@@ -394,6 +394,7 @@ while ($_) {
        /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
        $poly       = "$1=$2"                    if ($polytype{"$1=$2"} && ($polytype{"$1=$2"}->[2] >= $polytype{$poly}->[2]));
        $polyname   = convert_string ($2)        if ($1 eq "name");
+       $polyname   = convert_string ($2)        if ($1 eq "ref" && !($polyname));
        $isin       = convert_string ($2)        if ($1 eq "is_in");
 
        $polydir    = $yesno{$2}                 if ($1 eq "oneway");
