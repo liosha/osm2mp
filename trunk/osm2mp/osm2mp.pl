@@ -3,13 +3,20 @@
 
 ####    Settings
 
+my $version = "0.60b";
+
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
-my $cfgheader   = "header.cfg";
+my $cfgheader   = "header.tpl";
+
 
 my $codepage    = "1251";
-my $mapid       = "12345432";
-my $mapname     = "OSM-test";
+my $mapid       = "88888888";
+my $mapname     = "OSM routable map";
+
+my $defaultcountry = "Earth";
+my $defaultregion  = "OSM";
+my $defaultcity    = "Unknown";
 
 my $mergeroads     = 1;
 my $mergecos       = 0.2;
@@ -24,12 +31,6 @@ my $fixclosedist   = 5.5;
 my $restrictions   = 1;
 
 
-
-
-####    Init
-
-my $version = "0.53";
-
 my %yesno = (  "yes"       => 1,
                "true"      => 1,
                "1"         => 1,
@@ -37,16 +38,38 @@ my %yesno = (  "yes"       => 1,
                "false"     => 0,
                "0"         => 0);  
 
-
-
+use Getopt::Long;
+$result = GetOptions ( 
+                        "cfgpoi=s"              => \$cfgpoi,
+                        "cfgpoly=s"             => \$cfgpoly,
+                        "header=s"              => \$cfgheader,
+                        "mapid=s"               => \$mapid,
+                        "mapname=s"             => \$mapname,
+                        "codepage=s"            => \$codepage,
+                        "mergeroads!"           => \$mergeroads,
+                        "mergecos=f"            => \$mergecos,
+                        "detectdupes!"          => \$detectdupes,
+                        "splitroads!"           => \$splitroads,
+                        "fixclosenodes!"        => \$fixclosenodes,
+                        "fixclosedist=f"        => \$fixclosedist,
+                        "restrictions!"         => \$restrictions,
+                        "defaultcountry=s"      => \$defaultcountry,
+                        "defaultregion=s"       => \$defaultregion,
+                        "defaultcity=s"         => \$defaultcity,
+                      );
 
 ####    Action
 
 use strict;
+use Template;
 
 print STDERR "\n  ---|   OSM -> MP converter  $version   (c) 2008  liosha, xliosha\@gmail.com\n\n";
 
 
+if ($ARGV[0] eq "") {
+    print "Usage:  osm2mp.pl [options] file.osm\n\n";
+    exit;
+}
 
 
 ####    Reading configs
@@ -94,24 +117,24 @@ close CFG;
 
 ####    Header
 
-open HEAD, $cfgheader;
-while (<HEAD>) {
-    s/^ID=.*$/ID=$mapid/i                       if ($mapid);
-    s/^Name=.*$/Name=$mapname/i                 if ($mapname);
-    s/^CodePage=.*$/CodePage=$codepage/i        if ($codepage);
-    print;
-}
-close HEAD;
+my $tmp = Template->new();
+$tmp->process ($cfgheader, { 
+        mapid           => $mapid, 
+        mapname         => $mapname, 
+        codepage        => $codepage, 
+        defaultcountry  => $defaultcountry,
+        defaultregion   => $defaultregion, 
+      });
 
-open IN, $ARGV[0];
+
+####    Info
 
 
 use POSIX qw(strftime);
 print "\n; Converted from OpenStreetMap data with  osm2mp $version  (" . strftime ("%Y-%m-%d %H:%M:%S", localtime) . ")\n\n";
 
 
-
-
+open IN, $ARGV[0];
 
 
 ####    Loading nodes and writing POIs
@@ -296,8 +319,6 @@ while ($_) {
 
    if ( /\<\/way/ ) {
 
-#       print "; ERROR: WayID=$id has dupes\n"           if ($dupcount>0);
-
        ##       this way is multipolygon inner
        if ( $mpholes{$id} ) {
            $mpholes{$id} = [ @chain ];
@@ -317,6 +338,7 @@ printf STDERR "%d loaded\n", scalar keys %mpholes;
 
 my %rchain;
 my %rprops;
+my %risin;
 
 print STDERR "Processing ways...        ";
 print "\n\n\n; ### Lines and polygons\n\n";
@@ -332,6 +354,7 @@ my $countpolygons = 0;
    my ($poly, $polyname);
    my $polydir;
    my ($polytoll, $polynoauto, $polynobus, $polynoped, $polynobic, $polynohgv);
+   my $isin;
 
 while ($_) {
 
@@ -354,6 +377,8 @@ while ($_) {
       undef ($polynobic);
       undef ($polynohgv);
 
+      undef ($isin);
+
       next;
    }
 
@@ -369,6 +394,7 @@ while ($_) {
        /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
        $poly       = "$1=$2"                    if ($polytype{"$1=$2"} && ($polytype{"$1=$2"}->[2] >= $polytype{$poly}->[2]));
        $polyname   = convert_string ($2)        if ($1 eq "name");
+       $isin       = convert_string ($2)        if ($1 eq "is_in");
 
        $polydir    = $yesno{$2}                 if ($1 eq "oneway");
        $polytoll   = $yesno{$2}                 if ($1 eq "toll");
@@ -377,6 +403,8 @@ while ($_) {
        $polynoped  = 1 - $yesno{$2}             if ($1 eq "foot");
        $polynobic  = 1 - $yesno{$2}             if ($1 eq "bicycle");
        $polynohgv  = 1 - $yesno{$2}             if ($1 eq "hgv");
+       if ($1 eq "access") 
+           { $polynoauto = $polynobus = $polynoped = $polynobic = $polynohgv = 1 - $yesno{$2}; }
 
        next;
    }
@@ -399,6 +427,7 @@ while ($_) {
 
            $rchain{$id} = [ @chain ];
            $rprops{$id} = [ $poly, $polyname, join (",",@rp) ];
+           $risin{$id}  = $isin         if ($isin);
 
            # processing associated turn restrictions
            if ($restrictions) {
@@ -518,6 +547,7 @@ if ($mergeroads) {
         for my $r2 (@{$rstart{$p1->[-1]}}) {
             if ( $r1 ne $r2  &&  $rprops{$r2} 
               && join(":",@{$rprops{$r1}})  eq  join(":",@{$rprops{$r2}}) 
+              && $risin{$r1} eq $risin{$r2}
               && lcos($p1->[-2],$p1->[-1],$rchain{$r2}->[1]) > $mergecos ) {
                 push @list, $r2    
             }
@@ -553,6 +583,7 @@ if ($mergeroads) {
             push @{$rchain{$r1}}, @{$rchain{$r2}}[1..$#{$rchain{$r2}}];
             delete $rchain{$r2};
             delete $rprops{$r2};
+            delete $risin{$r2};
             @{$rstart{$p1->[-1]}} = grep { $_ ne $r2 } @{$rstart{$p1->[-1]}};
         } else {
             $i ++;
@@ -691,6 +722,7 @@ if ($splitroads) {
                 printf "; FIX: Added road %s, nodes from %d to %d\n", $id, $breaks[$i], $breaks[$i+1];
                 $rchain{$id} = [ @{$pchain}[$breaks[$i] .. $breaks[$i+1]] ];
                 $rprops{$id} = $rprops{$road};
+                $risin{$id}  = $risin{$road};
             }
             $#{$pchain} = $breaks[0];
         }
@@ -750,6 +782,13 @@ while (my ($road, $pchain) = each %rchain) {
     printf "EndLevel=%d\n",    $type[4]             if ($type[4] > $type[3]);
     print  "Label=$name\n"                          if ($name);
     print  "DirIndicator=1\n"                       if ((split /\,/, $rp)[2]);
+
+    print  "; is_in = $risin{$road}\n"  if ($risin{$road});
+    my ($city, $region, $country) = split (/,/, $risin{$road});
+
+    printf "CityName=%s\n", $city ? $city : $defaultcity;
+    print  "RegionName=$region\n"       if ($region);
+    print  "CountryName=$country\n"     if ($country);
 
     printf "Data%d=(%s)\n", $type[3], join ("), (", @nodes{@{$pchain}});
     printf "RoadID=%d\n", $roadcount++;
@@ -842,6 +881,9 @@ sub convert_string {            # String
    $str =~ s/\&#39\;/\'/gi;
    $str =~ s/\&#47\;/\//gi;
    $str =~ s/\&#92\;/\\/gi;
+   $str =~ s/\&#13\;/-/gi;
+
+   $str =~ s/\&#\d+\;/_/gi;
 
    return $str;
 }
@@ -902,3 +944,13 @@ sub indexof {                   # \@array, $elem
     return -1;
 }
 
+
+################################
+#
+#  TODO (?)
+#
+#  * доп конфиг для Label итд
+#  * обработка границ (внешние ноды)
+#  * береговая линия
+#
+#
