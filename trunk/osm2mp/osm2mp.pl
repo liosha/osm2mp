@@ -30,6 +30,7 @@ my $fixclosedist   = 5.5;
 
 my $restrictions   = 1;
 
+my $nocodepage;
 
 my %yesno = (  "yes"       => 1,
                "true"      => 1,
@@ -46,6 +47,7 @@ $result = GetOptions (
                         "mapid=s"               => \$mapid,
                         "mapname=s"             => \$mapname,
                         "codepage=s"            => \$codepage,
+                        "nocodepage"            => \$nocodepage,
                         "mergeroads!"           => \$mergeroads,
                         "mergecos=f"            => \$mergecos,
                         "detectdupes!"          => \$detectdupes,
@@ -873,7 +875,7 @@ use Encode;
 
 sub convert_string {            # String
 
-   my $str = encode ("cp".$codepage, decode("utf8", $_[0]));
+   my $str = $nocodepage ? $_[0] : encode ("cp".$codepage, decode("utf8", $_[0]));
 
    $str =~ s/\&amp\;/\&/gi;
    $str =~ s/\&#38\;/\&/gi;
