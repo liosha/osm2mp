@@ -69,7 +69,41 @@ print STDERR "\n  ---|   OSM -> MP converter  $version   (c) 2008  liosha, xlios
 
 
 if ($ARGV[0] eq "") {
-    print "Usage:  osm2mp.pl [options] file.osm\n\n";
+    print "Usage:  osm2mp.pl [options] file.osm > file.mp
+
+Possible options:
+
+    --cfgpoi <file>           poi config
+    --cfgpoly <file>          way config    
+    --header <file>           header template
+                              
+    --mapid <id>              map id
+    --mapname <name>          map name
+                              
+    --codepage <num>          codepage number (e.g. 1252)
+    --nocodepage              leave all labels in utf-8   
+                              
+    --mergeroads              merge same ways
+    --nomergeroads            
+    --mergecos <cosine>       maximum allowed angle between roads to merge
+                              
+    --detectdupes             detect road duplicates
+    --nodetectdupes           
+                              
+    --splitroads              split long and self-intersecting roads
+    --nosplitroads            (cgpsmapper-specific)
+                              
+    --fixclosenodes           enlarge distance between too close nodes
+    --nofixclosenodes         (cgpsmapper-specific)
+    --fixclosedist (dist)     minimum allowed distance (default 5.5 metres)
+                              
+    --restrictions            process turn restrictions
+    --norestrictions          
+
+    --defaultcountry <name>   default data for street indexing
+    --defaultregion <name>
+    --defaultcity <name>
+\n";
     exit;
 }
 
