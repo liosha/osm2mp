@@ -1,9 +1,15 @@
 #!/usr/bin/perl
 
 
+##
+##  Required packages: Template-toolkit, Getopt::Long
+##  See http://cpan.org/ or use PPM (Perl package manager)
+##
+
+
 ####    Settings
 
-my $version = "0.60b";
+my $version = "0.60";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
