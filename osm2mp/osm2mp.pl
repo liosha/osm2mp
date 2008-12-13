@@ -43,10 +43,10 @@ my %yesno = (  "yes"       => 1,
                "1"         => 1,
                "no"        => 0,
                "false"     => 0,
-               "0"         => 0);  
+               "0"         => 0);
 
 use Getopt::Long;
-$result = GetOptions ( 
+$result = GetOptions (
                         "cfgpoi=s"              => \$cfgpoi,
                         "cfgpoly=s"             => \$cfgpoly,
                         "header=s"              => \$cfgheader,
@@ -80,31 +80,31 @@ if ($ARGV[0] eq "") {
 Possible options:
 
     --cfgpoi <file>           poi config
-    --cfgpoly <file>          way config    
+    --cfgpoly <file>          way config
     --header <file>           header template
-                              
+
     --mapid <id>              map id
     --mapname <name>          map name
-                              
+
     --codepage <num>          codepage number (e.g. 1252)
-    --nocodepage              leave all labels in utf-8   
-                              
+    --nocodepage              leave all labels in utf-8
+
     --mergeroads              merge same ways
-    --nomergeroads            
+    --nomergeroads
     --mergecos <cosine>       maximum allowed angle between roads to merge
-                              
+
     --detectdupes             detect road duplicates
-    --nodetectdupes           
-                              
+    --nodetectdupes
+
     --splitroads              split long and self-intersecting roads
     --nosplitroads            (cgpsmapper-specific)
-                              
+
     --fixclosenodes           enlarge distance between too close nodes
     --nofixclosenodes         (cgpsmapper-specific)
     --fixclosedist (dist)     minimum allowed distance (default 5.5 metres)
-                              
+
     --restrictions            process turn restrictions
-    --norestrictions          
+    --norestrictions
 
     --defaultcountry <name>   default data for street indexing
     --defaultregion <name>
@@ -119,7 +119,7 @@ Possible options:
 my %poitype;
 
 open CFG, $cfgpoi;
-while (<CFG>) { 
+while (<CFG>) {
    if ( (!$_) || /^\s*[\#\;]/ ) { next; }
    chomp;
    my ($k, $v, $type, $llev, $hlev, $city) = split /\s+/;
@@ -136,19 +136,19 @@ close CFG;
 my %polytype;
 
 open CFG, $cfgpoly;
-while (<CFG>) { 
+while (<CFG>) {
    if ( (!$_) || /^\s*[\#\;]/ ) { next; }
    chomp;
 
    my $prio = 0;
    my ($k, $v, $mode, $type, $llev, $hlev, $rp, @p) = split /\s+/;
-   
+
    if ($type) {
      if ($type =~ /(.+),(\d)/) {     $type = $1;    $prio = $2;    }
      $llev = 0          if ($llev eq "");
      $hlev = 1          if ($hlev eq "");
 
-     $polytype{"$k=$v"} = [ $mode, $type, $prio, $llev, $hlev, $rp ]; 
+     $polytype{"$k=$v"} = [ $mode, $type, $prio, $llev, $hlev, $rp ];
    }
 }
 close CFG;
@@ -160,12 +160,12 @@ close CFG;
 ####    Header
 
 my $tmp = Template->new();
-$tmp->process ($cfgheader, { 
-        mapid           => $mapid, 
-        mapname         => $mapname, 
-        codepage        => $codepage, 
+$tmp->process ($cfgheader, {
+        mapid           => $mapid,
+        mapname         => $mapname,
+        codepage        => $codepage,
         defaultcountry  => $defaultcountry,
-        defaultregion   => $defaultregion, 
+        defaultregion   => $defaultregion,
       });
 
 
@@ -192,10 +192,10 @@ my $id;
 my $latlon;
 my ($poi, $poiname);
 
-while (<IN>) {             
+while (<IN>) {
    last if /\<way/;
 
-   if ( /\<node/ ) {                   
+   if ( /\<node/ ) {
       /^.*id=["'](\-?\d+)["'].*lat=["'](\-?\d+\.?\d*)["'].*lon=["'](\-?\d+\.?\d*)["'].*$/;
       $id = $1;
       $latlon = "$2,$3";
@@ -206,14 +206,14 @@ while (<IN>) {
       next;
    }
 
-   if ( /\<tag/ ) {                   
+   if ( /\<tag/ ) {
       /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
       $poi = "$1=$2"                            if ($poitype{"$1=$2"});
       $poiname = convert_string ($2)            if ($1 eq "name");
       next;
    }
 
-   if ( /\<\/node/ ) {                   
+   if ( /\<\/node/ ) {
 
       if ($poi) {
          $countpoi ++;
@@ -273,17 +273,17 @@ my ($tr_from, $tr_via, $tr_to);
 
 while ($_) {
 
-    if ( /\<relation/ ) {                   
+    if ( /\<relation/ ) {
         /^.*id=["'](\-?\d+)["'].*$/;
 
-        $id = $1;           
-        undef $reltype;     
+        $id = $1;
+        undef $reltype;
         undef $mp_outer;        undef @mp_inner;
         undef $tr_from;         undef $tr_via;          undef $tr_to;
         next;
     }
 
-    if ( /\<member/ ) {                   
+    if ( /\<member/ ) {
         /type=["'](\w+)["'].*ref=["'](\-?\d+)["'].*role=["'](\w+)["']/;
 
         $mp_outer = $2                  if ($3 eq "outer" && $1 eq "way");
@@ -302,7 +302,7 @@ while ($_) {
         next;
     }
 
-    if ( /\<\/relation/ ) {                   
+    if ( /\<\/relation/ ) {
         if ( $reltype eq "multipolygon" ) {
             $mpoly{$mp_outer} = [ @mp_inner ];
             @mpholes{@mp_inner} = @mp_inner;
@@ -339,7 +339,7 @@ while ($_) {
 
    last if /\<relation/;
 
-   if ( /\<way/ ) {                   
+   if ( /\<way/ ) {
       /^.*id=["'](\-?\d+)["'].*$/;
 
       $id = $1;
@@ -348,7 +348,7 @@ while ($_) {
       next;
    }
 
-   if ( /\<nd/ ) {                   
+   if ( /\<nd/ ) {
       /^.*ref=["'](.*)["'].*$/;
       if ($nodes{$1}  &&  $1 ne $chain[-1] ) {
           push @chain, $1;
@@ -401,10 +401,10 @@ my $countpolygons = 0;
 while ($_) {
 
    last if /\<relation/;
-   
-   if ( /\<way/ ) {                   
+
+   if ( /\<way/ ) {
       /^.*id=["'](\-?\d+)["'].*$/;
-      
+
       $id = $1;
       @chain = ();
 
@@ -424,15 +424,15 @@ while ($_) {
       next;
    }
 
-   if ( /\<nd/ ) {                   
+   if ( /\<nd/ ) {
       /^.*ref=["'](.*)["'].*$/;
       if ($nodes{$1}  &&  $1 ne $chain[-1] ) {
           push @chain, $1;
-      } 
+      }
       next;
    }
 
-   if ( /\<tag/ ) {                   
+   if ( /\<tag/ ) {
        /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
        $poly       = "$1=$2"                    if ($polytype{"$1=$2"} && ($polytype{"$1=$2"}->[2] >= $polytype{$poly}->[2]));
        $polyname   = convert_string ($2)        if ($1 eq "name");
@@ -446,7 +446,7 @@ while ($_) {
        $polynoped  = 1 - $yesno{$2}             if ($1 eq "foot");
        $polynobic  = 1 - $yesno{$2}             if ($1 eq "bicycle");
        $polynohgv  = 1 - $yesno{$2}             if ($1 eq "hgv");
-       if ($1 eq "access") 
+       if ($1 eq "access")
            { $polynoauto = $polynobus = $polynoped = $polynobic = $polynohgv = 1 - $yesno{$2}; }
 
        next;
@@ -498,8 +498,8 @@ while ($_) {
            if ( scalar @chain < 2 ) {
                print "; ERROR: WayID=$id has too few nodes at ($nodes{$chain[0]})\n";
                $d = "; ";
-           } 
-         
+           }
+
            my @type = @{$polytype{$poly}};
            print  "; WayID = $id\n";
            print  "; $poly\n";
@@ -519,11 +519,11 @@ while ($_) {
            if ( scalar @chain < 4 ) {
                print "; ERROR: WayID=$id has too few nodes near ($nodes{$chain[0]})\n";
                $d = "; ";
-           } 
+           }
            if ( $chain[0] ne $chain[-1] ) {
                print "; ERROR: area WayID=$id is not closed at ($nodes{$chain[0]})\n";
            }
-         
+
            my @type = @{$polytype{$poly}};
            print  "; WayID = $id\n";
            print  "; $poly\n";
@@ -585,17 +585,17 @@ if ($mergeroads) {
         my $r1 = $keys[$i];
         if ($rmove{$r1}) {      $i++;   next;   }
         my $p1 = $rchain{$r1};
- 
+
         my @list = ();
         for my $r2 (@{$rstart{$p1->[-1]}}) {
-            if ( $r1 ne $r2  &&  $rprops{$r2} 
-              && join(":",@{$rprops{$r1}})  eq  join(":",@{$rprops{$r2}}) 
+            if ( $r1 ne $r2  &&  $rprops{$r2}
+              && join(":",@{$rprops{$r1}})  eq  join(":",@{$rprops{$r2}})
               && $risin{$r1} eq $risin{$r2}
               && lcos($p1->[-2],$p1->[-1],$rchain{$r2}->[1]) > $mergecos ) {
-                push @list, $r2    
+                push @list, $r2
             }
         }
-            
+
         if (scalar @list) {
             $countmerg ++;
             @list = sort { lcos($p1->[-2],$p1->[-1],$rchain{$b}->[1]) <=> lcos($p1->[-2],$p1->[-1],$rchain{$a}->[1]) }  @list;
@@ -678,7 +678,7 @@ if ($detectdupes) {
 
     while (my ($road, $pchain) = each %rchain) {
         for (my $i=0; $i<$#{$pchain}; $i++) {
-            if ( $nodid{$pchain->[$i]} && $nodid{$pchain->[$i+1]} )   { 
+            if ( $nodid{$pchain->[$i]} && $nodid{$pchain->[$i+1]} )   {
                 push @{$segways{join(":",( sort {$a cmp $b} ($pchain->[$i],$pchain->[$i+1]) ))}}, $road;
             }
         }
@@ -790,7 +790,7 @@ if ($fixclosenodes) {
                 if (closenodes($cnode, $node)) {
                     print "; ERROR: too close nodes $cnode and $node, WayID=$road near (${nodes{$node}})\n";
                     $countclose ++;
-                } 
+                }
                 $cnode = $node;
             }
         }
@@ -844,7 +844,7 @@ while (my ($road, $pchain) = each %rchain) {
             printf "Nod%d=%d,%d,0\n", $nodcount++, $i, $nodid{$node};
         }
     }
-    
+
     print  "[END]\n\n\n";
 }
 
@@ -858,15 +858,15 @@ printf STDERR "%d written\n", $roadcount-1;
 
 if ($restrictions) {
     my $counttrest = 0;
-    
+
     print "\n\n\n; ### Turn restrictions\n\n";
 
     print STDERR "Writing restrictions...   ";
-    
+
     while ( my ($relid, $rel) = each %trest ) {
-    
+
         printf "\n; RelID = $relid, %s\n", join(":", @{$rel});
-    
+
         if      ($rel->[2] == 0) {
             print "; ERROR: RelID=$relid has undefined FROM direction\n";
         } elsif ($rel->[5] == 0) {
@@ -876,23 +876,23 @@ if ($restrictions) {
         } elsif ($rel->[6] == -1) {
             print "; ERROR: RelID=$relid TO road does'n contain VIA node\n";
         } else {
-    
+
             $counttrest ++;
-    
+
             my $i = $rel->[3] - $rel->[2];
             $i -= $rel->[2]         while ($i>=0 && $i < $#{$rchain{$rel->[1]}} && !$nodid{$rchain{$rel->[1]}->[$i]});
             my $j = $rel->[6] + $rel->[5];
             $j += $rel->[5]         while ($j>=0 && $j < $#{$rchain{$rel->[4]}} && !$nodid{$rchain{$rel->[4]}->[$j]});
-    
+
             print  "[Restrict]\n";
             printf "Nod=${nodid{$rel->[0]}}\n";
             print  "TraffPoints=${nodid{$rchain{$rel->[1]}->[$i]}},${nodid{$rel->[0]}},${nodid{$rchain{$rel->[4]}->[$j]}}\n";
             print  "TraffRoads=${roadid{$rel->[1]}},${roadid{$rel->[4]}}\n";
             print  "Time=\n";
             print  "[END-Restrict]\n";
-        }    
+        }
     }
-    
+
     print STDERR "$counttrest written\n";
 }
 
@@ -937,7 +937,7 @@ sub closenodes {                # NodeID1, NodeID2
 
     my ($lat1, $lon1) = split ",", $nodes{$_[0]};
     my ($lat2, $lon2) = split ",", $nodes{$_[1]};
-    
+
     my ($clat, $clon) = ( ($lat1+$lat2)/2, ($lon1+$lon2)/2 );
     my ($dlat, $dlon) = ( ($lat2-$lat1), ($lon2-$lon1) );
     my $klon = cos ($clat*3.14159/180);
@@ -955,7 +955,7 @@ sub closenodes {                # NodeID1, NodeID2
             my $azim = $dlat / $dlon;
             my $ndlon = sqrt ($ldist**2 / ($klon**2 + $azim**2)) / 2;
             my $ndlat = $ndlon * abs($azim);
-        
+
             $nodes{$_[0]} = ($clat - $ndlat * ($dlat <=> 0)) . "," . ($clon - $ndlon * ($dlon <=> 0));
             $nodes{$_[1]} = ($clat + $ndlat * ($dlat <=> 0)) . "," . ($clon + $ndlon * ($dlon <=> 0));
         }
@@ -982,18 +982,8 @@ sub lcos {                      # NodeID1, NodeID2, NodeID3
 
 sub indexof {                   # \@array, $elem
 
-    for (my $i=0; $i < scalar @{$_[0]}; $i++) 
+    for (my $i=0; $i < scalar @{$_[0]}; $i++)
         { return $i if ($_[0]->[$i] eq $_[1]); }
     return -1;
 }
 
-
-################################
-#
-#  TODO (?)
-#
-#  * доп конфиг для Label итд
-#  * обработка границ (внешние ноды)
-#  * береговая линия
-#
-#
