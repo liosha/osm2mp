@@ -38,6 +38,8 @@ my $restrictions   = 1;
 
 my $nocodepage;
 
+my $nametaglist    = "name,ref,int_ref";
+
 my %yesno = (  "yes"       => 1,
                "true"      => 1,
                "1"         => 1,
@@ -64,6 +66,7 @@ $result = GetOptions (
                         "defaultcountry=s"      => \$defaultcountry,
                         "defaultregion=s"       => \$defaultregion,
                         "defaultcity=s"         => \$defaultcity,
+                        "nametaglist=s"         => \$nametaglist,
                       );
 
 ####    Action
@@ -88,6 +91,8 @@ Possible options:
 
     --codepage <num>          codepage number (e.g. 1252)
     --nocodepage              leave all labels in utf-8
+
+    --nametaglist <list>      comma-separated list of tags for Label
 
     --mergeroads              merge same ways
     --nomergeroads
@@ -154,19 +159,20 @@ while (<CFG>) {
 close CFG;
 
 
+my @nametagarray = split (/,/, $nametaglist);
 
 
 
 ####    Header
 
-my $tmp = Template->new();
+my $tmp = Template->new({ABSOLUTE => 1});
 $tmp->process ($cfgheader, {
         mapid           => $mapid,
         mapname         => $mapname,
         codepage        => $codepage,
         defaultcountry  => $defaultcountry,
         defaultregion   => $defaultregion,
-      });
+      }) || die $tmp->error();
 
 
 ####    Info
@@ -191,6 +197,7 @@ my $countpoi = 0;
 my $id;
 my $latlon;
 my ($poi, $poiname);
+my $nameprio = 99;
 
 while (<IN>) {
    last if /\<way/;
@@ -203,13 +210,18 @@ while (<IN>) {
 
       $poi = "";
       $poiname = "";
+      $nameprio = 99;
       next;
    }
 
    if ( /\<tag/ ) {
       /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
       $poi = "$1=$2"                            if ($poitype{"$1=$2"});
-      $poiname = convert_string ($2)            if ($1 eq "name");
+      my $tagprio = indexof(\@nametagarray, $1);
+      if ($tagprio>=0 && $tagprio<$nameprio) {
+          $poiname = convert_string ($2);
+          $nameprio = $tagprio;
+      }
       next;
    }
 
@@ -393,10 +405,13 @@ my $countpolygons = 0;
 
    my $id;
    my @chain;
+
    my ($poly, $polyname);
+   $nameprio = 99;
+   my $isin;
+   
    my $polydir;
    my ($polytoll, $polynoauto, $polynobus, $polynoped, $polynobic, $polynohgv);
-   my $isin;
 
 while ($_) {
 
@@ -409,8 +424,9 @@ while ($_) {
       @chain = ();
 
       undef ($poly);
-
       undef ($polyname);
+      $nameprio = 99;
+      
       undef ($polydir);
       undef ($polytoll);
       undef ($polynoauto);
@@ -435,8 +451,13 @@ while ($_) {
    if ( /\<tag/ ) {
        /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
        $poly       = "$1=$2"                    if ($polytype{"$1=$2"} && ($polytype{"$1=$2"}->[2] >= $polytype{$poly}->[2]));
-       $polyname   = convert_string ($2)        if ($1 eq "name");
-       $polyname   = convert_string ($2)        if ($1 eq "ref" && !($polyname));
+       
+       my $tagprio = indexof(\@nametagarray, $1);
+       if ($tagprio>=0 && $tagprio<$nameprio) {
+           $polyname = convert_string ($2);
+           $nameprio = $tagprio;
+       }
+       
        $isin       = convert_string ($2)        if ($1 eq "is_in");
 
        $polydir    = $yesno{$2}                 if ($1 eq "oneway");
@@ -446,8 +467,8 @@ while ($_) {
        $polynoped  = 1 - $yesno{$2}             if ($1 eq "foot");
        $polynobic  = 1 - $yesno{$2}             if ($1 eq "bicycle");
        $polynohgv  = 1 - $yesno{$2}             if ($1 eq "hgv");
-       if ($1 eq "access")
-           { $polynoauto = $polynobus = $polynoped = $polynobic = $polynohgv = 1 - $yesno{$2}; }
+       $polynoauto = $polynobus = $polynoped = $polynobic = $polynohgv = 1 - $yesno{$2}
+                                                if ($1 eq "access");
 
        next;
    }
