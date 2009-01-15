@@ -9,7 +9,7 @@
 
 ####    Settings
 
-my $version = "0.60";
+my $version = "0.61b";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
@@ -45,7 +45,8 @@ my %yesno = (  "yes"       => 1,
                "1"         => 1,
                "no"        => 0,
                "false"     => 0,
-               "0"         => 0);
+               "0"         => 0,
+               "private"   => 0);
 
 use Getopt::Long;
 $result = GetOptions (
@@ -74,7 +75,7 @@ $result = GetOptions (
 use strict;
 use Template;
 
-print STDERR "\n  ---|   OSM -> MP converter  $version   (c) 2008  liosha, xliosha\@gmail.com\n\n";
+print STDERR "\n  ---|   OSM -> MP converter  $version   (c) 2008,2009  liosha, xliosha\@gmail.com\n\n";
 
 
 if ($ARGV[0] eq "") {
@@ -410,6 +411,7 @@ my $countpolygons = 0;
    $nameprio = 99;
    my $isin;
    
+   my $speed;
    my $polydir;
    my ($polytoll, $polynoauto, $polynobus, $polynoped, $polynobic, $polynohgv);
 
@@ -434,6 +436,8 @@ while ($_) {
       undef ($polynoped);
       undef ($polynobic);
       undef ($polynohgv);
+
+      undef ($speed);
 
       undef ($isin);
 
@@ -460,6 +464,8 @@ while ($_) {
        
        $isin       = convert_string ($2)        if ($1 eq "is_in");
 
+       $speed      = $2                         if ($1 eq "maxspeed" && $2>0);
+
        $polydir    = $yesno{$2}                 if ($1 eq "oneway");
        $polytoll   = $yesno{$2}                 if ($1 eq "toll");
        $polynoauto = 1 - $yesno{$2}             if ($1 eq "motorcar");
@@ -481,6 +487,12 @@ while ($_) {
        }
        if ( $polytype{$poly}->[0] eq "r"  &&  scalar @chain > 1 ) {
            my @rp = split /,/, $polytype{$poly}->[5];
+           
+           if (defined $speed) {
+               if ($speed =~ /mph$/i)   {  $speed *= 1.61;  }
+               $rp[0]  = speedcode($speed);               
+           }
+
            $rp[2]  = $polydir                           if defined $polydir;
            $rp[3]  = $polytoll                          if defined $polytoll;
            $rp[5]  = $rp[6] = $rp[8] = $polynoauto      if defined $polynoauto;
@@ -1007,4 +1019,17 @@ sub indexof {                   # \@array, $elem
         { return $i if ($_[0]->[$i] eq $_[1]); }
     return -1;
 }
+
+
+sub speedcode {                 # $speed
+    return 7            if ($_[0] > 110);
+    return 6            if ($_[0] > 90);
+    return 5            if ($_[0] > 80);
+    return 4            if ($_[0] > 60);
+    return 3            if ($_[0] > 40);
+    return 2            if ($_[0] > 20);
+    return 1            if ($_[0] > 10);
+    return 0;
+}
+
 
