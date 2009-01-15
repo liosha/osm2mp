@@ -39,6 +39,7 @@ my $restrictions   = 1;
 my $nocodepage;
 
 my $nametaglist    = "name,ref,int_ref";
+my $upcase         = 0;
 
 my %yesno = (  "yes"       => 1,
                "true"      => 1,
@@ -68,6 +69,7 @@ $result = GetOptions (
                         "defaultregion=s"       => \$defaultregion,
                         "defaultcity=s"         => \$defaultcity,
                         "nametaglist=s"         => \$nametaglist,
+                        "upcase!"               => \$upcase,
                       );
 
 ####    Action
@@ -92,6 +94,7 @@ Possible options:
 
     --codepage <num>          codepage number (e.g. 1252)
     --nocodepage              leave all labels in utf-8
+    --upcase                  convert all labels to upper case
 
     --nametaglist <list>      comma-separated list of tags for Label
 
@@ -948,7 +951,9 @@ use Encode;
 
 sub convert_string {            # String
 
-   my $str = $nocodepage ? $_[0] : encode ("cp".$codepage, decode("utf8", $_[0]));
+   my $str = decode("utf8", $_[0]);
+   $str = uc($str) if ($upcase);
+   $str = $nocodepage ? $_[0] : encode ("cp".$codepage, $str);
 
    $str =~ s/\&amp\;/\&/gi;
    $str =~ s/\&#38\;/\&/gi;
