@@ -9,7 +9,7 @@
 
 ####    Settings
 
-my $version = "0.61b";
+my $version = "0.65a";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
@@ -41,6 +41,9 @@ my $nocodepage;
 my $nametaglist    = "name,ref,int_ref";
 my $upcase         = 0;
 
+my $bbox;
+my $background     = 0;
+
 my %yesno = (  "yes"       => 1,
                "true"      => 1,
                "1"         => 1,
@@ -70,6 +73,8 @@ $result = GetOptions (
                         "defaultcity=s"         => \$defaultcity,
                         "nametaglist=s"         => \$nametaglist,
                         "upcase!"               => \$upcase,
+                        "bbox=s"                => \$bbox,
+                        "background!",          => \$background,
                       );
 
 ####    Action
@@ -88,6 +93,9 @@ Possible options:
     --cfgpoi <file>           poi config
     --cfgpoly <file>          way config
     --header <file>           header template
+
+    --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
+    --background              create background object
 
     --mapid <id>              map id
     --mapname <name>          map name
@@ -124,6 +132,8 @@ Possible options:
 
 
 ####    Reading configs
+
+my ($minlon, $minlat, $maxlon, $maxlat) = split /,/, $bbox;
 
 my %poitype;
 
@@ -189,6 +199,24 @@ print "\n; Converted from OpenStreetMap data with  osm2mp $version  (" . strftim
 open IN, $ARGV[0];
 
 
+
+####    Background object (?)
+
+
+if ($bbox && $background) {
+
+    print "\n\n\n; ### Background\n\n";
+    print  "[POLYGON]\n";
+    print  "Type=0x4b\n";
+    print  "EndLevel=9\n";
+    print  "Data0=($minlat,$minlon), ($minlat,$maxlon), ($maxlat,$maxlon), ($maxlat,$minlon) \n";
+    print  "[END]\n\n\n";
+
+}
+
+
+
+
 ####    Loading nodes and writing POIs
 
 my %nodes;
@@ -229,22 +257,20 @@ while (<IN>) {
       next;
    }
 
-   if ( /\<\/node/ ) {
+   if ( /\<\/node/ && $poi && (!$bbox || insidebbox($latlon)) ) {
 
-      if ($poi) {
-         $countpoi ++;
-         my @type = @{$poitype{$poi}};
+       $countpoi ++;
+       my @type = @{$poitype{$poi}};
 
-         print  "; NodeID = $id\n";
-         print  "; $poi\n";
-         print  "[POI]\n";
-         printf "Type=%s\n",            $type[0];
-         printf "Data%d=($latlon)\n",   $type[1];
-         printf "EndLevel=%d\n",        $type[2]        if ($type[2] > $type[1]);
-         printf "City=Y\n",                             if ($type[3]);
-         print  "Label=$poiname\n"                      if ($poiname);
-         print  "[END]\n\n";
-      }
+       print  "; NodeID = $id\n";
+       print  "; $poi\n";
+       print  "[POI]\n";
+       printf "Type=%s\n",            $type[0];
+       printf "Data%d=($latlon)\n",   $type[1];
+       printf "EndLevel=%d\n",        $type[2]        if ($type[2] > $type[1]);
+       printf "City=Y\n",                             if ($type[3]);
+       print  "Label=$poiname\n"                      if ($poiname);
+       print  "[END]\n\n";
    }
 }
 
@@ -409,6 +435,8 @@ my $countpolygons = 0;
 
    my $id;
    my @chain;
+   my @chainlist;
+   my $inbbox;
 
    my ($poly, $polyname);
    $nameprio = 99;
@@ -426,7 +454,10 @@ while ($_) {
       /^.* id=["'](\-?\d+)["'].*$/;
 
       $id = $1;
+
       @chain = ();
+      @chainlist = ();
+      $inbbox = 0;
 
       undef ($poly);
       undef ($polyname);
@@ -451,6 +482,11 @@ while ($_) {
       /^.*ref=["'](.*)["'].*$/;
       if ($nodes{$1}  &&  $1 ne $chain[-1] ) {
           push @chain, $1;
+          if ($bbox) {
+              if ( !$inbbox &&  insidebbox($nodes{$1}) )        { push @chainlist, ($#chain ? $#chain-1 : 0); }
+              if (  $inbbox && !insidebbox($nodes{$1}) )        { push @chainlist, $#chain; }
+              $inbbox = insidebbox($nodes{$1});
+          }
       }
       next;
    }
@@ -484,7 +520,13 @@ while ($_) {
 
    if ( /\<\/way/ ) {
 
+       if ( !$bbox )                    {   @chainlist = (0);   }
+       if ( !($#chainlist % 2) )        {   push @chainlist, $#chain;   }
+
+#       print "; $id   ".join(":",@chainlist)."\n\n";
+
        ##       this way is road
+ 
        if ( $polytype{$poly}->[0] eq "r"  &&  scalar @chain <= 1 ) {
            print "; ERROR: Road WayID=$id has too few nodes at ($nodes{$chain[0]})\n";
        }
@@ -527,7 +569,9 @@ while ($_) {
            }
        }
 
+
        ##       this way is map line
+
        if ( $polytype{$poly}->[0] eq "l" ) {
            $countlines ++;
            my $d = "";
@@ -537,18 +581,23 @@ while ($_) {
            }
 
            my @type = @{$polytype{$poly}};
-           print  "; WayID = $id\n";
-           print  "; $poly\n";
-           print  "${d}[POLYLINE]\n";
-           printf "${d}Type=%s\n",        $type[1];
-           printf "${d}EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
-           print  "${d}Label=$polyname\n"                       if ($polyname);
-           print  "${d}DirIndicator=$polydir\n"                 if defined $polydir;
-           printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain});
-           print  "${d}[END]\n\n\n";
+
+           for (my $i=0; $i<$#chainlist+1; $i+=2) {
+               print  "; WayID = $id\n";
+               print  "; $poly\n";
+               print  "${d}[POLYLINE]\n";
+               printf "${d}Type=%s\n",        $type[1];
+               printf "${d}EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
+               print  "${d}Label=$polyname\n"                       if ($polyname);
+               print  "${d}DirIndicator=$polydir\n"                 if defined $polydir;
+               printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain[$chainlist[$i]..$chainlist[$i+1]]});
+               print  "${d}[END]\n\n\n";
+           }
        }
 
+
        ##       this way is map polygon
+
        if ( $polytype{$poly}->[0] eq "p" ) {
            $countpolygons ++;
            my $d = "";
@@ -1037,4 +1086,12 @@ sub speedcode {                 # $speed
     return 0;
 }
 
+
+sub insidebbox {                # $latlon
+
+    my ($lat, $lon) = split /,/, $_[0];
+    return 1    if ( $lat>=$minlat && $lon>=$minlon && $lat<$maxlat && $lon<$maxlon );
+    return 0;
+
+}
 
