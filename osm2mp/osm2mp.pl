@@ -573,7 +573,6 @@ while ($_) {
        ##       this way is map line
 
        if ( $polytype{$poly}->[0] eq "l" ) {
-           $countlines ++;
            my $d = "";
            if ( scalar @chain < 2 ) {
                print "; ERROR: WayID=$id has too few nodes at ($nodes{$chain[0]})\n";
@@ -583,6 +582,8 @@ while ($_) {
            my @type = @{$polytype{$poly}};
 
            for (my $i=0; $i<$#chainlist+1; $i+=2) {
+               $countlines ++;
+
                print  "; WayID = $id\n";
                print  "; $poly\n";
                print  "${d}[POLYLINE]\n";
@@ -599,7 +600,6 @@ while ($_) {
        ##       this way is map polygon
 
        if ( $polytype{$poly}->[0] eq "p" ) {
-           $countpolygons ++;
            my $d = "";
            if ( scalar @chain < 4 ) {
                print "; ERROR: WayID=$id has too few nodes near ($nodes{$chain[0]})\n";
@@ -610,22 +610,27 @@ while ($_) {
            }
 
            my @type = @{$polytype{$poly}};
-           print  "; WayID = $id\n";
-           print  "; $poly\n";
-           print  "${d}[POLYGON]\n";
-           printf "${d}Type=%s\n",        $type[1];
-           printf "${d}EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
-           print  "${d}Label=$polyname\n"                       if ($polyname);
-           printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain});
-           if ($mpoly{$id}) {
-               printf "; this is multipolygon with %d holes: %s\n", scalar @{$mpoly{$id}}, join (", ", @{$mpoly{$id}});
-               for my $hole (@{$mpoly{$id}}) {
-                   if ($mpholes{$hole} ne $hole && @{$mpholes{$hole}}) {
-                       printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@{$mpholes{$hole}}});
+
+           if (!$bbox || scalar @chainlist) {
+               $countpolygons ++;
+
+               print  "; WayID = $id\n";
+               print  "; $poly\n";
+               print  "${d}[POLYGON]\n";
+               printf "${d}Type=%s\n",        $type[1];
+               printf "${d}EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
+               print  "${d}Label=$polyname\n"                       if ($polyname);
+               printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain});
+               if ($mpoly{$id}) {
+                   printf "; this is multipolygon with %d holes: %s\n", scalar @{$mpoly{$id}}, join (", ", @{$mpoly{$id}});
+                   for my $hole (@{$mpoly{$id}}) {
+                       if ($mpholes{$hole} ne $hole && @{$mpholes{$hole}}) {
+                           printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@{$mpholes{$hole}}});
+                       }
                    }
                }
+               print  "${d}[END]\n\n\n";
            }
-           print  "${d}[END]\n\n\n";
        }
    }
 
