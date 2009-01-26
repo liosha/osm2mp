@@ -514,6 +514,7 @@ while ($_) {
        $polynohgv  = 1 - $yesno{$2}             if ($1 eq "hgv");
        $polynoauto = $polynobus = $polynoped = $polynobic = $polynohgv = 1 - $yesno{$2}
                                                 if ($1 eq "access");
+       $polynobic  = $polynoped = $yesno{$2}    if ($1 eq "motorroad");
 
        next;
    }
