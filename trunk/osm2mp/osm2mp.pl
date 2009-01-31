@@ -44,13 +44,14 @@ my $upcase         = 0;
 my $bbox;
 my $background     = 0;
 
-my %yesno = (  "yes"       => 1,
-               "true"      => 1,
-               "1"         => 1,
-               "no"        => 0,
-               "false"     => 0,
-               "0"         => 0,
-               "private"   => 0);
+my %yesno = (  "yes"            => 1,
+               "true"           => 1,
+               "1"              => 1,
+               "permissive"     => 1,
+               "no"             => 0,
+               "false"          => 0,
+               "0"              => 0,
+               "private"        => 0);
 
 use Getopt::Long;
 $result = GetOptions (
@@ -197,6 +198,7 @@ print "\n; Converted from OpenStreetMap data with  osm2mp $version  (" . strftim
 
 
 open IN, $ARGV[0];
+print STDERR "Processing file $ARGV[0]\n\n";
 
 
 
