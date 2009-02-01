@@ -2,8 +2,12 @@
 ID=[% mapid %]
 Name=[% mapname %]
 
+[% IF codepage %]
 LblCoding=9
 CodePage=[% codepage %]
+[% ELSE %]
+; UTF-8 encoding
+[% END %]
 
 POINumberFirst=N
 DefaultCityCountry=[% defaultcountry %]
