@@ -78,6 +78,10 @@ $result = GetOptions (
                         "background!",          => \$background,
                       );
 
+undef $codepage         if ($nocodepage);
+
+
+
 ####    Action
 
 use strict;
