@@ -235,6 +235,7 @@ my $countpoi = 0;
 my $id;
 my $latlon;
 my ($poi, $poiname);
+my ($poihouse, $poistreet, $poicity, $poiregion, $poicountry, $poizip, $poiphone);
 my $nameprio = 99;
 
 while (<IN>) {
@@ -249,6 +250,7 @@ while (<IN>) {
       $poi = "";
       $poiname = "";
       $nameprio = 99;
+      ($poihouse, $poistreet, $poicity, $poiregion, $poicountry, $poizip, $poiphone) = ("", "", "", "", "", "", "");
       next;
    }
 
@@ -260,6 +262,23 @@ while (<IN>) {
           $poiname = convert_string ($2);
           $nameprio = $tagprio;
       }
+
+      $poistreet    = convert_string($2)        if ($1 eq "addr:street" );
+      $poizip       = convert_string($2)        if ($1 eq "addr:postcode" );
+      $poicity      = convert_string($2)        if ($1 eq "addr:city" );      
+      $poiregion    = convert_string($2)        if ($1 eq "is_in:county");
+      $poicountry   = convert_string($2)        if ($1 eq "is_in:country");
+
+      # Navitel only (?)
+      $poihouse     = convert_string($2)        if ($1 eq "addr:housenumber" );        
+      $poiphone     = convert_string($2)        if ($1 eq "phone" );
+
+      if ($1 eq "is_in") {
+          ($poicity, my $region, my $country) = split (/,/, convert_string($2));
+          $poiregion  = $region         if ($region);
+          $poicountry = $country        if ($region);
+      }
+      
       next;
    }
 
@@ -273,9 +292,19 @@ while (<IN>) {
        print  "[POI]\n";
        printf "Type=%s\n",            $type[0];
        printf "Data%d=($latlon)\n",   $type[1];
-       printf "EndLevel=%d\n",        $type[2]        if ($type[2] > $type[1]);
-       printf "City=Y\n",                             if ($type[3]);
-       print  "Label=$poiname\n"                      if ($poiname);
+       printf "EndLevel=%d\n",        $type[2]          if ($type[2] > $type[1]);
+       printf "City=Y\n",                               if ($type[3]);
+       print  "Label=$poiname\n"                        if ($poiname);
+
+       print  "StreetDesc=$poistreet\n"                 if ($poistreet);
+       printf "CityName=%s\n", $poicity ? $poicity : $defaultcity;
+       print  "RegionName=$poiregion\n"                 if ($poiregion);
+       print  "CountryName=$poicountry\n"               if ($poicountry);
+       print  "Zip=$poizip\n"                           if ($poizip);
+
+       print  "HouseNumber=$poihouse\n"                 if ($poihouse);
+       print  "Phone=$poiphone\n"                       if ($poiphone);
+
        print  "[END]\n\n";
    }
 }
