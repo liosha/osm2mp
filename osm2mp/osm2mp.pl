@@ -430,6 +430,8 @@ my %rchain;
 my %rprops;
 my %risin;
 
+my %xnodes;
+
 print STDERR "Processing ways...        ";
 print "\n\n\n; ### Lines and polygons\n\n";
 
@@ -553,9 +555,16 @@ while ($_) {
            $rp[10] = $polynobic                         if defined $polynobic;
            $rp[11] = $polynohgv                         if defined $polynohgv;
 
-           $rchain{$id} = [ @chain ];
-           $rprops{$id} = [ $poly, $polyname, join (",",@rp) ];
-           $risin{$id}  = $isin         if ($isin);
+           for (my $i=0; $i<$#chainlist+1; $i+=2) {
+               $rchain{"$id:$i"} = [ @chain[$chainlist[$i]..$chainlist[$i+1]] ];
+               $rprops{"$id:$i"} = [ $poly, $polyname, join (",",@rp) ];
+               $risin{"$id:$i"}  = $isin         if ($isin);
+
+               $xnodes{ $chain[$chainlist[$i]] }        = 1;
+               $xnodes{ $chain[$chainlist[$i]+1] }      = 1;
+               $xnodes{ $chain[$chainlist[$i+1]] }      = 1;
+               $xnodes{ $chain[$chainlist[$i+1]-1] }    = 1;
+           }
 
            # processing associated turn restrictions
            if ($restrictions) {
@@ -743,7 +752,7 @@ my %rnodes;
 my %nodid;
 
 print STDERR "Detecting road nodes...   ";
-print "\n\n\n; ### Routing nodes\n\n";
+# print "\n\n\n; ### Routing nodes\n\n";
 
 while (my ($road, $pchain) = each %rchain) {
     for my $node (@{$pchain}) {    $rnodes{$node} ++;    }
@@ -756,6 +765,11 @@ for my $node (keys %rnodes) {
         $nodid{$node} = $nodcount++;
     }
 }
+
+for my $node (keys %xnodes) {   
+    $nodid{$node} = $nodcount++         if (!$nodid{$node});
+}
+
 
 printf STDERR "%d found\n", scalar keys %nodid;
 
@@ -938,7 +952,7 @@ while (my ($road, $pchain) = each %rchain) {
     for (my $i=0; $i < scalar @{$pchain}; $i++) {
         my $node = $pchain->[$i];
         if ($nodid{$node}) {
-            printf "Nod%d=%d,%d,0\n", $nodcount++, $i, $nodid{$node};
+            printf "Nod%d=%d,%d,%d\n", $nodcount++, $i, $nodid{$node}, $xnodes{$node};
         }
     }
 
