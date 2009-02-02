@@ -560,10 +560,14 @@ while ($_) {
                $rprops{"$id:$i"} = [ $poly, $polyname, join (",",@rp) ];
                $risin{"$id:$i"}  = $isin         if ($isin);
 
-               $xnodes{ $chain[$chainlist[$i]] }        = 1;
-               $xnodes{ $chain[$chainlist[$i]+1] }      = 1;
-               $xnodes{ $chain[$chainlist[$i+1]] }      = 1;
-               $xnodes{ $chain[$chainlist[$i+1]-1] }    = 1;
+               if ( !insidebbox($nodes{$chain[$chainlist[$i]]}) ) {
+                   $xnodes{ $chain[$chainlist[$i]] }        = 1;
+                   $xnodes{ $chain[$chainlist[$i]+1] }      = 1;
+               }
+               if ( !insidebbox($nodes{$chain[$chainlist[$i+1]]}) ) {
+                   $xnodes{ $chain[$chainlist[$i+1]] }      = 1;
+                   $xnodes{ $chain[$chainlist[$i+1]-1] }    = 1;
+               }
            }
 
            # processing associated turn restrictions
@@ -952,7 +956,7 @@ while (my ($road, $pchain) = each %rchain) {
     for (my $i=0; $i < scalar @{$pchain}; $i++) {
         my $node = $pchain->[$i];
         if ($nodid{$node}) {
-            printf "Nod%d=%d,%d,%d\n", $nodcount++, $i, $nodid{$node}, $xnodes{$node};
+            printf "Nod%d=%d,%d,%d\n ; $node $xnodes{$node}\n", $nodcount++, $i, $nodid{$node}, $xnodes{$node};
         }
     }
 
