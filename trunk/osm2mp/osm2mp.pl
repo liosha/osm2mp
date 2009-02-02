@@ -995,12 +995,12 @@ if ($restrictions) {
             my $j = $rel->[6] + $rel->[5];
             $j += $rel->[5]         while ($j>=0 && $j < $#{$rchain{$rel->[4]}} && !$nodid{$rchain{$rel->[4]}->[$j]});
 
-            print  "[Restrict]\n";
-            printf "Nod=${nodid{$rel->[0]}}\n";
-            print  "TraffPoints=${nodid{$rchain{$rel->[1]}->[$i]}},${nodid{$rel->[0]}},${nodid{$rchain{$rel->[4]}->[$j]}}\n";
-            print  "TraffRoads=${roadid{$rel->[1]}},${roadid{$rel->[4]}}\n";
-            print  "Time=\n";
-            print  "[END-Restrict]\n";
+            print  ";[Restrict]\n";
+            printf ";Nod=${nodid{$rel->[0]}}\n";
+            print  ";TraffPoints=${nodid{$rchain{$rel->[1]}->[$i]}},${nodid{$rel->[0]}},${nodid{$rchain{$rel->[4]}->[$j]}}\n";
+            print  ";TraffRoads=${roadid{$rel->[1]}},${roadid{$rel->[4]}}\n";
+            print  ";Time=\n";
+            print  ";[END-Restrict]\n";
         }
     }
 
