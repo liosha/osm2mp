@@ -956,7 +956,7 @@ while (my ($road, $pchain) = each %rchain) {
     for (my $i=0; $i < scalar @{$pchain}; $i++) {
         my $node = $pchain->[$i];
         if ($nodid{$node}) {
-            printf "Nod%d=%d,%d,%d\n ; $node $xnodes{$node}\n", $nodcount++, $i, $nodid{$node}, $xnodes{$node};
+            printf "Nod%d=%d,%d,%d\n", $nodcount++, $i, $nodid{$node}, $xnodes{$node};
         }
     }
 
