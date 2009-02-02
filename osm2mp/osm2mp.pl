@@ -560,13 +560,15 @@ while ($_) {
                $rprops{"$id:$i"} = [ $poly, $polyname, join (",",@rp) ];
                $risin{"$id:$i"}  = $isin         if ($isin);
 
-               if ( !insidebbox($nodes{$chain[$chainlist[$i]]}) ) {
-                   $xnodes{ $chain[$chainlist[$i]] }        = 1;
-                   $xnodes{ $chain[$chainlist[$i]+1] }      = 1;
-               }
-               if ( !insidebbox($nodes{$chain[$chainlist[$i+1]]}) ) {
-                   $xnodes{ $chain[$chainlist[$i+1]] }      = 1;
-                   $xnodes{ $chain[$chainlist[$i+1]-1] }    = 1;
+               if ($bbox) {
+                   if ( !insidebbox($nodes{$chain[$chainlist[$i]]}) ) {
+                       $xnodes{ $chain[$chainlist[$i]] }        = 1;
+                       $xnodes{ $chain[$chainlist[$i]+1] }      = 1;
+                   }
+                   if ( !insidebbox($nodes{$chain[$chainlist[$i+1]]}) ) {
+                       $xnodes{ $chain[$chainlist[$i+1]] }      = 1;
+                       $xnodes{ $chain[$chainlist[$i+1]-1] }    = 1;
+                   }
                }
            }
 
