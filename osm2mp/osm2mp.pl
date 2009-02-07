@@ -9,7 +9,7 @@
 
 ####    Settings
 
-my $version = "0.65a";
+my $version = "0.65";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
@@ -18,7 +18,7 @@ my $cfgheader   = "header.tpl";
 
 my $codepage    = "1251";
 my $mapid       = "88888888";
-my $mapname     = "OSM routable map";
+my $mapname     = "OSM routable";
 
 my $defaultcountry = "Earth";
 my $defaultregion  = "OSM";
@@ -276,7 +276,7 @@ while (<IN>) {
       if ($1 eq "is_in") {
           ($poicity, my $region, my $country) = split (/,/, convert_string($2));
           $poiregion  = $region         if ($region);
-          $poicountry = $country        if ($region);
+          $poicountry = $country        if ($country);
       }
       
       next;
@@ -335,8 +335,11 @@ my $relstr  = $_;
 
 my %mpoly;
 my %mpholes;
+
 my %trest;
-my %waytr;
+#my %waytr;
+my %nodetr;
+
 
 print STDERR "Loading relations...      ";
 
@@ -346,7 +349,7 @@ my $reltype;
 my $mp_outer;
 my @mp_inner;
 
-my ($tr_from, $tr_via, $tr_to);
+my ($tr_from, $tr_via, $tr_to, $tr_type);
 
 while ($_) {
 
@@ -356,7 +359,8 @@ while ($_) {
         $id = $1;
         undef $reltype;
         undef $mp_outer;        undef @mp_inner;
-        undef $tr_from;         undef $tr_via;          undef $tr_to;
+        undef $tr_from;         undef $tr_via;          
+        undef $tr_to;           undef $tr_type;
         next;
     }
 
@@ -376,6 +380,7 @@ while ($_) {
     if ( /\<tag/ ) {
         /k=["'](\w+)["'].*v=["'](\w+)["']/;
         $reltype = $2                           if ( $1 eq "type" );
+        $tr_type = $2                           if ( $1 eq "restriction" );
         next;
     }
 
@@ -385,9 +390,17 @@ while ($_) {
             @mpholes{@mp_inner} = @mp_inner;
         }
         if ( $restrictions && $reltype eq "restriction" ) {
-            $trest{$id} = [ $tr_via, $tr_from, 0, -1, $tr_to, 0, -1 ];
-            push @{$waytr{$tr_from}}, $id;
-            push @{$waytr{$tr_to}}, $id;
+            $tr_to = $tr_from                   if ($tr_type eq "no_u_turn" && !$tr_to);
+
+            if ( $tr_from && $tr_via && $tr_to ) {
+                $trest{$id} = { node => $tr_via, 
+                                type => ($tr_type =~ /^only_/) ? "only" : "no",
+                                fr_way => $tr_from,   fr_dir => 0,   fr_pos => -1, 
+                                to_way => $tr_to,     to_dir => 0,   to_pos => -1 };
+                push @{$nodetr{$tr_via}}, $id;
+            } else {
+                print ";ERROR: Wrong restriction RelID=$id\n";
+            }
         }
         next;
     }
@@ -429,7 +442,7 @@ while ($_) {
       /^.*ref=["'](.*)["'].*$/;
       if ($nodes{$1}  &&  $1 ne $chain[-1] ) {
           push @chain, $1;
-      } else {
+      } elsif ($nodes{$1}) {
           print "; ERROR: WayID=$id has dupes at ($nodes{$1})\n";
           $dupcount ++;
       }
@@ -470,18 +483,18 @@ $_ = $waystr;
 my $countlines = 0;
 my $countpolygons = 0;
 
-   my $id;
-   my @chain;
-   my @chainlist;
-   my $inbbox;
+my $id;
+my @chain;
+my @chainlist;
+my $inbbox;
 
-   my ($poly, $polyname);
-   $nameprio = 99;
-   my $isin;
-   
-   my $speed;
-   my $polydir;
-   my ($polytoll, $polynoauto, $polynobus, $polynoped, $polynobic, $polynohgv);
+my ($poly, $polyname);
+my $nameprio = 99;
+my $isin;
+
+my $speed;
+my $polydir;
+my ($polytoll, $polynoauto, $polynobus, $polynoped, $polynobic, $polynohgv);
 
 while ($_) {
 
@@ -561,8 +574,6 @@ while ($_) {
        if ( !$bbox )                    {   @chainlist = (0);   }
        if ( !($#chainlist % 2) )        {   push @chainlist, $#chain;   }
 
-#       print "; $id   ".join(":",@chainlist)."\n\n";
-
        ##       this way is road
  
        if ( $polytype{$poly}->[0] eq "r"  &&  scalar @chain <= 1 ) {
@@ -602,21 +613,36 @@ while ($_) {
            }
 
            # processing associated turn restrictions
+
            if ($restrictions) {
-             for my $relid (@{$waytr{$id}}) {
-               if ($trest{$relid}->[1] eq $id) {
-                   $trest{$relid}->[3] = indexof (\@chain, $trest{$relid}->[0]);
-                   if ($rp[2] && $trest{$relid}->[3] != 0)              { $trest{$relid}->[2] = 1; }
-                    elsif ($trest{$relid}->[3] == 0 && !$rp[2])         { $trest{$relid}->[2] = -1; }
-                    elsif ($trest{$relid}->[3] == $#chain)              { $trest{$relid}->[2] = 1; }
+               if ( $chainlist[0] == 0 ) {
+                   for my $relid (@{$nodetr{$chain[0]}}) {
+                       if ( $trest{$relid}->{fr_way} eq $id ) {  
+                           $trest{$relid}->{fr_way} = "$id:0";
+                           $trest{$relid}->{fr_dir} = -1;
+                           $trest{$relid}->{fr_pos} = 0;
+                       }
+                       if ( $trest{$relid}->{to_way} eq $id ) {  
+                           $trest{$relid}->{to_way} = "$id:0";
+                           $trest{$relid}->{to_dir} = 1;
+                           $trest{$relid}->{to_pos} = 0;
+                       }
+                   }
                }
-               if ($trest{$relid}->[4] eq $id) {
-                   $trest{$relid}->[6] = indexof (\@chain, $trest{$relid}->[0]);
-                   if ($rp[2] && $trest{$relid}->[6] != $#chain)        { $trest{$relid}->[5] = 1; }
-                    elsif ($trest{$relid}->[6] == 0)                    { $trest{$relid}->[5] = 1; }
-                    elsif ($trest{$relid}->[6] == $#chain && !$rp[2])   { $trest{$relid}->[5] = -1; }
+               if ( $chainlist[-1] == $#chain ) {
+                   for my $relid (@{$nodetr{$chain[-1]}}) {
+                       if ( $trest{$relid}->{fr_way} eq $id ) {  
+                           $trest{$relid}->{fr_way} = "$id:" . (($#chainlist-1)>>1);
+                           $trest{$relid}->{fr_dir} = 1;
+                           $trest{$relid}->{fr_pos} = $chainlist[-1] - $chainlist[-2];
+                       }
+                       if ( $trest{$relid}->{to_way} eq $id ) {  
+                           $trest{$relid}->{to_way} = "$id:" . (($#chainlist-1)>>1);
+                           $trest{$relid}->{to_dir} = -1;
+                           $trest{$relid}->{to_pos} = $chainlist[-1] - $chainlist[-2];
+                       }
+                   }
                }
-             }
            }
        }
 
@@ -694,6 +720,7 @@ printf STDERR "%d roads loaded
 
 
 
+
 ####    Detecting end nodes
 
 my %enodes;
@@ -746,21 +773,18 @@ if ($mergeroads) {
             $rmove{$r2} = $r1;
 
             if ($restrictions) {
-              for my $relid (@{$waytr{$r2}}) {
-                if ($trest{$relid}->[1] eq $r2) {
-                    print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
-                    $trest{$relid}->[1] = $r1;
-                    $trest{$relid}->[3] += ( (scalar @{$rchain{$r1}}) - 1 );
-                    push @{$waytr{$r1}}, $relid;
+                while ( my ($relid, $tr) = each %trest )  {
+                    if ( $tr->{fr_way} eq $r2 )  {  
+                        print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
+                        $tr->{fr_way} = $r1;
+                        $tr->{fr_pos} += ( (scalar @{$rchain{$r1}}) - 1 );
+                    }
+                    if ( $tr->{to_way} eq $r2 )  {  
+                        print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
+                        $tr->{to_way} = $r1;
+                        $tr->{to_pos} += ( (scalar @{$rchain{$r1}}) - 1 );
+                    }
                 }
-                if ($trest{$relid}->[4] eq $r2) {
-                    print "; FIX: RelID=$relid TO moved from WayID=$r2 to WayID=$r1\n";
-                    $trest{$relid}->[4] = $r1;
-                    $trest{$relid}->[6] += ( (scalar @{$rchain{$r1}}) - 1 );
-                    push @{$waytr{$r1}}, $relid;
-                }
-              }
-              delete $waytr{$r2};
             }
 
             $enodes{$rchain{$r2}->[0]} -= 2;
@@ -785,26 +809,24 @@ if ($mergeroads) {
 
 my %rnodes;
 my %nodid;
+my %nodeways;
 
 print STDERR "Detecting road nodes...   ";
-# print "\n\n\n; ### Routing nodes\n\n";
 
 while (my ($road, $pchain) = each %rchain) {
-    for my $node (@{$pchain}) {    $rnodes{$node} ++;    }
+    for my $node (@{$pchain}) {
+        $rnodes{$node} ++;
+        push @{$nodeways{$node}}, $road         if ($nodetr{$node});
+    }
 }
 
 my $nodcount = 1;
 for my $node (keys %rnodes) {
-    if ($rnodes{$node}>1 || $enodes{$node}>0) {
-#        printf "; NodID=$nodcount - NodeID=$node at (%s) - $rnodes{$node} roads, $enodes{$node} ends\n", $nodes{$node};
+    if ( $rnodes{$node}>1 || $enodes{$node}>0 || $xnodes{$node} || (defined($nodetr{$node}) && scalar @{$nodetr{$node}}) ) {
+#        printf "; NodID=$nodcount - NodeID=$node at (%s) - $rnodes{$node} roads, $enodes{$node} ends, X=$xnodes{$node}, %d trs\n", $nodes{$node}, (defined($nodetr{$node}) && scalar @{$nodetr{$node}});
         $nodid{$node} = $nodcount++;
     }
 }
-
-for my $node (keys %xnodes) {   
-    $nodid{$node} = $nodcount++         if (!$nodid{$node});
-}
-
 
 printf STDERR "%d found\n", scalar keys %nodid;
 
@@ -838,7 +860,6 @@ if ($detectdupes) {
 
     for my $seg (keys %segways) {
         if ( $#{$segways{$seg}} > 0 ) {
-#            printf "; ERROR: Segment $seg is a part of %d roads - %s\n", scalar @{$segways{$seg}}, join (", ", @{$segways{$seg}});
             $countdupsegs ++;
             my $roads = join ", ", ( sort {$a cmp $b} @{$segways{$seg}} );
             $roadsegs{$roads} ++;
@@ -897,13 +918,6 @@ if ($splitroads) {
             $j = $i             if ($nodid{$pchain->[$i]});
         }
         if (scalar @breaks > 0) {
-            if ($restrictions) {
-              for my $relid (@{$waytr{$road}}) {
-                # FIXME: processing turn restrictions for splitted roads
-                print STDERR "Warning! Turn restriction RelID=$relid is not properly processed\n";
-                delete $trest{$relid};
-              }
-            }
             printf "; FIX: WayID=$road is splitted at %s\n", join (", ", @breaks);
             push @breaks, $#{$pchain};
             for (my $i=0; $i<$#breaks; $i++) {
@@ -912,12 +926,36 @@ if ($splitroads) {
                 $rchain{$id} = [ @{$pchain}[$breaks[$i] .. $breaks[$i+1]] ];
                 $rprops{$id} = $rprops{$road};
                 $risin{$id}  = $risin{$road};
+
+                if ($restrictions) {
+                    while ( my ($relid, $tr) = each %trest )  {  
+                        if ( $tr->{to_way} eq $road ) {
+                            #print "; Rel=$relid   ". join (" : ", %{$tr}) ."\n";
+                            if ( $tr->{to_pos} > $breaks[$i]-(1+$tr->{to_dir})/2 && $tr->{to_pos} <= $breaks[$i+1]-(1+$tr->{to_dir})/2 ) {
+                                $tr->{to_way} = $id;
+                                $tr->{to_pos} -= $breaks[$i];
+                                print "; FIX: Turn restriction RelID=$relid moved to WayID=$id\n";
+                                #print "; now Rel=$relid   ". join (" : ", %{$tr}) ."\n";
+                            }
+                        }
+                        if ( $tr->{fr_way} eq $road ) {
+                            #print "; Rel=$relid   ". join (" : ", %{$tr}) ."\n";
+                            if ( $tr->{fr_pos} > $breaks[$i]+($tr->{fr_dir}-1)/2 && $tr->{fr_pos} <= $breaks[$i+1]+($tr->{fr_dir}-1)/2 ) {
+                                $tr->{fr_way} = $id;
+                                $tr->{fr_pos} -= $breaks[$i];
+                                print "; FIX: Turn restriction RelID=$relid moved to WayID=$id\n";
+                                #print "; now Rel=$relid   ". join (" : ", %{$tr}) ."\n";
+                            }
+                        }
+                    }
+                }
             }
             $#{$pchain} = $breaks[0];
         }
     }
     print STDERR "$countself self-intersections, $countlong long roads\n";
 }
+
 
 
 
@@ -961,7 +999,7 @@ while (my ($road, $pchain) = each %rchain) {
     my ($poly, $name, $rp) = @{$rprops{$road}};
     my @type = @{$polytype{$poly}};
 
-    $roadid{$road} = $roadcount         if ($waytr{$road});
+    $roadid{$road} = $roadcount;
 
     #  @type == [ $mode, $type, $prio, $llev, $hlev, $rp ]
     print  "; WayID = $road\n";
@@ -1002,40 +1040,47 @@ printf STDERR "%d written\n", $roadcount-1;
 
 ####    Writing turn restrictions
 
+my $counttrest = 0;
 if ($restrictions) {
-    my $counttrest = 0;
 
     print "\n\n\n; ### Turn restrictions\n\n";
 
     print STDERR "Writing restrictions...   ";
 
-    while ( my ($relid, $rel) = each %trest ) {
+    while ( my ($relid, $tr) = each %trest ) {
 
-        printf "\n; RelID = $relid, %s\n", join(":", @{$rel});
+        print  "\n; Rel=$relid    ". join (" : ", %{$tr}) ."\n";
+        my $err = 0;
 
-        if      ($rel->[2] == 0) {
-            print "; ERROR: RelID=$relid has undefined FROM direction\n";
-        } elsif ($rel->[5] == 0) {
-            print "; ERROR: RelID=$relid has undefined TO direction\n";
-        } elsif ($rel->[3] == -1) {
-            print "; ERROR: RelID=$relid FROM road does'n contain VIA node\n";
-        } elsif ($rel->[6] == -1) {
-            print "; ERROR: RelID=$relid TO road does'n contain VIA node\n";
-        } else {
+        if  ($tr->{fr_dir} == 0)        {  $err=1;  print "; ERROR: RelID=$relid FROM road does'n have VIA end node\n";  }
+        if  ($tr->{to_dir} == 0)        {  $err=1;  print "; ERROR: RelID=$relid TO road does'n have VIA end node\n"; } 
 
-            $counttrest ++;
+        if ( !$err && $tr->{type} eq "no") {
+            dumptrest ($tr);
+        }
 
-            my $i = $rel->[3] - $rel->[2];
-            $i -= $rel->[2]         while ($i>=0 && $i < $#{$rchain{$rel->[1]}} && !$nodid{$rchain{$rel->[1]}->[$i]});
-            my $j = $rel->[6] + $rel->[5];
-            $j += $rel->[5]         while ($j>=0 && $j < $#{$rchain{$rel->[4]}} && !$nodid{$rchain{$rel->[4]}->[$j]});
+        if ( !$err && $tr->{type} eq "only") {
+#            print  "; Roads:  " . join (", ", @{$nodeways{$trest{$relid}->{node}}}) . "\n";
+            my %newtr = (
+                    node    => $tr->{node},
+                    fr_way  => $tr->{fr_way},
+                    fr_dir  => $tr->{fr_dir},
+                    fr_pos  => $tr->{fr_pos}
+                );
+            for my $road (@{$nodeways{$trest{$relid}->{node}}}) {
+                print "; To road $road \n";
+                $newtr{to_way} = $road;
+                $newtr{to_pos} = indexof( $rchain{$road}, $tr->{node} );
 
-            print  ";[Restrict]\n";
-            printf ";Nod=${nodid{$rel->[0]}}\n";
-            print  ";TraffPoints=${nodid{$rchain{$rel->[1]}->[$i]}},${nodid{$rel->[0]}},${nodid{$rchain{$rel->[4]}->[$j]}}\n";
-            print  ";TraffRoads=${roadid{$rel->[1]}},${roadid{$rel->[4]}}\n";
-            print  ";Time=\n";
-            print  ";[END-Restrict]\n";
+                if ( $newtr{to_pos} > 0 && !($tr->{to_way} eq $road && $tr->{to_dir} eq -1) ) {
+                    $newtr{to_dir} = -1;
+                    dumptrest (\%newtr);
+                }
+                if ( $newtr{to_pos} < $#{$rchain{$road}} && !($tr->{to_way} eq $road && $tr->{to_dir} eq 1) ) {
+                    $newtr{to_dir} = 1;
+                    dumptrest (\%newtr);
+                }
+            }
         }
     }
 
@@ -1154,5 +1199,25 @@ sub insidebbox {                # $latlon
     return 1    if ( $lat>=$minlat && $lon>=$minlon && $lat<$maxlat && $lon<$maxlon );
     return 0;
 
+}
+
+
+sub dumptrest {                 # \%trest
+
+    $counttrest ++;
+
+    my $tr = $_[0];
+
+    my $i = $tr->{fr_pos} - $tr->{fr_dir};
+    $i -= $tr->{fr_dir}         while ( !$nodid{$rchain{$tr->{fr_way}}->[$i]} && $i>=0 && $i < $#{$rchain{$tr->{fr_way}}} );
+    my $j = $tr->{to_pos} + $tr->{to_dir};
+    $j += $tr->{to_dir}         while ( !$nodid{$rchain{$tr->{to_way}}->[$j]} && $j>=0 && $j < $#{$rchain{$tr->{to_way}}} );
+
+    print  "[Restrict]\n";
+    printf "Nod=${nodid{$tr->{node}}}\n";
+    print  "TraffPoints=${nodid{$rchain{$tr->{fr_way}}->[$i]}},${nodid{$tr->{node}}},${nodid{$rchain{$tr->{to_way}}->[$j]}}\n";
+    print  "TraffRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
+    print  "Time=\n";
+    print  "[END-Restrict]\n\n";
 }
 
