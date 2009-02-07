@@ -1,8 +1,10 @@
 ################################
 #
-#  TODO (?)
+#  Possible TODO list
 #
-#  * обработка границ (внешние ноды)
-#  * береговая линия
+#  * cropping of map polygons
+#  * shoreline processing
+#  * custom shape crop area
+#  * house numbering
 #
 #
