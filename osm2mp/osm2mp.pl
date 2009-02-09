@@ -44,6 +44,10 @@ my $upcase         = 0;
 my $bbox;
 my $background     = 0;
 
+my $disableuturns  = 0;     
+
+
+
 my %yesno = (  "yes"            => 1,
                "true"           => 1,
                "1"              => 1,
@@ -76,6 +80,7 @@ $result = GetOptions (
                         "upcase!"               => \$upcase,
                         "bbox=s"                => \$bbox,
                         "background!",          => \$background,
+                        "disableuturns!",       => \$disableuturns,
                       );
 
 undef $codepage         if ($nocodepage);
@@ -93,27 +98,27 @@ print STDERR "\n  ---|   OSM -> MP converter  $version   (c) 2008,2009  liosha, 
 if ($ARGV[0] eq "") {
     print "Usage:  osm2mp.pl [options] file.osm > file.mp
 
-Possible options:
+Possible options [defaults]:
 
-    --cfgpoi <file>           poi config
-    --cfgpoly <file>          way config
-    --header <file>           header template
+    --cfgpoi <file>           poi config        [$cfgpoi]
+    --cfgpoly <file>          way config        [$cfgpoly]
+    --header <file>           header template   [$cfgheader]
 
     --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
     --background              create background object
 
-    --mapid <id>              map id
-    --mapname <name>          map name
+    --mapid <id>              map id    [$mapid]
+    --mapname <name>          map name  [$mapname]
 
-    --codepage <num>          codepage number (e.g. 1252)
+    --codepage <num>          codepage number (e.g. 1252)       [$codepage]
     --nocodepage              leave all labels in utf-8
     --upcase                  convert all labels to upper case
 
-    --nametaglist <list>      comma-separated list of tags for Label
+    --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
 
     --mergeroads              merge same ways
     --nomergeroads
-    --mergecos <cosine>       maximum allowed angle between roads to merge
+    --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
 
     --detectdupes             detect road duplicates
     --nodetectdupes
@@ -123,14 +128,14 @@ Possible options:
 
     --fixclosenodes           enlarge distance between too close nodes
     --nofixclosenodes         (cgpsmapper-specific)
-    --fixclosedist (dist)     minimum allowed distance (default 5.5 metres)
+    --fixclosedist (dist)     minimum allowed distance (default 5.5 metres)     [$fixclosedist]
 
     --restrictions            process turn restrictions
     --norestrictions
 
-    --defaultcountry <name>   default data for street indexing
-    --defaultregion <name>
-    --defaultcity <name>
+    --defaultcountry <name>   default data for street indexing  [$defaultcountry]
+    --defaultregion <name>                                      [$defaultregion]
+    --defaultcity <name>                                        [$defaultcity]
 \n";
     exit;
 }
@@ -816,15 +821,38 @@ print STDERR "Detecting road nodes...   ";
 while (my ($road, $pchain) = each %rchain) {
     for my $node (@{$pchain}) {
         $rnodes{$node} ++;
-        push @{$nodeways{$node}}, $road         if ($nodetr{$node});
+        push @{$nodeways{$node}}, $road         if ($nodetr{$node} || ($disableuturns && $enodes{$node==2}));
     }
 }
 
 my $nodcount = 1;
+my $utcount  = 0;
 for my $node (keys %rnodes) {
     if ( $rnodes{$node}>1 || $enodes{$node}>0 || $xnodes{$node} || (defined($nodetr{$node}) && scalar @{$nodetr{$node}}) ) {
 #        printf "; NodID=$nodcount - NodeID=$node at (%s) - $rnodes{$node} roads, $enodes{$node} ends, X=$xnodes{$node}, %d trs\n", $nodes{$node}, (defined($nodetr{$node}) && scalar @{$nodetr{$node}});
         $nodid{$node} = $nodcount++;
+    }
+    if ($disableuturns && $rnodes{$node}==2 && $enodes{$node}==2) {
+        if ( $rprops{$nodeways{$node}->[0]}[2] !~ /^.,.,1/ ) {
+            my $dir = indexof ($rchain{$nodeways{$node}->[0]}, $node);
+            $trest{"ut".$utcount++} = { node => $node,  type => "no",
+                        fr_way => $nodeways{$node}->[0],   
+                        fr_dir => ($dir>0) ? 1 : -1,
+                        fr_pos => $dir, 
+                        to_way => $nodeways{$node}->[0],     
+                        to_dir => ($dir>0) ? -1 : 1,
+                        to_pos => $dir };
+        }
+        if ( $rprops{$nodeways{$node}->[0]}[2] !~ /^.,.,1/ ) {
+            my $dir = indexof ($rchain{$nodeways{$node}->[1]}, $node);
+            $trest{"ut".$utcount++} = { node => $node,  type => "no",
+                        fr_way => $nodeways{$node}->[1],   
+                        fr_dir => ($dir>0) ? 1 : -1,
+                        fr_pos => $dir, 
+                        to_way => $nodeways{$node}->[1],     
+                        to_dir => ($dir>0) ? -1 : 1,
+                        to_pos => $dir };
+        }
     }
 }
 
@@ -1072,7 +1100,7 @@ if ($restrictions) {
                 $newtr{to_way} = $road;
                 $newtr{to_pos} = indexof( $rchain{$road}, $tr->{node} );
 
-                if ( $newtr{to_pos} > 0 && !($tr->{to_way} eq $road && $tr->{to_dir} eq -1) ) {
+                if ( $newtr{to_pos} > 0 && !($tr->{to_way} eq $road && $tr->{to_dir} eq -1) && ($rprops{$road}[2] !~ /^.,.,1/) ) {
                     $newtr{to_dir} = -1;
                     dumptrest (\%newtr);
                 }
