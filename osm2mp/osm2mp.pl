@@ -238,7 +238,6 @@ while (<IN>) {
    if ( $osmbbox && /\<bounds/ ) {
         ($minlat, $minlon, $maxlat, $maxlon) = ( /minlat=["'](\-?\d+\.?\d*)["'] minlon=["'](\-?\d+\.?\d*)["'] maxlat=["'](\-?\d+\.?\d*)["'] maxlon=["'](\-?\d+\.?\d*)["']/ );
         $bbox = join ",", ($minlon, $minlat, $maxlon, $maxlat);
-        print STDERR "--$bbox--";
    }
 
    if ( /\<node/ ) {
