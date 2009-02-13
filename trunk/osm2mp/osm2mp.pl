@@ -43,8 +43,9 @@ my $upcase         = 0;
 
 my $bbox;
 my $background     = 0;
+my $osmbbox        = 0;
 
-my $disableuturns  = 0;     
+my $disableuturns  = 0;
 
 
 
@@ -79,6 +80,7 @@ $result = GetOptions (
                         "nametaglist=s"         => \$nametaglist,
                         "upcase!"               => \$upcase,
                         "bbox=s"                => \$bbox,
+                        "osmbbox!"              => \$osmbbox,
                         "background!",          => \$background,
                         "disableuturns!",       => \$disableuturns,
                       );
@@ -96,6 +98,9 @@ print STDERR "\n  ---|   OSM -> MP converter  $version   (c) 2008,2009  liosha, 
 
 
 if ($ARGV[0] eq "") {
+
+    my @onoff = ( "off", "on");
+
     print "Usage:  osm2mp.pl [options] file.osm > file.mp
 
 Possible options [defaults]:
@@ -105,45 +110,42 @@ Possible options [defaults]:
     --header <file>           header template   [$cfgheader]
 
     --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
-    --background              create background object
+    --osmbbox                 use bounds from .osm              [$onoff[$osmbbox]]
+    --background              create background object          [$onoff[$background]]
 
-    --mapid <id>              map id    [$mapid]
-    --mapname <name>          map name  [$mapname]
+    --mapid <id>              map id            [$mapid]
+    --mapname <name>          map name          [$mapname]
 
-    --codepage <num>          codepage number (e.g. 1252)       [$codepage]
-    --nocodepage              leave all labels in utf-8
-    --upcase                  convert all labels to upper case
+    --codepage <num>          codepage number                   [$codepage]
+    --nocodepage              leave all labels in utf-8         [$onoff[$nocodepage]]
+    --upcase                  convert all labels to upper case  [$onoff[$upcase]]
 
     --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
 
-    --mergeroads              merge same ways
-    --nomergeroads
+    --mergeroads              merge same ways                           [$onoff[$mergeroads]]
     --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
 
-    --detectdupes             detect road duplicates
-    --nodetectdupes
+    --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
 
-    --splitroads              split long and self-intersecting roads
-    --nosplitroads            (cgpsmapper-specific)
+    --splitroads              split long and self-intersecting roads    [$onoff[$splitroads]]
 
-    --fixclosenodes           enlarge distance between too close nodes
-    --nofixclosenodes         (cgpsmapper-specific)
-    --fixclosedist (dist)     minimum allowed distance (default 5.5 metres)     [$fixclosedist]
+    --fixclosenodes           enlarge distance between too close nodes  [$onoff[$fixclosenodes]]
+    --fixclosedist <dist>     minimum allowed distance                  [$fixclosedist m]
 
-    --restrictions            process turn restrictions
-    --norestrictions
+    --restrictions            process turn restrictions                 [$onoff[$restrictions]]
+    --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
 
     --defaultcountry <name>   default data for street indexing  [$defaultcountry]
     --defaultregion <name>                                      [$defaultregion]
     --defaultcity <name>                                        [$defaultcity]
+
+You can use no<option> disable features (i.e --nomergeroads)
 \n";
     exit;
 }
 
 
 ####    Reading configs
-
-my ($minlon, $minlat, $maxlon, $maxlat) = split /,/, $bbox;
 
 my %poitype;
 
@@ -211,24 +213,11 @@ print STDERR "Processing file $ARGV[0]\n\n";
 
 
 
-####    Background object (?)
-
-
-if ($bbox && $background) {
-
-    print "\n\n\n; ### Background\n\n";
-    print  "[POLYGON]\n";
-    print  "Type=0x4b\n";
-    print  "EndLevel=9\n";
-    print  "Data0=($minlat,$minlon), ($minlat,$maxlon), ($maxlat,$maxlon), ($maxlat,$minlon) \n";
-    print  "[END]\n\n\n";
-
-}
-
-
 
 
 ####    Loading nodes and writing POIs
+
+my ($minlon, $minlat, $maxlon, $maxlat) = split /,/, $bbox;
 
 my %nodes;
 
@@ -245,6 +234,12 @@ my $nameprio = 99;
 
 while (<IN>) {
    last if /\<way/;
+
+   if ( $osmbbox && /\<bounds/ ) {
+        ($minlat, $minlon, $maxlat, $maxlon) = ( /minlat=["'](\-?\d+\.?\d*)["'] minlon=["'](\-?\d+\.?\d*)["'] maxlat=["'](\-?\d+\.?\d*)["'] maxlon=["'](\-?\d+\.?\d*)["']/ );
+        $bbox = join ",", ($minlon, $minlat, $maxlon, $maxlat);
+        print STDERR "--$bbox--";
+   }
 
    if ( /\<node/ ) {
       /^.* id=["'](\-?\d+)["'].*lat=["'](\-?\d+\.?\d*)["'].*lon=["'](\-?\d+\.?\d*)["'].*$/;
@@ -270,12 +265,12 @@ while (<IN>) {
 
       $poistreet    = convert_string($2)        if ($1 eq "addr:street" );
       $poizip       = convert_string($2)        if ($1 eq "addr:postcode" );
-      $poicity      = convert_string($2)        if ($1 eq "addr:city" );      
+      $poicity      = convert_string($2)        if ($1 eq "addr:city" );
       $poiregion    = convert_string($2)        if ($1 eq "is_in:county");
       $poicountry   = convert_string($2)        if ($1 eq "is_in:country");
 
       # Navitel only (?)
-      $poihouse     = convert_string($2)        if ($1 eq "addr:housenumber" );        
+      $poihouse     = convert_string($2)        if ($1 eq "addr:housenumber" );
       $poiphone     = convert_string($2)        if ($1 eq "phone" );
 
       if ($1 eq "is_in") {
@@ -283,7 +278,6 @@ while (<IN>) {
           $poiregion  = $region         if ($region);
           $poicountry = $country        if ($country);
       }
-      
       next;
    }
 
@@ -364,7 +358,7 @@ while ($_) {
         $id = $1;
         undef $reltype;
         undef $mp_outer;        undef @mp_inner;
-        undef $tr_from;         undef $tr_via;          
+        undef $tr_from;         undef $tr_via;
         undef $tr_to;           undef $tr_type;
         next;
     }
@@ -398,9 +392,9 @@ while ($_) {
             $tr_to = $tr_from                   if ($tr_type eq "no_u_turn" && !$tr_to);
 
             if ( $tr_from && $tr_via && $tr_to ) {
-                $trest{$id} = { node => $tr_via, 
+                $trest{$id} = { node => $tr_via,
                                 type => ($tr_type =~ /^only_/) ? "only" : "no",
-                                fr_way => $tr_from,   fr_dir => 0,   fr_pos => -1, 
+                                fr_way => $tr_from,   fr_dir => 0,   fr_pos => -1,
                                 to_way => $tr_to,     to_dir => 0,   to_pos => -1 };
                 push @{$nodetr{$tr_via}}, $id;
             } else {
@@ -517,7 +511,6 @@ while ($_) {
       undef ($poly);
       undef ($polyname);
       $nameprio = 99;
-      
       undef ($polydir);
       undef ($polytoll);
       undef ($polynoauto);
@@ -549,13 +542,11 @@ while ($_) {
    if ( /\<tag/ ) {
        /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
        $poly       = "$1=$2"                    if ($polytype{"$1=$2"} && ($polytype{"$1=$2"}->[2] >= $polytype{$poly}->[2]));
-       
        my $tagprio = indexof(\@nametagarray, $1);
        if ($tagprio>=0 && $tagprio<$nameprio) {
            $polyname = convert_string ($2);
            $nameprio = $tagprio;
        }
-       
        $isin       = convert_string ($2)        if ($1 eq "is_in");
 
        $speed      = $2                         if ($1 eq "maxspeed" && $2>0);
@@ -580,16 +571,14 @@ while ($_) {
        if ( !($#chainlist % 2) )        {   push @chainlist, $#chain;   }
 
        ##       this way is road
- 
        if ( $polytype{$poly}->[0] eq "r"  &&  scalar @chain <= 1 ) {
            print "; ERROR: Road WayID=$id has too few nodes at ($nodes{$chain[0]})\n";
        }
        if ( $polytype{$poly}->[0] eq "r"  &&  scalar @chain > 1 ) {
            my @rp = split /,/, $polytype{$poly}->[5];
-           
            if (defined $speed) {
                if ($speed =~ /mph$/i)   {  $speed *= 1.61;  }
-               $rp[0]  = speedcode($speed);               
+               $rp[0]  = speedcode($speed);
            }
 
            $rp[2]  = $polydir                           if defined $polydir;
@@ -622,12 +611,12 @@ while ($_) {
            if ($restrictions) {
                if ( $chainlist[0] == 0 ) {
                    for my $relid (@{$nodetr{$chain[0]}}) {
-                       if ( $trest{$relid}->{fr_way} eq $id ) {  
+                       if ( $trest{$relid}->{fr_way} eq $id ) {
                            $trest{$relid}->{fr_way} = "$id:0";
                            $trest{$relid}->{fr_dir} = -1;
                            $trest{$relid}->{fr_pos} = 0;
                        }
-                       if ( $trest{$relid}->{to_way} eq $id ) {  
+                       if ( $trest{$relid}->{to_way} eq $id ) {
                            $trest{$relid}->{to_way} = "$id:0";
                            $trest{$relid}->{to_dir} = 1;
                            $trest{$relid}->{to_pos} = 0;
@@ -636,12 +625,12 @@ while ($_) {
                }
                if ( $chainlist[-1] == $#chain ) {
                    for my $relid (@{$nodetr{$chain[-1]}}) {
-                       if ( $trest{$relid}->{fr_way} eq $id ) {  
+                       if ( $trest{$relid}->{fr_way} eq $id ) {
                            $trest{$relid}->{fr_way} = "$id:" . (($#chainlist-1)>>1);
                            $trest{$relid}->{fr_dir} = 1;
                            $trest{$relid}->{fr_pos} = $chainlist[-1] - $chainlist[-2];
                        }
-                       if ( $trest{$relid}->{to_way} eq $id ) {  
+                       if ( $trest{$relid}->{to_way} eq $id ) {
                            $trest{$relid}->{to_way} = "$id:" . (($#chainlist-1)>>1);
                            $trest{$relid}->{to_dir} = -1;
                            $trest{$relid}->{to_pos} = $chainlist[-1] - $chainlist[-2];
@@ -779,12 +768,12 @@ if ($mergeroads) {
 
             if ($restrictions) {
                 while ( my ($relid, $tr) = each %trest )  {
-                    if ( $tr->{fr_way} eq $r2 )  {  
+                    if ( $tr->{fr_way} eq $r2 )  {
                         print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
                         $tr->{fr_way} = $r1;
                         $tr->{fr_pos} += ( (scalar @{$rchain{$r1}}) - 1 );
                     }
-                    if ( $tr->{to_way} eq $r2 )  {  
+                    if ( $tr->{to_way} eq $r2 )  {
                         print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
                         $tr->{to_way} = $r1;
                         $tr->{to_pos} += ( (scalar @{$rchain{$r1}}) - 1 );
@@ -836,20 +825,20 @@ for my $node (keys %rnodes) {
         if ( $rprops{$nodeways{$node}->[0]}[2] !~ /^.,.,1/ ) {
             my $dir = indexof ($rchain{$nodeways{$node}->[0]}, $node);
             $trest{"ut".$utcount++} = { node => $node,  type => "no",
-                        fr_way => $nodeways{$node}->[0],   
+                        fr_way => $nodeways{$node}->[0],
                         fr_dir => ($dir>0) ? 1 : -1,
-                        fr_pos => $dir, 
-                        to_way => $nodeways{$node}->[0],     
+                        fr_pos => $dir,
+                        to_way => $nodeways{$node}->[0],
                         to_dir => ($dir>0) ? -1 : 1,
                         to_pos => $dir };
         }
         if ( $rprops{$nodeways{$node}->[0]}[2] !~ /^.,.,1/ ) {
             my $dir = indexof ($rchain{$nodeways{$node}->[1]}, $node);
             $trest{"ut".$utcount++} = { node => $node,  type => "no",
-                        fr_way => $nodeways{$node}->[1],   
+                        fr_way => $nodeways{$node}->[1],
                         fr_dir => ($dir>0) ? 1 : -1,
-                        fr_pos => $dir, 
-                        to_way => $nodeways{$node}->[1],     
+                        fr_pos => $dir,
+                        to_way => $nodeways{$node}->[1],
                         to_dir => ($dir>0) ? -1 : 1,
                         to_pos => $dir };
         }
@@ -956,7 +945,7 @@ if ($splitroads) {
                 $risin{$id}  = $risin{$road};
 
                 if ($restrictions) {
-                    while ( my ($relid, $tr) = each %trest )  {  
+                    while ( my ($relid, $tr) = each %trest )  {
                         if ( $tr->{to_way} eq $road ) {
                             #print "; Rel=$relid   ". join (" : ", %{$tr}) ."\n";
                             if ( $tr->{to_pos} > $breaks[$i]-(1+$tr->{to_dir})/2 && $tr->{to_pos} <= $breaks[$i+1]-(1+$tr->{to_dir})/2 ) {
@@ -1066,6 +1055,23 @@ printf STDERR "%d written\n", $roadcount-1;
 
 
 
+####    Background object (?)
+
+
+if ($bbox && $background) {
+
+    print "\n\n\n; ### Background\n\n";
+    print  "[POLYGON]\n";
+    print  "Type=0x4b\n";
+    print  "EndLevel=9\n";
+    print  "Data0=($minlat,$minlon), ($minlat,$maxlon), ($maxlat,$maxlon), ($maxlat,$minlon) \n";
+    print  "[END]\n\n\n";
+
+}
+
+
+
+
 ####    Writing turn restrictions
 
 my $counttrest = 0;
@@ -1081,7 +1087,7 @@ if ($restrictions) {
         my $err = 0;
 
         if  ($tr->{fr_dir} == 0)        {  $err=1;  print "; ERROR: RelID=$relid FROM road does'n have VIA end node\n";  }
-        if  ($tr->{to_dir} == 0)        {  $err=1;  print "; ERROR: RelID=$relid TO road does'n have VIA end node\n"; } 
+        if  ($tr->{to_dir} == 0)        {  $err=1;  print "; ERROR: RelID=$relid TO road does'n have VIA end node\n"; }
 
         if ( !$err && $tr->{type} eq "no") {
             dumptrest ($tr);
