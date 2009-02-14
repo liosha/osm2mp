@@ -2,7 +2,7 @@
 
 
 ##
-##  Required packages: Template-toolkit, Getopt::Long
+##  Required packages: Template-toolkit, Getopt::Long, Text::Unidecode
 ##  See http://cpan.org/ or use PPM (Perl package manager)
 ##
 
@@ -40,6 +40,7 @@ my $nocodepage;
 
 my $nametaglist    = "name,ref,int_ref";
 my $upcase         = 0;
+my $translit       = 0;
 
 my $bbox;
 my $background     = 0;
@@ -79,6 +80,7 @@ $result = GetOptions (
                         "defaultcity=s"         => \$defaultcity,
                         "nametaglist=s"         => \$nametaglist,
                         "upcase!"               => \$upcase,
+                        "translit!"             => \$translit,
                         "bbox=s"                => \$bbox,
                         "osmbbox!"              => \$osmbbox,
                         "background!",          => \$background,
@@ -119,6 +121,7 @@ Possible options [defaults]:
     --codepage <num>          codepage number                   [$codepage]
     --nocodepage              leave all labels in utf-8         [$onoff[$nocodepage]]
     --upcase                  convert all labels to upper case  [$onoff[$upcase]]
+    --translit                tranliterate labels               [$onoff[$translit]]
 
     --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
 
@@ -1136,12 +1139,14 @@ print STDERR "All done!!\n\n";
 ####    Functions
 
 use Encode;
+use Text::Unidecode;
 
 sub convert_string {            # String
 
    my $str = decode("utf8", $_[0]);
-   $str = uc($str) if ($upcase);
-   $str = $nocodepage ? $_[0] : encode ("cp".$codepage, $str);
+   $str = unidecode($str)       if ($translit);
+   $str = uc($str)              if ($upcase);
+   $str = encode ( ($nocodepage ? "utf8" : "cp".$codepage), $str);
 
    $str =~ s/\&amp\;/\&/gi;
    $str =~ s/\&#38\;/\&/gi;
