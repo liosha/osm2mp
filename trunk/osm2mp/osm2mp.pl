@@ -812,7 +812,7 @@ print STDERR "Detecting road nodes...   ";
 while (my ($road, $pchain) = each %rchain) {
     for my $node (@{$pchain}) {
         $rnodes{$node} ++;
-        push @{$nodeways{$node}}, $road         if ($nodetr{$node} || ($disableuturns && $enodes{$node==2}));
+        push @{$nodeways{$node}}, $road         if ($nodetr{$node} || ($disableuturns && $enodes{$node}==2));
     }
 }
 
@@ -824,7 +824,7 @@ for my $node (keys %rnodes) {
         $nodid{$node} = $nodcount++;
     }
     if ($disableuturns && $rnodes{$node}==2 && $enodes{$node}==2) {
-        if ( $rprops{$nodeways{$node}->[0]}[2] !~ /^.,.,1/ ) {
+        if ( $rprops{$nodeways{$node}->[0]}[2] =~ /^.,.,0/ ) {
             my $dir = indexof ($rchain{$nodeways{$node}->[0]}, $node);
             $trest{"ut".$utcount++} = { node => $node,  type => "no",
                         fr_way => $nodeways{$node}->[0],
@@ -834,7 +834,7 @@ for my $node (keys %rnodes) {
                         to_dir => ($dir>0) ? -1 : 1,
                         to_pos => $dir };
         }
-        if ( $rprops{$nodeways{$node}->[0]}[2] !~ /^.,.,1/ ) {
+        if ( $rprops{$nodeways{$node}->[1]}[2] =~ /^.,.,0/ ) {
             my $dir = indexof ($rchain{$nodeways{$node}->[1]}, $node);
             $trest{"ut".$utcount++} = { node => $node,  type => "no",
                         fr_way => $nodeways{$node}->[1],
@@ -1091,7 +1091,7 @@ if ($restrictions) {
         if  ($tr->{fr_dir} == 0)        {  $err=1;  print "; ERROR: RelID=$relid FROM road does'n have VIA end node\n";  }
         if  ($tr->{to_dir} == 0)        {  $err=1;  print "; ERROR: RelID=$relid TO road does'n have VIA end node\n"; }
 
-        if ( !$err && $tr->{type} eq "no") {
+        if ( !$err && $tr->{type} eq "no" ) {
             dumptrest ($tr);
         }
 
@@ -1213,6 +1213,7 @@ sub lcos {                      # NodeID1, NodeID2, NodeID3
 
 sub indexof {                   # \@array, $elem
 
+    return -1   if ( !defined($_[0]) );
     for (my $i=0; $i < scalar @{$_[0]}; $i++)
         { return $i if ($_[0]->[$i] eq $_[1]); }
     return -1;
