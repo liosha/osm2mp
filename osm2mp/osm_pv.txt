@@ -1,6 +1,6 @@
 [Map]
 FileName=OSM
-MapVersion=060
+MapVersion=070
 FID=888
 ProductCode=1
 Color=32
