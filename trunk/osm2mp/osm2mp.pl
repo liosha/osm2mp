@@ -9,7 +9,7 @@
 
 ####    Settings
 
-my $version = "0.65";
+my $version = "0.70a";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
@@ -48,6 +48,8 @@ my $osmbbox        = 0;
 
 my $disableuturns  = 0;
 
+my $shorelines     = 0;
+
 
 
 my %yesno = (  "yes"            => 1,
@@ -85,6 +87,7 @@ $result = GetOptions (
                         "osmbbox!"              => \$osmbbox,
                         "background!",          => \$background,
                         "disableuturns!",       => \$disableuturns,
+                        "shorelines!",          => \$shorelines,
                       );
 
 undef $codepage         if ($nocodepage);
@@ -107,6 +110,9 @@ if ($ARGV[0] eq "") {
 
 Possible options [defaults]:
 
+    --mapid <id>              map id            [$mapid]
+    --mapname <name>          map name          [$mapname]
+
     --cfgpoi <file>           poi config        [$cfgpoi]
     --cfgpoly <file>          way config        [$cfgpoly]
     --header <file>           header template   [$cfgheader]
@@ -115,32 +121,28 @@ Possible options [defaults]:
     --osmbbox                 use bounds from .osm              [$onoff[$osmbbox]]
     --background              create background object          [$onoff[$background]]
 
-    --mapid <id>              map id            [$mapid]
-    --mapname <name>          map name          [$mapname]
-
     --codepage <num>          codepage number                   [$codepage]
     --nocodepage              leave all labels in utf-8         [$onoff[$nocodepage]]
     --upcase                  convert all labels to upper case  [$onoff[$upcase]]
     --translit                tranliterate labels               [$onoff[$translit]]
 
     --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
+    --defaultcountry <name>   default data for street indexing  [$defaultcountry]
+    --defaultregion <name>                                      [$defaultregion]
+    --defaultcity <name>                                        [$defaultcity]
 
     --mergeroads              merge same ways                           [$onoff[$mergeroads]]
     --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
-
-    --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
-
     --splitroads              split long and self-intersecting roads    [$onoff[$splitroads]]
-
     --fixclosenodes           enlarge distance between too close nodes  [$onoff[$fixclosenodes]]
     --fixclosedist <dist>     minimum allowed distance                  [$fixclosedist m]
+    --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
 
     --restrictions            process turn restrictions                 [$onoff[$restrictions]]
     --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
 
-    --defaultcountry <name>   default data for street indexing  [$defaultcountry]
-    --defaultregion <name>                                      [$defaultregion]
-    --defaultcity <name>                                        [$defaultcity]
+    --shorelines              process shorelines                        [$onoff[$shorelines]]
+
 
 You can use no<option> disable features (i.e --nomergeroads)
 \n";
@@ -475,13 +477,15 @@ my %risin;
 
 my %xnodes;
 
+my %schain;
+
 print STDERR "Processing ways...        ";
 print "\n\n\n; ### Lines and polygons\n\n";
 
 seek IN, $waypos, 0;
 $_ = $waystr;
 
-my $countlines = 0;
+my $countlines    = 0;
 my $countpolygons = 0;
 
 my $id;
@@ -645,7 +649,7 @@ while ($_) {
 
        ##       this way is map line
 
-       if ( $polytype{$poly}->[0] eq "l" ) {
+       if ( $polytype{$poly}->[0] eq "l" || ($polytype{$poly}->[0] eq "s" && !$shorelines) ) {
            my $d = "";
            if ( scalar @chain < 2 ) {
                print "; ERROR: WayID=$id has too few nodes at ($nodes{$chain[0]})\n";
@@ -666,6 +670,19 @@ while ($_) {
                print  "${d}DirIndicator=$polydir\n"                 if defined $polydir;
                printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain[$chainlist[$i]..$chainlist[$i+1]]});
                print  "${d}[END]\n\n\n";
+           }
+       }
+
+
+       ##       this way is coastline
+
+       if ( $polytype{$poly}->[0] eq "s" && $shorelines ) {
+           if ( scalar @chain < 2 ) {
+               print "; ERROR: WayID=$id has too few nodes at ($nodes{$chain[0]})\n";
+           } else {
+               for (my $i=0; $i<$#chainlist+1; $i+=2) {
+                   $schain{$chain[$chainlist[$i]]} = [ @chain[$chainlist[$i]..$chainlist[$i+1]] ];
+               }
            }
        }
 
@@ -709,8 +726,44 @@ while ($_) {
 
 } continue { $_ = <IN>; }
 
-printf STDERR "%d roads loaded
-                          $countlines lines and $countpolygons polygons dumped\n", scalar keys %rchain;
+printf STDERR "%d roads and %d coastlines loaded
+                          $countlines lines and $countpolygons polygons dumped\n", scalar keys %rchain, scalar keys %schain;
+
+
+
+
+
+####    Processing shorelines
+
+if ($shorelines) {
+    print "\n\n\n";
+    print STDERR "Processing shorelines...  ";
+
+    my @keys = keys %schain;
+
+    my $i = 0;
+    while ($i < scalar @keys) {
+        while ( $schain{$keys[$i]}  &&  $schain{$schain{$keys[$i]}->[-1]}  &&  $schain{$keys[$i]}->[-1] ne $keys[$i] ) {
+            my $mnode = $schain{$keys[$i]}->[-1];
+            pop  @{$schain{$keys[$i]}};
+            push @{$schain{$keys[$i]}}, @{$schain{$mnode}};
+            delete $schain{$mnode};
+        }
+        $i++;
+    }
+
+    
+    for my $i (keys %schain) {
+        print  "; coastline\n";
+        print  "[POLYLINE]\n";
+        print  "Type=0x15\n";
+        print  "EndLevel=4\n";
+        printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$i}}});
+        print  "[END]\n\n\n";
+    }
+
+    printf STDERR "%d written\n", scalar keys %schain;
+}
 
 
 
