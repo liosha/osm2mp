@@ -7,6 +7,8 @@
 ##
 
 
+use Math::Polygon;
+
 ####    Settings
 
 my $version = "0.70a";
@@ -649,7 +651,8 @@ while ($_) {
 
        ##       this way is map line
 
-       if ( $polytype{$poly}->[0] eq "l" || ($polytype{$poly}->[0] eq "s" && !$shorelines) ) {
+#       if ( $polytype{$poly}->[0] eq "l" || ($polytype{$poly}->[0] eq "s" && !$shorelines) ) {
+       if ( $polytype{$poly}->[0] eq "l" || $polytype{$poly}->[0] eq "s" ) {
            my $d = "";
            if ( scalar @chain < 2 ) {
                print "; ERROR: WayID=$id has too few nodes at ($nodes{$chain[0]})\n";
@@ -752,17 +755,45 @@ if ($shorelines) {
         $i++;
     }
 
-    
+    my %loops;
+    my @islands;
+
     for my $i (keys %schain) {
-        print  "; coastline\n";
-        print  "[POLYLINE]\n";
-        print  "Type=0x15\n";
-        print  "EndLevel=4\n";
-        printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$i}}});
-        print  "[END]\n\n\n";
+        if ($schain{$i}->[0] eq $schain{$i}->[-1]) {
+            $loops{$i} = Math::Polygon->new( map {  [split ",",$nodes{$_}] } @{$schain{$i}}  );
+            if ($loops{$i}->isClockwise) {
+                print "; island\n";
+                push @islands, $i;
+                delete $loops{$i};
+            } else {
+                print "; lake\n";
+            }
+        }
+
+#        print  "; coastline\n";
+#        print  "[POLYLINE]\n";
+#        print  "Type=0x15\n";
+#        print  "EndLevel=4\n";
+#        printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$i}}});
+#        print  "[END]\n\n\n";
     }
 
-    printf STDERR "%d written\n", scalar keys %schain;
+    for my $i (keys %loops) {
+        print  "; lake\n";
+        print  "[POLYGON]\n";
+        print  "Type=0x3c\n";
+        print  "EndLevel=4\n";
+        printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$i}}});
+        for my $j (@islands) {
+            if ($loops{$i}->contains( [split ",", $nodes{$j}] )) {
+                printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$j}}});
+            }
+        }
+        print  "[END]\n\n\n";
+
+    }
+
+    printf STDERR "%d written (%d lakes, %d islands)\n", scalar keys %schain, scalar keys %loops, scalar @islands;
 }
 
 
