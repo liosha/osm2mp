@@ -2,7 +2,11 @@
 
 
 ##
-##  Required packages: Template-toolkit, Getopt::Long, Text::Unidecode
+##  Required packages: 
+##    * Template-toolkit
+##    * Getopt::Long
+##    * Text::Unidecode
+##    * Math::Polygon
 ##  See http://cpan.org/ or use PPM (Perl package manager)
 ##
 
@@ -704,25 +708,31 @@ while ($_) {
 
            my @type = @{$polytype{$poly}};
 
-           if (!$bbox || scalar @chainlist) {
-               $countpolygons ++;
+           print  "; WayID = $id\n";
+           print  "; $poly\n";
 
-               print  "; WayID = $id\n";
-               print  "; $poly\n";
-               print  "${d}[POLYGON]\n";
-               printf "${d}Type=%s\n",        $type[1];
-               printf "${d}EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
-               print  "${d}Label=$polyname\n"                       if ($polyname);
-               printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain});
+           if (!$d && (!$bbox || scalar @chainlist)) {
+
+               my $polygon = Math::Polygon->new( map { [split ",",$nodes{$_}] } @chain );
+               $polygon = $polygon->fillClip1 ($minlat, $minlon, $maxlat, $maxlon) if ($bbox);
+               
+               $countpolygons ++;
+       
+               print  "[POLYGON]\n";
+               printf "Type=%s\n",        $type[1];
+               printf "EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
+               print  "Label=$polyname\n"                       if ($polyname);
+               # printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain});
+               printf "Data%d=(%s)\n",    $type[3], join ("), (", map {join(",", @{$_})} @{$polygon->points});
                if ($mpoly{$id}) {
                    printf "; this is multipolygon with %d holes: %s\n", scalar @{$mpoly{$id}}, join (", ", @{$mpoly{$id}});
                    for my $hole (@{$mpoly{$id}}) {
                        if ($mpholes{$hole} ne $hole && @{$mpholes{$hole}}) {
-                           printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@{$mpholes{$hole}}});
+                           printf "Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@{$mpholes{$hole}}});
                        }
                    }
                }
-               print  "${d}[END]\n\n\n";
+               print  "[END]\n\n\n";
            }
        }
    }
