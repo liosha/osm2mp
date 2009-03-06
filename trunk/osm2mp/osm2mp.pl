@@ -716,23 +716,25 @@ while ($_) {
                my $polygon = Math::Polygon->new( map { [split ",",$nodes{$_}] } @chain );
                $polygon = $polygon->fillClip1 ($minlat, $minlon, $maxlat, $maxlon) if ($bbox);
                
-               $countpolygons ++;
-       
-               print  "[POLYGON]\n";
-               printf "Type=%s\n",        $type[1];
-               printf "EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
-               print  "Label=$polyname\n"                       if ($polyname);
-               # printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain});
-               printf "Data%d=(%s)\n",    $type[3], join ("), (", map {join(",", @{$_})} @{$polygon->points});
-               if ($mpoly{$id}) {
-                   printf "; this is multipolygon with %d holes: %s\n", scalar @{$mpoly{$id}}, join (", ", @{$mpoly{$id}});
-                   for my $hole (@{$mpoly{$id}}) {
-                       if ($mpholes{$hole} ne $hole && @{$mpholes{$hole}}) {
-                           printf "Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@{$mpholes{$hole}}});
+               if ($polygon) {
+                   $countpolygons ++;
+           
+                   print  "[POLYGON]\n";
+                   printf "Type=%s\n",        $type[1];
+                   printf "EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
+                   print  "Label=$polyname\n"                       if ($polyname);
+                   # printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain});
+                   printf "Data%d=(%s)\n",    $type[3], join ("), (", map {join(",", @{$_})} @{$polygon->points});
+                   if ($mpoly{$id}) {
+                       printf "; this is multipolygon with %d holes: %s\n", scalar @{$mpoly{$id}}, join (", ", @{$mpoly{$id}});
+                       for my $hole (@{$mpoly{$id}}) {
+                           if ($mpholes{$hole} ne $hole && @{$mpholes{$hole}}) {
+                               printf "Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@{$mpholes{$hole}}});
+                           }
                        }
                    }
+                   print  "[END]\n\n\n";
                }
-               print  "[END]\n\n\n";
            }
        }
    }
@@ -788,6 +790,7 @@ if ($shorelines) {
 #        print  "[END]\n\n\n";
     }
 
+    my $countislands = 0;
     for my $i (keys %loops) {
         print  "; lake\n";
         print  "[POLYGON]\n";
@@ -796,6 +799,7 @@ if ($shorelines) {
         printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$i}}});
         for my $j (@islands) {
             if ($loops{$i}->contains( [split ",", $nodes{$j}] )) {
+                $countislands++;
                 printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$j}}});
             }
         }
@@ -803,7 +807,7 @@ if ($shorelines) {
 
     }
 
-    printf STDERR "%d written (%d lakes, %d islands)\n", scalar keys %schain, scalar keys %loops, scalar @islands;
+    printf STDERR "%d lakes, %d islands\n", scalar keys %loops, $countislands;
 }
 
 
