@@ -1128,7 +1128,11 @@ while (my ($road, $pchain) = each %rchain) {
     print  "DirIndicator=1\n"                       if ((split /\,/, $rp)[2]);
 
     print  "; is_in = $risin{$road}\n"  if ($risin{$road});
-    my ($city, $region, $country) = split (/,/, $risin{$road});
+    my ($city, $region, $country);
+    my @addr = split (/\s*,\s*/, $risin{$road});
+    $city       = $addr[0]              if (scalar @addr);
+    $country    = $addr[1]              if (scalar @addr == 2);
+    ($region, $country) = @addr[1..2]   if (scalar @addr > 2);
 
     printf "CityName=%s\n", $city ? $city : $defaultcity;
     print  "RegionName=$region\n"       if ($region);
