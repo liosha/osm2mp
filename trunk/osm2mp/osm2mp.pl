@@ -44,7 +44,7 @@ my $restrictions   = 1;
 
 my $nocodepage;
 
-my $nametaglist    = "name,ref,int_ref";
+my $nametaglist    = "name,ref,int_ref,addr:housenumber";
 my $upcase         = 0;
 my $translit       = 0;
 
@@ -276,18 +276,18 @@ while (<IN>) {
       $poistreet    = convert_string($2)        if ($1 eq "addr:street" );
       $poizip       = convert_string($2)        if ($1 eq "addr:postcode" );
       $poicity      = convert_string($2)        if ($1 eq "addr:city" );
-      $poiregion    = convert_string($2)        if ($1 eq "is_in:county");
-      $poicountry   = convert_string($2)        if ($1 eq "is_in:country");
+#      $poiregion    = convert_string($2)        if ($1 eq "is_in:county");
+#      $poicountry   = convert_string($2)        if ($1 eq "is_in:country");
 
       # Navitel only (?)
       $poihouse     = convert_string($2)        if ($1 eq "addr:housenumber" );
       $poiphone     = convert_string($2)        if ($1 eq "phone" );
 
-      if ($1 eq "is_in") {
-          ($poicity, my $region, my $country) = split (/,/, convert_string($2));
-          $poiregion  = $region         if ($region);
-          $poicountry = $country        if ($country);
-      }
+ #     if ($1 eq "is_in") {
+ #         ($poicity, my $region, my $country) = split (/,/, convert_string($2));
+ #         $poiregion  = $region         if ($region);
+ #         $poicountry = $country        if ($country);
+ #     }
       next;
    }
 
@@ -305,12 +305,13 @@ while (<IN>) {
        printf "City=Y\n",                               if ($type[3]);
        print  "Label=$poiname\n"                        if ($poiname);
 
-       print  "StreetDesc=$poistreet\n"                 if ($poistreet);
-       printf "CityName=%s\n", $poicity ? $poicity : $defaultcity;
-       print  "RegionName=$poiregion\n"                 if ($poiregion);
-       print  "CountryName=$poicountry\n"               if ($poicountry);
+       if ($poiname && $poicity) {
+           printf "CityName=$poicity\n";
+           print  "StreetDesc=$poistreet\n"                 if ($poistreet);
+           print  "RegionName=$poiregion\n"                 if ($poiregion);
+           print  "CountryName=$poicountry\n"               if ($poicountry);
+       }
        print  "Zip=$poizip\n"                           if ($poizip);
-
        print  "HouseNumber=$poihouse\n"                 if ($poihouse);
        print  "Phone=$poiphone\n"                       if ($poiphone);
 
@@ -408,7 +409,7 @@ while ($_) {
                                 to_way => $tr_to,     to_dir => 0,   to_pos => -1 };
                 push @{$nodetr{$tr_via}}, $id;
             } else {
-                print ";ERROR: Wrong restriction RelID=$id\n";
+                print "; ERROR: Wrong restriction RelID=$id\n";
             }
         }
         next;
@@ -423,16 +424,22 @@ printf STDERR "%d multipolygons, %d turn restrictions\n", scalar keys %mpoly, sc
 
 
 
-####    Loading multipolygon holes and checking node dupes
+####    Loading cities, multipolygon holes and checking node dupes
 
-print STDERR "Loading holes...          ";
+print STDERR "Loading cities...         ";
 
 seek IN, $waypos, 0;
 $_ = $waystr;
 
-   my $id;
-   my @chain;
-   my $dupcount;
+my $id;
+my @chain;
+my $dupcount;
+
+my %cityname;
+my %citybound;
+
+my $city;
+my $name;
 
 while ($_) {
 
@@ -444,6 +451,8 @@ while ($_) {
       $id = $1;
       @chain = ();
       $dupcount = 0;
+      $city = 0;
+      $name="";
       next;
    }
 
@@ -458,17 +467,32 @@ while ($_) {
       next;
    }
 
+   if ( /\<tag/ ) {
+       /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
+       $name=convert_string($2) if ($1 eq "name" || $1 eq "place_name");
+       $city=1                  if ($1 eq "place" && ($2 eq "city" || $2 eq "town"));
+       next;
+   }
+
    if ( /\<\/way/ ) {
 
        ##       this way is multipolygon inner
        if ( $mpholes{$id} ) {
            $mpholes{$id} = [ @chain ];
        }
+       if ($city && $name && $chain[0] eq $chain[-1]) {
+           print "; city: $id $name\n";
+           $cityname{$id} = $name;
+           $citybound{$id} = Math::Polygon->new( map { [split ",",$nodes{$_}] } @chain );
+       }
+       print "; ERROR: City without name WayID=$id\n"           if ($city && !$name);
+       print "; ERROR: City polygon WayID=$id is not closed\n"  if ($city && $chain[0] ne $chain[-1]);
    }
 
 } continue { $_ = <IN>; }
 
-printf STDERR "%d loaded\n", scalar keys %mpholes;
+#printf STDERR "%d loaded\n", scalar keys %mpholes;
+printf STDERR "%d loaded\n", scalar keys %cityname;
 
 
 
@@ -559,7 +583,7 @@ while ($_) {
            $polyname = convert_string ($2);
            $nameprio = $tagprio;
        }
-       $isin       = convert_string ($2)        if ($1 eq "is_in");
+#       $isin       = convert_string ($2)        if ($1 eq "is_in");
 
        $speed      = $2                         if ($1 eq "maxspeed" && $2>0);
 
@@ -601,10 +625,18 @@ while ($_) {
            $rp[10] = $polynobic                         if defined $polynobic;
            $rp[11] = $polynohgv                         if defined $polynohgv;
 
+           for my $i (keys %cityname) {
+               if ( $citybound{$i}->contains([split ",",$nodes{$chain[0]}]) 
+                 && $citybound{$i}->contains([split ",",$nodes{$chain[-1]}]) ) {
+                   $isin = $cityname{$i};
+                   last;
+               }
+           }
+
            for (my $i=0; $i<$#chainlist+1; $i+=2) {
                $rchain{"$id:$i"} = [ @chain[$chainlist[$i]..$chainlist[$i+1]] ];
                $rprops{"$id:$i"} = [ $poly, $polyname, join (",",@rp) ];
-               $risin{"$id:$i"}  = $isin         if ($isin);
+               $risin{"$id:$i"}  = $isin         if ($isin && $polyname);
 
                if ($bbox) {
                    if ( !insidebbox($nodes{$chain[$chainlist[$i]]}) ) {
@@ -1127,16 +1159,19 @@ while (my ($road, $pchain) = each %rchain) {
     print  "Label=$name\n"                          if ($name);
     print  "DirIndicator=1\n"                       if ((split /\,/, $rp)[2]);
 
-    print  "; is_in = $risin{$road}\n"  if ($risin{$road});
-    my ($city, $region, $country);
-    my @addr = split (/\s*,\s*/, $risin{$road});
-    $city       = $addr[0]              if (scalar @addr);
-    $country    = $addr[1]              if (scalar @addr == 2);
-    ($region, $country) = @addr[1..2]   if (scalar @addr > 2);
 
-    printf "CityName=%s\n", $city ? $city : $defaultcity;
-    print  "RegionName=$region\n"       if ($region);
-    print  "CountryName=$country\n"     if ($country);
+    if ($risin{$road}) {
+#        print  "; is_in = $risin{$road}\n";
+        my ($city, $region, $country);
+        my @addr = split (/\s*,\s*/, $risin{$road});
+        $city       = $addr[0]              if (scalar @addr);
+        $country    = $addr[1]              if (scalar @addr == 2);
+        ($region, $country) = @addr[1..2]   if (scalar @addr > 2);
+    
+        printf "CityName=%s\n", $city ? $city : $defaultcity;
+        print  "RegionName=$region\n"       if ($region);
+        print  "CountryName=$country\n"     if ($country);
+    }
 
     printf "Data%d=(%s)\n", $type[3], join ("), (", @nodes{@{$pchain}});
     printf "RoadID=%d\n", $roadcount++;
@@ -1259,7 +1294,11 @@ sub convert_string {            # String
    $str =~ s/\&#92\;/\\/gi;
    $str =~ s/\&#13\;/-/gi;
 
-   $str =~ s/\&#\d+\;/_/gi;
+   $str =~ s/\&#\d+\;/ /gi;
+   $str =~ s/[\?\"\<\>\*]/ /g;
+
+   $str =~ s/ +/ /g;
+   $str =~ s/^[ \;\.\,\!\-\+\_]+//;
 
    return $str;
 }
@@ -1362,3 +1401,7 @@ sub dumptrest {                 # \%trest
     print  "[END-Restrict]\n\n";
 }
 
+
+sub dumppolygon {
+
+}
