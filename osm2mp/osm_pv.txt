@@ -1,9 +1,9 @@
 [Map]
 FileName=OSM
-MapVersion=070
+MapVersion=060
 FID=888
 ProductCode=1
-Color=32
+;Color=32
 
 CodePage=1251
 
@@ -18,11 +18,10 @@ Zoom1=6
 MapsourceName=OpenStreetMap
 MapSetName=OpenStreetMap
 CDSetName=OpenStreetMap
-Copy1=OpenStreetMap.org
 [End-Map]
 
 
 ;
 [Files]
 img=88888888.img
-[END-Files]
+[End-Files]

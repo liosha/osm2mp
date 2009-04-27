@@ -6,8 +6,10 @@ require LWP::UserAgent;
 
 my $bbox = $ARGV[0];
 
-my $api  = "http://api.openstreetmap.org/api/0.5/map?bbox=";
+my $api  = "http://api.openstreetmap.org/api/0.6/map?bbox=";
 my $step = 0.5;
+#my $api  = "http://www.informationfreeway.org/api/0.5/map?bbox=";
+#my $step = 2;
 
 
 my @tiles;
@@ -34,7 +36,7 @@ while (scalar @tiles) {
     } else {
 #        print STDERR $res->status_line . "  --| ";
         print STDERR $res->code . "  --| ";
-        if ($res->code==400 || $res->code==500) {
+        if ($res->code==400 || $res->code==500 || $res->code==501) {
             print STDERR "tile will be splitted\n";
             my ($lon0, $lat0, $lon1, $lat1) = split ",", $tile;
             push @tiles, join (",", ($lon0, $lat0, ($lon0+$lon1)/2, ($lat0+$lat1)/2));
