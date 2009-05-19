@@ -15,7 +15,7 @@ use Math::Polygon;
 
 ####    Settings
 
-my $version = "0.70a";
+my $version = "0.70";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
@@ -28,7 +28,7 @@ my $mapname     = "OSM routable";
 
 my $defaultcountry = "Earth";
 my $defaultregion  = "OSM";
-my $defaultcity    = "Unknown";
+my $defaultcity    = "";
 
 my $mergeroads     = 1;
 my $mergecos       = 0.2;
@@ -38,7 +38,7 @@ my $detectdupes    = 1;
 my $splitroads     = 1;
 
 my $fixclosenodes  = 1;
-my $fixclosedist   = 5.5;
+my $fixclosedist   = 3.0;       # 5.5
 
 my $restrictions   = 1;
 
@@ -239,9 +239,7 @@ my $countpoi = 0;
 
 my $id;
 my $latlon;
-my ($poi, $poiname);
-my ($poihouse, $poistreet, $poicity, $poiregion, $poicountry, $poizip, $poiphone);
-my $nameprio = 99;
+my %nodetag;
 
 while (<IN>) {
    last if /\<way/;
@@ -252,48 +250,31 @@ while (<IN>) {
    }
 
    if ( /\<node/ ) {
-      /^.* id=["'](\-?\d+)["'].*lat=["'](\-?\d+\.?\d*)["'].*lon=["'](\-?\d+\.?\d*)["'].*$/;
-      $id = $1;
-      $latlon = "$2,$3";
-      $nodes{$1} = $latlon;
-
-      $poi = "";
-      $poiname = "";
-      $nameprio = 99;
-      ($poihouse, $poistreet, $poicity, $poiregion, $poicountry, $poizip, $poiphone) = ("", "", "", "", "", "", "");
-      next;
+       /^.* id=["'](\-?\d+)["'].*lat=["'](\-?\d+\.?\d*)["'].*lon=["'](\-?\d+\.?\d*)["'].*$/;
+       $id = $1;
+       $latlon = "$2,$3";
+       $nodes{$1} = $latlon;
+       %nodetag = ();
+       next;
    }
 
    if ( /\<tag/ ) {
-      /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
-      $poi = "$1=$2"                            if ($poitype{"$1=$2"});
-      my $tagprio = indexof(\@nametagarray, $1);
-      if ($tagprio>=0 && $tagprio<$nameprio) {
-          $poiname = convert_string ($2);
-          $nameprio = $tagprio;
-      }
-
-      $poistreet    = convert_string($2)        if ($1 eq "addr:street" );
-      $poizip       = convert_string($2)        if ($1 eq "addr:postcode" );
-      $poicity      = convert_string($2)        if ($1 eq "addr:city" );
-#      $poiregion    = convert_string($2)        if ($1 eq "is_in:county");
-#      $poicountry   = convert_string($2)        if ($1 eq "is_in:country");
-
-      # Navitel only (?)
-      $poihouse     = convert_string($2)        if ($1 eq "addr:housenumber" );
-      $poiphone     = convert_string($2)        if ($1 eq "phone" );
-
- #     if ($1 eq "is_in") {
- #         ($poicity, my $region, my $country) = split (/,/, convert_string($2));
- #         $poiregion  = $region         if ($region);
- #         $poicountry = $country        if ($country);
- #     }
-      next;
+       /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
+       $nodetag{$1} = $2;
+       next;
    }
 
-   if ( /\<\/node/ && $poi && (!$bbox || insidebbox($latlon)) ) {
+   if ( /\<\/node/ && (!$bbox || insidebbox($latlon)) ) {
+
+       my @typelist = grep {$poitype{"$_=$nodetag{$_}"}} keys %nodetag;
+       next unless $typelist[0];
 
        $countpoi ++;
+       my $poi = "$typelist[0]=$nodetag{$typelist[0]}";
+
+       my @namelist = grep {defined} @nodetag{@nametagarray};
+       my $poiname = convert_string ($namelist[0]);
+
        my @type = @{$poitype{$poi}};
 
        print  "; NodeID = $id\n";
@@ -305,15 +286,10 @@ while (<IN>) {
        printf "City=Y\n",                               if ($type[3]);
        print  "Label=$poiname\n"                        if ($poiname);
 
-       if ($poiname && $poicity) {
-           printf "CityName=$poicity\n";
-           print  "StreetDesc=$poistreet\n"                 if ($poistreet);
-           print  "RegionName=$poiregion\n"                 if ($poiregion);
-           print  "CountryName=$poicountry\n"               if ($poicountry);
-       }
-       print  "Zip=$poizip\n"                           if ($poizip);
-       print  "HouseNumber=$poihouse\n"                 if ($poihouse);
-       print  "Phone=$poiphone\n"                       if ($poiphone);
+       printf "Zip=%s\n",               convert_string($nodetag{"addr:postcode"})       if $nodetag{"addr:postcode"};
+       printf "StreetDesc=%s\n",        convert_string($nodetag{"addr:street"})         if $nodetag{"addr:street"};
+       printf "HouseNumber=%s\n",       convert_string($nodetag{"addr:housenumber"})    if $nodetag{"addr:housenumber"};
+       printf "Phone=%s\n",             convert_string($nodetag{"phone"})               if $nodetag{"phone"};
 
        print  "[END]\n\n";
    }
@@ -469,7 +445,7 @@ while ($_) {
 
    if ( /\<tag/ ) {
        /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
-       $name=convert_string($2) if ($1 eq "name" || $1 eq "place_name");
+       $name=convert_string($2) if ($1 eq "place_name" || (!$name && $1 eq "name"));
        $city=1                  if ($1 eq "place" && ($2 eq "city" || $2 eq "town"));
        next;
    }
@@ -480,8 +456,9 @@ while ($_) {
        if ( $mpholes{$id} ) {
            $mpholes{$id} = [ @chain ];
        }
+       ##       this way is city bounds
        if ($city && $name && $chain[0] eq $chain[-1]) {
-           print "; city: $id $name\n";
+           print "; Found city: WayID=$id $name\n";
            $cityname{$id} = $name;
            $citybound{$id} = Math::Polygon->new( map { [split ",",$nodes{$_}] } @chain );
        }
@@ -491,7 +468,6 @@ while ($_) {
 
 } continue { $_ = <IN>; }
 
-#printf STDERR "%d loaded\n", scalar keys %mpholes;
 printf STDERR "%d loaded\n", scalar keys %cityname;
 
 
@@ -499,7 +475,7 @@ printf STDERR "%d loaded\n", scalar keys %cityname;
 
 
 
-####    Loading roads and writing other ways
+####    Loading roads and coastlines, and writing other ways
 
 my %rchain;
 my %rprops;
@@ -523,13 +499,9 @@ my @chain;
 my @chainlist;
 my $inbbox;
 
-my ($poly, $polyname);
-my $nameprio = 99;
 my $isin;
 
-my $speed;
-my $polydir;
-my ($polytoll, $polynoauto, $polynobus, $polynoped, $polynobic, $polynohgv);
+my %waytag;
 
 while ($_) {
 
@@ -540,24 +512,11 @@ while ($_) {
 
       $id = $1;
 
+      %waytag = ();
       @chain = ();
       @chainlist = ();
       $inbbox = 0;
-
-      undef ($poly);
-      undef ($polyname);
-      $nameprio = 99;
-      undef ($polydir);
-      undef ($polytoll);
-      undef ($polynoauto);
-      undef ($polynobus);
-      undef ($polynoped);
-      undef ($polynobic);
-      undef ($polynohgv);
-
-      undef ($speed);
-
-      undef ($isin);
+      $isin = "";
 
       next;
    }
@@ -577,31 +536,17 @@ while ($_) {
 
    if ( /\<tag/ ) {
        /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
-       $poly       = "$1=$2"                    if ($polytype{"$1=$2"} && ($polytype{"$1=$2"}->[2] >= $polytype{$poly}->[2]));
-       my $tagprio = indexof(\@nametagarray, $1);
-       if ($tagprio>=0 && $tagprio<$nameprio) {
-           $polyname = convert_string ($2);
-           $nameprio = $tagprio;
-       }
-#       $isin       = convert_string ($2)        if ($1 eq "is_in");
-
-       $speed      = $2                         if ($1 eq "maxspeed" && $2>0);
-
-       $polydir    = $yesno{$2}                 if ($1 eq "oneway");
-       $polytoll   = $yesno{$2}                 if ($1 eq "toll");
-       $polynoauto = 1 - $yesno{$2}             if ($1 eq "motorcar");
-       $polynobus  = 1 - $yesno{$2}             if ($1 eq "psv");
-       $polynoped  = 1 - $yesno{$2}             if ($1 eq "foot");
-       $polynobic  = 1 - $yesno{$2}             if ($1 eq "bicycle");
-       $polynohgv  = 1 - $yesno{$2}             if ($1 eq "hgv");
-       $polynoauto = $polynobus = $polynoped = $polynobic = $polynohgv = 1 - $yesno{$2}
-                                                if ($1 eq "access");
-       $polynobic  = $polynoped = $yesno{$2}    if ($1 eq "motorroad");
-
+       $waytag{$1} = $2;
        next;
    }
 
    if ( /\<\/way/ ) {
+
+       my @typelist = sort {@polytype{$b}->[2] cmp @polytype{$a}->[2]} grep {@polytype{$_}} map {"$_=$waytag{$_}"} keys %waytag;
+       my $poly = $typelist[0];
+
+       my @namelist = grep {defined} @waytag{@nametagarray};
+       my $polyname = convert_string ($namelist[0]);
 
        if ( !$bbox )                    {   @chainlist = (0);   }
        if ( !($#chainlist % 2) )        {   push @chainlist, $#chain;   }
@@ -612,18 +557,26 @@ while ($_) {
        }
        if ( $polytype{$poly}->[0] eq "r"  &&  scalar @chain > 1 ) {
            my @rp = split /,/, $polytype{$poly}->[5];
-           if (defined $speed) {
-               if ($speed =~ /mph$/i)   {  $speed *= 1.61;  }
-               $rp[0]  = speedcode($speed);
+           if ($waytag{"maxspeed"}>0) {
+               if ($waytag{"maxspeed"} =~ /mph$/i)   {  $waytag{"maxspeed"} *= 1.61;  }
+               $rp[0]  = speedcode($waytag{"maxspeed"});
            }
 
-           $rp[2]  = $polydir                           if defined $polydir;
-           $rp[3]  = $polytoll                          if defined $polytoll;
-           $rp[5]  = $rp[6] = $rp[8] = $polynoauto      if defined $polynoauto;
-           $rp[7]  = $polynobus                         if defined $polynobus;
-           $rp[9]  = $polynoped                         if defined $polynoped;
-           $rp[10] = $polynobic                         if defined $polynobic;
-           $rp[11] = $polynohgv                         if defined $polynohgv;
+           $rp[2]  = $yesno{$waytag{"oneway"}}                  if exists $waytag{"oneway"};
+           $rp[3]  = $yesno{$waytag{"toll"}}                    if exists $waytag{"toll"};
+
+           $rp[5]=$rp[6]=$rp[7]=$rp[8]=$rp[9]=$rp[10]=$rp[11] = 1-$yesno{$waytag{"access"}}
+                                                                if exists $waytag{"access"};
+           $rp[5]=$rp[6]=$rp[7]=$rp[8]=$rp[10] = 1-$yesno{$waytag{"auto"}}
+                                                                if exists $waytag{"auto"};
+           $rp[9]=$rp[10] = $yesno{$waytag{"motorroad"}}        if exists $waytag{"motorroad"};
+           
+           $rp[5]=$rp[6]=$rp[8] = 1-$yesno{$waytag{"motorcar"}} if exists $waytag{"motorcar"};
+           $rp[9]  = 1-$yesno{$waytag{"foot"}}                  if exists $waytag{"foot"};
+           $rp[10] = 1-$yesno{$waytag{"bicycle"}}               if exists $waytag{"bicycle"};
+           $rp[7]  = 1-$yesno{$waytag{"psv"}}                   if exists $waytag{"psv"};
+           $rp[11] = 1-$yesno{$waytag{"hgv"}}                   if exists $waytag{"hgv"};
+
 
            for my $i (keys %cityname) {
                if ( $citybound{$i}->contains([split ",",$nodes{$chain[0]}]) 
@@ -706,7 +659,7 @@ while ($_) {
                printf "${d}Type=%s\n",        $type[1];
                printf "${d}EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
                print  "${d}Label=$polyname\n"                       if ($polyname);
-               print  "${d}DirIndicator=$polydir\n"                 if defined $polydir;
+               # print  "${d}DirIndicator=$polydir\n"                 if defined $polydir;
                printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain[$chainlist[$i]..$chainlist[$i+1]]});
                print  "${d}[END]\n\n\n";
            }
@@ -1168,9 +1121,11 @@ while (my ($road, $pchain) = each %rchain) {
         $country    = $addr[1]              if (scalar @addr == 2);
         ($region, $country) = @addr[1..2]   if (scalar @addr > 2);
     
-        printf "CityName=%s\n", $city ? $city : $defaultcity;
-        print  "RegionName=$region\n"       if ($region);
-        print  "CountryName=$country\n"     if ($country);
+        print "CityName=$city\n";
+        print "RegionName=$region\n"       if ($region);
+        print "CountryName=$country\n"     if ($country);
+    } elsif ($name && $defaultcity) {
+        print "CityName=$defaultcity\n";
     }
 
     printf "Data%d=(%s)\n", $type[3], join ("), (", @nodes{@{$pchain}});
