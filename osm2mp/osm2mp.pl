@@ -55,6 +55,7 @@ my $osmbbox        = 0;
 my $disableuturns  = 0;
 
 my $shorelines     = 0;
+my $navitel        = 0;
 
 
 
@@ -94,6 +95,7 @@ $result = GetOptions (
                         "background!",          => \$background,
                         "disableuturns!",       => \$disableuturns,
                         "shorelines!",          => \$shorelines,
+                        "navitel!",             => \$navitel,
                       );
 
 undef $codepage         if ($nocodepage);
@@ -136,6 +138,7 @@ Possible options [defaults]:
     --defaultcountry <name>   default data for street indexing  [$defaultcountry]
     --defaultregion <name>                                      [$defaultregion]
     --defaultcity <name>                                        [$defaultcity]
+    --navitel                 write addresses for polygons              [$onoff[$navitel]]
 
     --mergeroads              merge same ways                           [$onoff[$mergeroads]]
     --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
@@ -708,6 +711,21 @@ while ($_) {
                    printf "Type=%s\n",        $type[1];
                    printf "EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
                    print  "Label=$polyname\n"                       if ($polyname);
+
+                   ## Navitel
+                   if ($navitel) {
+                       printf "StreetDesc=%s\n",        convert_string($waytag{"addr:street"})         if $waytag{"addr:street"};
+                       printf "HouseNumber=%s\n",       convert_string($waytag{"addr:housenumber"})    if $waytag{"addr:housenumber"};
+                       if ( $waytag{"addr:housenumber"} &&  $waytag{"addr:street"} ) {
+                           for my $i (keys %cityname) {
+                               if ( $citybound{$i}->contains([split ",",$nodes{$chain[0]}]) ) {
+                                   print "CityName=$cityname{$i}\n";
+                                   last;
+                               }
+                           }
+                       }
+                   }
+
                    # printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain});
                    printf "Data%d=(%s)\n",    $type[3], join ("), (", map {join(",", @{$_})} @{$polygon->points});
                    if ($mpoly{$id}) {
@@ -1110,6 +1128,7 @@ while (my ($road, $pchain) = each %rchain) {
     printf "Type=%s\n",        $type[1];
     printf "EndLevel=%d\n",    $type[4]             if ($type[4] > $type[3]);
     print  "Label=$name\n"                          if ($name);
+    print  "StreetDesc=$name\n"                     if ($name && $navitel);
     print  "DirIndicator=1\n"                       if ((split /\,/, $rp)[2]);
 
 
@@ -1348,6 +1367,11 @@ sub dumptrest {                 # \%trest
     my $j = $tr->{to_pos} + $tr->{to_dir};
     $j += $tr->{to_dir}         while ( !$nodid{$rchain{$tr->{to_way}}->[$j]} && $j>=0 && $j < $#{$rchain{$tr->{to_way}}} );
 
+    unless ( ${nodid{$tr->{node}}} ) {
+        print "; Restriction is outside boundaries\n";
+        return;
+    }
+    
     print  "[Restrict]\n";
     printf "Nod=${nodid{$tr->{node}}}\n";
     print  "TraffPoints=${nodid{$rchain{$tr->{fr_way}}->[$i]}},${nodid{$tr->{node}}},${nodid{$rchain{$tr->{to_way}}->[$j]}}\n";
