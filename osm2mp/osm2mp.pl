@@ -722,6 +722,7 @@ while ($_) {
                                    print "CityName=$cityname{$i}\n";
                                    last;
                                }
+                           print "CityName=$defaultcity\n"      if $defaultcity;
                            }
                        }
                    }
