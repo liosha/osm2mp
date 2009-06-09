@@ -15,7 +15,7 @@ use Math::Polygon;
 
 ####    Settings
 
-my $version = "0.70";
+my $version = "0.71a";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
@@ -56,6 +56,7 @@ my $disableuturns  = 0;
 
 my $shorelines     = 0;
 my $navitel        = 0;
+my $makepoi        = 0;
 
 
 
@@ -96,6 +97,7 @@ $result = GetOptions (
                         "disableuturns!",       => \$disableuturns,
                         "shorelines!",          => \$shorelines,
                         "navitel!",             => \$navitel,
+                        "makepoi!",             => \$makepoi,
                       );
 
 undef $codepage         if ($nocodepage);
@@ -151,6 +153,7 @@ Possible options [defaults]:
     --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
 
     --shorelines              process shorelines                        [$onoff[$shorelines]]
+    --makepoi                 create POIs for polygons                  [$onoff[$makepoi]]
 
 
 You can use no<option> disable features (i.e --nomergeroads)
@@ -722,7 +725,7 @@ while ($_) {
                                    print "CityName=$cityname{$i}\n";
                                    last;
                                }
-                           print "CityName=$defaultcity\n"      if $defaultcity;
+                               print "CityName=$defaultcity\n"      if $defaultcity;
                            }
                        }
                    }
@@ -738,6 +741,18 @@ while ($_) {
                        }
                    }
                    print  "[END]\n\n\n";
+
+                   if ($makepoi && $polyname && $type[5]) {
+
+                       my ($poi,$pll,$phl) = split ",", $type[5];
+
+                       print  "[POI]\n";
+                       print  "Type=$poi\n";
+                       print  "EndLevel=$phl\n";
+                       print  "Label=$polyname\n";
+                       printf "Data%d=(%f,%f)\n", $pll, centroid(($polygon->points));
+                       print  "[END]\n\n\n";
+                   }
                }
            }
        }
@@ -778,11 +793,11 @@ if ($shorelines) {
         if ($schain{$i}->[0] eq $schain{$i}->[-1]) {
             $loops{$i} = Math::Polygon->new( map {  [split ",",$nodes{$_}] } @{$schain{$i}}  );
             if ($loops{$i}->isClockwise) {
-                print "; island\n";
+#                print "; island\n";
                 push @islands, $i;
                 delete $loops{$i};
             } else {
-                print "; lake\n";
+#                print "; lake\n";
             }
         }
 
@@ -805,6 +820,7 @@ if ($shorelines) {
             if ($loops{$i}->contains( [split ",", $nodes{$j}] )) {
                 $countislands++;
                 printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$j}}});
+                #delete $loops{$i};
             }
         }
         print  "[END]\n\n\n";
@@ -1382,6 +1398,22 @@ sub dumptrest {                 # \%trest
 }
 
 
-sub dumppolygon {
+sub centroid {
 
+    my $slat = 0;
+    my $slon = 0;
+    my $ssq  = 0;
+
+    for (my $i = 1; $i < scalar(@_) - 1; $i++ ) {
+        my $tlat = ($_[0]->[0]+$_[$i]->[0]+$_[$i+1]->[0])/3;
+        my $tlon = ($_[0]->[1]+$_[$i]->[1]+$_[$i+1]->[1])/3;
+
+        my $tsq = (($_[$i]->[0]-$_[0]->[0])*($_[$i+1]->[1]-$_[0]->[1]) - ($_[$i+1]->[0]-$_[0]->[0])*($_[$i]->[1]-$_[0]->[1]));
+        
+        $slat += $tlat * $tsq;
+        $slon += $tlon * $tsq;
+        $ssq  += $tsq;
+    }
+
+    return ($slat/$ssq , $slon/$ssq);
 }
