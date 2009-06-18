@@ -7,24 +7,28 @@
 ##    * Getopt::Long
 ##    * Text::Unidecode
 ##    * Math::Polygon
+##    * Math::Geometry::Planar
 ##  See http://cpan.org/ or use PPM (Perl package manager)
 ##
 
 
-use Math::Polygon;
+use Math::Polygon;      # will be removed    
+use Math::Geometry::Planar;
+
 
 ####    Settings
 
-my $version = "0.71a";
+my $version = "0.72a";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
 my $cfgheader   = "header.tpl";
 
-
-my $codepage    = "1251";
 my $mapid       = "88888888";
 my $mapname     = "OSM routable";
+
+my $codepage    = "1251";
+my $nocodepage;
 
 my $defaultcountry = "Earth";
 my $defaultregion  = "OSM";
@@ -38,11 +42,9 @@ my $detectdupes    = 1;
 my $splitroads     = 1;
 
 my $fixclosenodes  = 1;
-my $fixclosedist   = 3.0;       # 5.5
+my $fixclosedist   = 3.0;       # set 5.5 for cgpsmapper 0097 and earlier
 
 my $restrictions   = 1;
-
-my $nocodepage;
 
 my $nametaglist    = "name,ref,int_ref,addr:housenumber";
 my $upcase         = 0;
@@ -56,7 +58,7 @@ my $disableuturns  = 0;
 
 my $shorelines     = 0;
 my $navitel        = 0;
-my $makepoi        = 0;
+my $makepoi        = 1;
 
 
 
@@ -230,11 +232,21 @@ print STDERR "Processing file $ARGV[0]\n\n";
 
 
 
+####    Bounds
+
+my $bounds;
+my $boundpoly = Math::Geometry::Planar->new;
+
+$bounds = 1 if $bbox;
+
+my ($minlon, $minlat, $maxlon, $maxlat) = split /,/, $bbox;
+$boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat]]);
+
 
 
 ####    Loading nodes and writing POIs
 
-my ($minlon, $minlat, $maxlon, $maxlat) = split /,/, $bbox;
+
 
 my %nodes;
 
@@ -253,6 +265,8 @@ while (<IN>) {
    if ( $osmbbox && /\<bounds/ ) {
         ($minlat, $minlon, $maxlat, $maxlon) = ( /minlat=["'](\-?\d+\.?\d*)["'] minlon=["'](\-?\d+\.?\d*)["'] maxlat=["'](\-?\d+\.?\d*)["'] maxlon=["'](\-?\d+\.?\d*)["']/ );
         $bbox = join ",", ($minlon, $minlat, $maxlon, $maxlat);
+        $bounds = 1 if $bbox;
+        $boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat]]);
    }
 
    if ( /\<node/ ) {
@@ -270,7 +284,7 @@ while (<IN>) {
        next;
    }
 
-   if ( /\<\/node/ && (!$bbox || insidebbox($latlon)) ) {
+   if ( /\<\/node/ && (!$bounds || insidebbox($latlon)) ) {
 
        my @typelist = grep {$poitype{"$_=$nodetag{$_}"}} keys %nodetag;
        next unless $typelist[0];
@@ -531,7 +545,7 @@ while ($_) {
       /^.*ref=["'](.*)["'].*$/;
       if ($nodes{$1}  &&  $1 ne $chain[-1] ) {
           push @chain, $1;
-          if ($bbox) {
+          if ($bounds) {
               if ( !$inbbox &&  insidebbox($nodes{$1}) )        { push @chainlist, ($#chain ? $#chain-1 : 0); }
               if (  $inbbox && !insidebbox($nodes{$1}) )        { push @chainlist, $#chain; }
               $inbbox = insidebbox($nodes{$1});
@@ -554,7 +568,7 @@ while ($_) {
        my @namelist = grep {defined} @waytag{@nametagarray};
        my $polyname = convert_string ($namelist[0]);
 
-       if ( !$bbox )                    {   @chainlist = (0);   }
+       if ( !$bounds )                  {   @chainlist = (0);   }
        if ( !($#chainlist % 2) )        {   push @chainlist, $#chain;   }
 
        ##       this way is road
@@ -597,7 +611,7 @@ while ($_) {
                $rprops{"$id:$i"} = [ $poly, $polyname, join (",",@rp) ];
                $risin{"$id:$i"}  = $isin         if ($isin && $polyname);
 
-               if ($bbox) {
+               if ($bounds) {
                    if ( !insidebbox($nodes{$chain[$chainlist[$i]]}) ) {
                        $xnodes{ $chain[$chainlist[$i]] }        = 1;
                        $xnodes{ $chain[$chainlist[$i]+1] }      = 1;
@@ -702,10 +716,10 @@ while ($_) {
            print  "; WayID = $id\n";
            print  "; $poly\n";
 
-           if (!$d && (!$bbox || scalar @chainlist)) {
+           if (!$d && (!$bounds || scalar @chainlist)) {
 
                my $polygon = Math::Polygon->new( map { [split ",",$nodes{$_}] } @chain );
-               $polygon = $polygon->fillClip1 ($minlat, $minlon, $maxlat, $maxlon) if ($bbox);
+               $polygon = $polygon->fillClip1 ($minlat, $minlon, $maxlat, $maxlon) if ($bounds);
                
                if ($polygon) {
                    $countpolygons ++;
@@ -773,8 +787,9 @@ if ($shorelines) {
     print "\n\n\n";
     print STDERR "Processing shorelines...  ";
 
-    my @keys = keys %schain;
 
+    ##  merging
+    my @keys = keys %schain;
     my $i = 0;
     while ($i < scalar @keys) {
         while ( $schain{$keys[$i]}  &&  $schain{$schain{$keys[$i]}->[-1]}  &&  $schain{$keys[$i]}->[-1] ne $keys[$i] ) {
@@ -786,11 +801,75 @@ if ($shorelines) {
         $i++;
     }
 
+
+    ##  tracing bounds
+    if ($bounds) {
+
+        my @bound = @{$boundpoly->points};
+        push @bound, $bound[0];
+
+        my @tbound;
+        my $pos = 0;
+        for (my $i=0; $i<$#bound; $i++) {
+            push @tbound, {type=>"bound", point=>$bound[$i], pos=>$pos};
+            for my $sline (keys %schain) {
+                my $p1 = [ reverse split /,/, $nodes{$schain{$sline}->[0]} ];
+                my $p2 = [ reverse split /,/, $nodes{$schain{$sline}->[1]} ];
+                my $ipoint = SegmentIntersection [$bound[$i],$bound[$i+1],$p1,$p2];
+                push @tbound, {type=>"start", point=>$ipoint, pos=>$pos+SegmentLength([$bound[$i],$ipoint]), line=>$sline }  if $ipoint;
+
+                my $p1 = [ reverse split /,/, $nodes{$schain{$sline}->[-1]} ];
+                my $p2 = [ reverse split /,/, $nodes{$schain{$sline}->[-2]} ];
+                my $ipoint = SegmentIntersection [$bound[$i],$bound[$i+1],$p1,$p2];
+                push @tbound, {type=>"end", point=>$ipoint, pos=>$pos+SegmentLength([$bound[$i],$ipoint]), line=>$sline }  if $ipoint;
+            }
+            $pos += SegmentLength [$bound[$i],$bound[$i+1]];
+        }
+
+        my $tmp = (sort {$a->{pos}<=>$b->{pos}} grep {$_->{type} ne "bound"} @tbound)[0];
+        if ( $tmp->{type} eq "end" ) {
+            map {$_->{pos} += $pos} grep {$_->{pos} <= $tmp->{pos}} @tbound;
+        }
+
+        my $tmp = 0;
+        for my $node (sort {$a->{pos}<=>$b->{pos}} @tbound) {
+            my $ll = join ",", reverse @{$node->{point}};
+            $nodes{$ll} = $ll;
+
+            if ($node->{type} eq "start") {
+                $tmp = $node;
+                $schain{$tmp->{line}}->[0] = $ll;
+            } 
+            if ($node->{type} eq "bound" && $tmp) {
+                unshift @{$schain{$tmp->{line}}}, ($ll);
+            } 
+            if ($node->{type} eq "end" && $tmp) {
+                $schain{$node->{line}}->[-1] = $ll;
+                if ($node->{line} eq $tmp->{line}) {
+                    push @{$schain{$node->{line}}}, $schain{$node->{line}}->[0];
+                } else {
+                    push @{$schain{$node->{line}}}, @{$schain{$tmp->{line}}};
+                    map { $_->{line} = $node->{line} } grep { $_->{line} eq $tmp->{line} } @tbound;
+                }
+                $tmp = 0;
+            }
+        }
+    }
+
+
+
+    ##  detecting lakes and islands
     my %loops;
     my @islands;
 
     for my $i (keys %schain) {
+
+
         if ($schain{$i}->[0] eq $schain{$i}->[-1]) {
+
+            # FIXME   filtering huge polygons
+            next if scalar @{$schain{$i}} > 30000;
+
             $loops{$i} = Math::Polygon->new( map {  [split ",",$nodes{$_}] } @{$schain{$i}}  );
             if ($loops{$i}->isClockwise) {
 #                print "; island\n";
@@ -801,7 +880,7 @@ if ($shorelines) {
             }
         }
 
-#        print  "; coastline\n";
+#        print  "; merged coastline\n";
 #        print  "[POLYLINE]\n";
 #        print  "Type=0x15\n";
 #        print  "EndLevel=4\n";
@@ -820,7 +899,7 @@ if ($shorelines) {
             if ($loops{$i}->contains( [split ",", $nodes{$j}] )) {
                 $countislands++;
                 printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$j}}});
-                #delete $loops{$i};
+                # delete $loops{$i};
             }
         }
         print  "[END]\n\n\n";
@@ -829,7 +908,6 @@ if ($shorelines) {
 
     printf STDERR "%d lakes, %d islands\n", scalar keys %loops, $countislands;
 }
-
 
 
 
@@ -1188,7 +1266,7 @@ printf STDERR "%d written\n", $roadcount-1;
 ####    Background object (?)
 
 
-if ($bbox && $background) {
+if ($bounds && $background) {
 
     print "\n\n\n; ### Background\n\n";
     print  "[POLYGON]\n";
@@ -1365,11 +1443,15 @@ sub speedcode {                 # $speed
 
 
 sub insidebbox {                # $latlon
-
     my ($lat, $lon) = split /,/, $_[0];
     return 1    if ( $lat>=$minlat && $lon>=$minlon && $lat<$maxlat && $lon<$maxlon );
     return 0;
+}
 
+
+sub insidebounds {                # $latlon
+    my ($lat, $lon) = split /,/, $_[0];
+    return $boundpoly->isinside([$lon,$lat]);
 }
 
 

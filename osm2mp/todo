@@ -2,9 +2,9 @@
 #
 #  Possible TODO list
 #
-#  * cropping of map polygons
-#  * shoreline processing
-#  * custom shape crop area
+#  * custom shape map
+#  * different addressing schemas
+#  * advanced features config
 #  * house numbering
 #
 #
