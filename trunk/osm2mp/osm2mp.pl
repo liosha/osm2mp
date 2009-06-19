@@ -12,7 +12,7 @@
 ##
 
 
-use Math::Polygon;      # will be removed    
+use Math::Polygon;
 use Math::Geometry::Planar;
 
 
@@ -60,6 +60,11 @@ my $shorelines     = 0;
 my $navitel        = 0;
 my $makepoi        = 1;
 
+
+# FIXME make command-line parameters?
+my @citynamelist        = ("place_name", "name");
+my @regionnamelist      = ("addr:region", "is_in:region", "addr:state", "is_in:state");
+my @countrynamelist     = ("addr:country", "is_in:country_code", "is_in:country");
 
 
 my %yesno = (  "yes"            => 1,
@@ -434,8 +439,7 @@ my $dupcount;
 my %cityname;
 my %citybound;
 
-my $city;
-my $name;
+my %waytag;
 
 while ($_) {
 
@@ -446,9 +450,8 @@ while ($_) {
 
       $id = $1;
       @chain = ();
+      %waytag = ();
       $dupcount = 0;
-      $city = 0;
-      $name="";
       next;
    }
 
@@ -465,8 +468,7 @@ while ($_) {
 
    if ( /\<tag/ ) {
        /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
-       $name=convert_string($2) if ($1 eq "place_name" || (!$name && $1 eq "name"));
-       $city=1                  if ($1 eq "place" && ($2 eq "city" || $2 eq "town"));
+       $waytag{$1} = $2;
        next;
    }
 
@@ -477,13 +479,19 @@ while ($_) {
            $mpholes{$id} = [ @chain ];
        }
        ##       this way is city bounds
-       if ($city && $name && $chain[0] eq $chain[-1]) {
-           print "; Found city: WayID=$id $name\n";
-           $cityname{$id} = $name;
-           $citybound{$id} = Math::Polygon->new( map { [split ",",$nodes{$_}] } @chain );
+       if ($waytag{"place"} eq "city" || $waytag{"place"} eq "town") { 
+           my $name = convert_string ( (grep {defined} @waytag{@citynamelist})[0] );
+           if ($name && $chain[0] eq $chain[-1]) {
+               print "; Found city: WayID=$id $name\n";
+               my $region = convert_string ( (grep {defined} @waytag{@regionnamelist})[0] );
+               my $country = convert_string ( (grep {defined} @waytag{@countrynamelist})[0] );
+               $cityname{$id} = [ $name, $region, $country ];
+               $citybound{$id} = Math::Polygon->new( map { [split ",",$nodes{$_}] } @chain );
+           } else {
+               print "; ERROR: City without name WayID=$id\n"           unless ($name);
+               print "; ERROR: City polygon WayID=$id is not closed\n"  if ($chain[0] ne $chain[-1]);
+           }
        }
-       print "; ERROR: City without name WayID=$id\n"           if ($city && !$name);
-       print "; ERROR: City polygon WayID=$id is not closed\n"  if ($city && $chain[0] ne $chain[-1]);
    }
 
 } continue { $_ = <IN>; }
@@ -521,8 +529,6 @@ my $inbbox;
 
 my $isin;
 
-my %waytag;
-
 while ($_) {
 
    last if /\<relation/;
@@ -536,7 +542,7 @@ while ($_) {
       @chain = ();
       @chainlist = ();
       $inbbox = 0;
-      $isin = "";
+      $isin = 0;
 
       next;
    }
@@ -601,7 +607,7 @@ while ($_) {
            for my $i (keys %cityname) {
                if ( $citybound{$i}->contains([split ",",$nodes{$chain[0]}]) 
                  && $citybound{$i}->contains([split ",",$nodes{$chain[-1]}]) ) {
-                   $isin = $cityname{$i};
+                   $isin = $i;
                    last;
                }
            }
@@ -736,7 +742,9 @@ while ($_) {
                        if ( $waytag{"addr:housenumber"} &&  $waytag{"addr:street"} ) {
                            for my $i (keys %cityname) {
                                if ( $citybound{$i}->contains([split ",",$nodes{$chain[0]}]) ) {
-                                   print "CityName=$cityname{$i}\n";
+                                   print "CityName=".$cityname{$i}->[0]."\n";
+                                   print "RegionName=".$cityname{$i}->[1]."\n"          if $cityname{$i}->[1];
+                                   print "CountryName=".$cityname{$i}->[2]."\n"         if $cityname{$i}->[2];
                                    last;
                                }
                                print "CityName=$defaultcity\n"      if $defaultcity;
@@ -816,11 +824,13 @@ if ($shorelines) {
                 my $p1 = [ reverse split /,/, $nodes{$schain{$sline}->[0]} ];
                 my $p2 = [ reverse split /,/, $nodes{$schain{$sline}->[1]} ];
                 my $ipoint = SegmentIntersection [$bound[$i],$bound[$i+1],$p1,$p2];
+                $ipoint = $p2           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p2])==0);
                 push @tbound, {type=>"start", point=>$ipoint, pos=>$pos+SegmentLength([$bound[$i],$ipoint]), line=>$sline }  if $ipoint;
 
                 my $p1 = [ reverse split /,/, $nodes{$schain{$sline}->[-1]} ];
                 my $p2 = [ reverse split /,/, $nodes{$schain{$sline}->[-2]} ];
                 my $ipoint = SegmentIntersection [$bound[$i],$bound[$i+1],$p1,$p2];
+                $ipoint = $p2           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p2])==0);
                 push @tbound, {type=>"end", point=>$ipoint, pos=>$pos+SegmentLength([$bound[$i],$ipoint]), line=>$sline }  if $ipoint;
             }
             $pos += SegmentLength [$bound[$i],$bound[$i+1]];
@@ -1228,13 +1238,7 @@ while (my ($road, $pchain) = each %rchain) {
 
 
     if ($risin{$road}) {
-#        print  "; is_in = $risin{$road}\n";
-        my ($city, $region, $country);
-        my @addr = split (/\s*,\s*/, $risin{$road});
-        $city       = $addr[0]              if (scalar @addr);
-        $country    = $addr[1]              if (scalar @addr == 2);
-        ($region, $country) = @addr[1..2]   if (scalar @addr > 2);
-    
+        my ($city, $region, $country) = @{$cityname{$risin{$road}}};
         print "CityName=$city\n";
         print "RegionName=$region\n"       if ($region);
         print "CountryName=$country\n"     if ($country);
