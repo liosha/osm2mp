@@ -824,17 +824,31 @@ if ($shorelines) {
                 my $p1 = [ reverse split /,/, $nodes{$schain{$sline}->[0]} ];
                 my $p2 = [ reverse split /,/, $nodes{$schain{$sline}->[1]} ];
                 my $ipoint = SegmentIntersection [$bound[$i],$bound[$i+1],$p1,$p2];
-                $ipoint = $p2           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p2])==0);
-                push @tbound, {type=>"start", point=>$ipoint, pos=>$pos+SegmentLength([$bound[$i],$ipoint]), line=>$sline }  if $ipoint;
+                $ipoint = $p2           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p2])==0 && !insidebounds($nodes{$schain{$sline}->[0]}));
+                $ipoint = $p1           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p1])==0);
+                if ($ipoint) {  unless ( grep { $_->{type} eq "end" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1] } @tbound ) {
+                    push @tbound, {type=>"start", point=>$ipoint, pos=>$pos+SegmentLength([$bound[$i],$ipoint]), line=>$sline };
+                } else { 
+                    @tbound = grep { !($_->{type} eq "end" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1]) } @tbound;
+                }}
 
                 my $p1 = [ reverse split /,/, $nodes{$schain{$sline}->[-1]} ];
                 my $p2 = [ reverse split /,/, $nodes{$schain{$sline}->[-2]} ];
                 my $ipoint = SegmentIntersection [$bound[$i],$bound[$i+1],$p1,$p2];
-                $ipoint = $p2           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p2])==0);
-                push @tbound, {type=>"end", point=>$ipoint, pos=>$pos+SegmentLength([$bound[$i],$ipoint]), line=>$sline }  if $ipoint;
+                $ipoint = $p2           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p2])==0 && !insidebounds($nodes{$schain{$sline}->[-1]}));
+                $ipoint = $p1           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p1])==0);
+                if ($ipoint) {  unless ( grep { $_->{type} eq "start" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1] } @tbound ) {
+                    push @tbound, {type=>"end", point=>$ipoint, pos=>$pos+SegmentLength([$bound[$i],$ipoint]), line=>$sline };
+                } else { 
+                    @tbound = grep { !($_->{type} eq "start" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1]) } @tbound;
+                }}
             }
             $pos += SegmentLength [$bound[$i],$bound[$i+1]];
         }
+
+#        use Data::Dump;
+#        dd (sort {$a->{pos}<=>$b->{pos}} @tbound);
+#        exit;
 
         my $tmp = (sort {$a->{pos}<=>$b->{pos}} grep {$_->{type} ne "bound"} @tbound)[0];
         if ( $tmp->{type} eq "end" ) {
@@ -918,7 +932,6 @@ if ($shorelines) {
 
     printf STDERR "%d lakes, %d islands\n", scalar keys %loops, $countislands;
 }
-
 
 
 
@@ -1353,9 +1366,17 @@ use Text::Unidecode;
 
 sub convert_string {            # String
 
+   ##  Non-standard characters
+   my %cmap = (
+       # Romanian
+       "\x{0218}" => "\x{015E}",        "\x{0219}" => "\x{015F}",       # S-comma
+       "\x{021A}" => "\x{0162}",        "\x{021B}" => "\x{0163}",       # T-comma
+   );
+
    my $str = decode("utf8", $_[0]);
-   $str = unidecode($str)       if ($translit);
-   $str = uc($str)              if ($upcase);
+   map { $str =~ s/$_/$cmap{$_}/g } keys %cmap  if !$translit;
+   $str = unidecode($str)                       if $translit;
+   $str = uc($str)                              if $upcase;
    $str = encode ( ($nocodepage ? "utf8" : "cp".$codepage), $str);
 
    $str =~ s/\&amp\;/\&/gi;
@@ -1372,7 +1393,7 @@ sub convert_string {            # String
 
    $str =~ s/ +/ /g;
    $str =~ s/^[ \;\.\,\!\-\+\_]+//;
-
+ 
    return $str;
 }
 
@@ -1448,14 +1469,13 @@ sub speedcode {                 # $speed
 
 sub insidebbox {                # $latlon
     my ($lat, $lon) = split /,/, $_[0];
-    return 1    if ( $lat>=$minlat && $lon>=$minlon && $lat<$maxlat && $lon<$maxlon );
+    return 1    if ( $lat>$minlat && $lon>$minlon && $lat<$maxlat && $lon<$maxlon );
     return 0;
 }
 
 
 sub insidebounds {                # $latlon
-    my ($lat, $lon) = split /,/, $_[0];
-    return $boundpoly->isinside([$lon,$lat]);
+    return $boundpoly->isinside([reverse split /,/, $_[0]]);
 }
 
 
