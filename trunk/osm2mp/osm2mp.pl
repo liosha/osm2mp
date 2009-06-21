@@ -62,6 +62,7 @@ my $makepoi        = 1;
 
 
 # FIXME make command-line parameters?
+my @housenamelist       = ("addr:housenumber", "addr:housename");
 my @citynamelist        = ("place_name", "name");
 my @regionnamelist      = ("addr:region", "is_in:region", "addr:state", "is_in:state");
 my @countrynamelist     = ("addr:country", "is_in:country_code", "is_in:country");
@@ -164,7 +165,7 @@ Possible options [defaults]:
 
 
 You can use no<option> disable features (i.e --nomergeroads)
-\n";
+";
     exit;
 }
 
@@ -249,85 +250,34 @@ $boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$min
 
 
 
-####    Loading nodes and writing POIs
 
-
+####    1st pass 
+###     loading nodes
 
 my %nodes;
-
 print STDERR "Loading nodes...          ";
-print "\n\n\n; ### Points\n\n";
-
-my $countpoi = 0;
-
-my $id;
-my $latlon;
-my %nodetag;
 
 while (<IN>) {
-   last if /\<way/;
 
-   if ( $osmbbox && /\<bounds/ ) {
+    if ( /\<node.* id=["'](\-?\d+)["'].*lat=["'](\-?\d+\.?\d*)["'].*lon=["'](\-?\d+\.?\d*)["'].*$/ ) {
+        $nodes{$1} = "$2,$3";
+        next;
+    }
+
+    if ( $osmbbox && /\<bounds/ ) {
         ($minlat, $minlon, $maxlat, $maxlon) = ( /minlat=["'](\-?\d+\.?\d*)["'] minlon=["'](\-?\d+\.?\d*)["'] maxlat=["'](\-?\d+\.?\d*)["'] maxlon=["'](\-?\d+\.?\d*)["']/ );
         $bbox = join ",", ($minlon, $minlat, $maxlon, $maxlat);
         $bounds = 1 if $bbox;
         $boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat]]);
-   }
+    }
 
-   if ( /\<node/ ) {
-       /^.* id=["'](\-?\d+)["'].*lat=["'](\-?\d+\.?\d*)["'].*lon=["'](\-?\d+\.?\d*)["'].*$/;
-       $id = $1;
-       $latlon = "$2,$3";
-       $nodes{$1} = $latlon;
-       %nodetag = ();
-       next;
-   }
-
-   if ( /\<tag/ ) {
-       /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
-       $nodetag{$1} = $2;
-       next;
-   }
-
-   if ( /\<\/node/ && (!$bounds || insidebbox($latlon)) ) {
-
-       my @typelist = grep {$poitype{"$_=$nodetag{$_}"}} keys %nodetag;
-       next unless $typelist[0];
-
-       $countpoi ++;
-       my $poi = "$typelist[0]=$nodetag{$typelist[0]}";
-
-       my @namelist = grep {defined} @nodetag{@nametagarray};
-       my $poiname = convert_string ($namelist[0]);
-
-       my @type = @{$poitype{$poi}};
-
-       print  "; NodeID = $id\n";
-       print  "; $poi\n";
-       print  "[POI]\n";
-       printf "Type=%s\n",            $type[0];
-       printf "Data%d=($latlon)\n",   $type[1];
-       printf "EndLevel=%d\n",        $type[2]          if ($type[2] > $type[1]);
-       printf "City=Y\n",                               if ($type[3]);
-       print  "Label=$poiname\n"                        if ($poiname);
-
-       printf "Zip=%s\n",               convert_string($nodetag{"addr:postcode"})       if $nodetag{"addr:postcode"};
-       printf "StreetDesc=%s\n",        convert_string($nodetag{"addr:street"})         if $nodetag{"addr:street"};
-       printf "HouseNumber=%s\n",       convert_string($nodetag{"addr:housenumber"})    if $nodetag{"addr:housenumber"};
-       printf "Phone=%s\n",             convert_string($nodetag{"phone"})               if $nodetag{"phone"};
-
-       print  "[END]\n\n";
-   }
+    last if /\<way/;
 }
-
-printf STDERR "%d loaded, %d POIs dumped\n", scalar keys %nodes, $countpoi;
-
+printf STDERR "%d loaded\n", scalar keys %nodes;
 
 
 
-
-
-####    Skipping ways
+###     saving file positions
 
 my $waypos  = tell IN;
 my $waystr  = $_;
@@ -339,16 +289,12 @@ my $relstr  = $_;
 
 
 
-
-
-
-####    Loading relations
+###     loading relations
 
 my %mpoly;
 my %mpholes;
 
 my %trest;
-#my %waytr;
 my %nodetr;
 
 
@@ -423,9 +369,11 @@ printf STDERR "%d multipolygons, %d turn restrictions\n", scalar keys %mpoly, sc
 
 
 
+####    2nd pass
+###     loading cities, multipolygon holes and checking node dupes
 
-
-####    Loading cities, multipolygon holes and checking node dupes
+my %cityname;
+my %citybound;
 
 print STDERR "Loading cities...         ";
 
@@ -433,21 +381,13 @@ seek IN, $waypos, 0;
 $_ = $waystr;
 
 my $id;
+my %waytag;
 my @chain;
 my $dupcount;
 
-my %cityname;
-my %citybound;
-
-my %waytag;
-
 while ($_) {
 
-   last if /\<relation/;
-
-   if ( /\<way/ ) {
-      /^.* id=["'](\-?\d+)["'].*$/;
-
+   if ( /\<way.* id=["'](\-?\d+)["'].*$/ ) {
       $id = $1;
       @chain = ();
       %waytag = ();
@@ -455,8 +395,7 @@ while ($_) {
       next;
    }
 
-   if ( /\<nd/ ) {
-      /^.*ref=["'](.*)["'].*$/;
+   if ( /\<nd.*ref=["'](.*)["'].*$/ ) {
       if ($nodes{$1}  &&  $1 ne $chain[-1] ) {
           push @chain, $1;
       } elsif ($nodes{$1}) {
@@ -466,8 +405,7 @@ while ($_) {
       next;
    }
 
-   if ( /\<tag/ ) {
-       /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
+   if ( /\<tag.*k=["'](.*)["'].*v=["'](.*)["'].*$/ ) {
        $waytag{$1} = $2;
        next;
    }
@@ -492,12 +430,87 @@ while ($_) {
                print "; ERROR: City polygon WayID=$id is not closed\n"  if ($chain[0] ne $chain[-1]);
            }
        }
+       next;
    }
 
+   last if /\<relation/;
 } continue { $_ = <IN>; }
 
 printf STDERR "%d loaded\n", scalar keys %cityname;
 
+
+
+
+
+####    3rd pass
+###     writing POIs
+
+seek IN, 0, 0;
+
+print STDERR "Writing POIs...           ";
+print "\n\n\n; ### Points\n\n";
+
+my $countpoi = 0;
+my $id;
+my %nodetag;
+
+while (<IN>) {
+
+   if ( /\<node.* id=["'](\-?\d+)["']/ ) {
+       $id = $1;
+       %nodetag = ();
+       next;
+   }
+
+   if ( /\<tag.* k=["'](.*)["'].* v=["'](.*)["'].*$/ ) {
+       $nodetag{$1} = $2;
+       next;
+   }
+
+   if ( /\<\/node/ && (!$bounds || insidebounds($nodes{$id})) ) {
+
+       my @typelist = grep {$poitype{"$_=$nodetag{$_}"}} keys %nodetag;
+       next unless $typelist[0];
+
+       $countpoi ++;
+       my $poi = "$typelist[0]=$nodetag{$typelist[0]}";
+       my $poiname = convert_string ((grep {defined} @nodetag{@nametagarray})[0]);
+       my @type = @{$poitype{$poi}};
+
+       print  "; NodeID = $id\n";
+       print  "; $poi\n";
+       print  "[POI]\n";
+       print  "Type=$type[0]\n";
+       printf "Data%d=($nodes{$id})\n",   $type[1];
+       printf "EndLevel=%d\n",            $type[2]      if ($type[2] > $type[1]);
+       printf "City=Y\n",                               if ($type[3]);
+       print  "Label=$poiname\n"                        if ($poiname);
+
+       my $housenumber = convert_string ( (grep {defined} @nodetag{@housenamelist})[0] );
+       print  "HouseNumber=$housenumber\n"                                              if $housenumber;
+       printf "StreetDesc=%s\n",        convert_string($nodetag{"addr:street"})         if $nodetag{"addr:street"};
+
+       for my $i (keys %cityname) {
+           if ( $citybound{$i}->contains([split ",",$nodes{$id}]) ) {
+               print "CityName=".$cityname{$i}->[0]."\n";
+               print "RegionName=".$cityname{$i}->[1]."\n"          if $cityname{$i}->[1];
+               print "CountryName=".$cityname{$i}->[2]."\n"         if $cityname{$i}->[2];
+               last;
+           } elsif ( $defaultcity ) {
+               print "CityName=$defaultcity\n";
+           }
+       }
+
+       printf "Zip=%s\n",               convert_string($nodetag{"addr:postcode"})       if $nodetag{"addr:postcode"};
+       printf "Phone=%s\n",             convert_string($nodetag{"phone"})               if $nodetag{"phone"};
+
+       print  "[END]\n\n";
+   }
+
+   last if /\<way/;
+}
+
+printf STDERR "%d written\n", $countpoi;
 
 
 
@@ -510,14 +523,10 @@ my %rprops;
 my %risin;
 
 my %xnodes;
-
 my %schain;
 
 print STDERR "Processing ways...        ";
 print "\n\n\n; ### Lines and polygons\n\n";
-
-seek IN, $waypos, 0;
-$_ = $waystr;
 
 my $countlines    = 0;
 my $countpolygons = 0;
@@ -595,6 +604,8 @@ while ($_) {
                                                                 if exists $waytag{"access"};
            $rp[5]=$rp[6]=$rp[7]=$rp[8]=$rp[10] = 1-$yesno{$waytag{"auto"}}
                                                                 if exists $waytag{"auto"};
+           $rp[5]=$rp[6]=$rp[7]=$rp[8]=$rp[10] = 1-$yesno{$waytag{"vehicle"}}
+                                                                if exists $waytag{"vehicle"};
            $rp[9]=$rp[10] = $yesno{$waytag{"motorroad"}}        if exists $waytag{"motorroad"};
            
            $rp[5]=$rp[6]=$rp[8] = 1-$yesno{$waytag{"motorcar"}} if exists $waytag{"motorcar"};
@@ -735,19 +746,28 @@ while ($_) {
                    printf "EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
                    print  "Label=$polyname\n"                       if ($polyname);
 
+                   my $city;
+                   if ($navitel || ($makepoi && $polyname && $type[5])) {
+                       for my $i (keys %cityname) {
+                           if ( $citybound{$i}->contains([split ",",$nodes{$chain[0]}]) ) {
+                               $city = $i;
+                               last;
+                           }
+                       }
+                   }
+
                    ## Navitel
                    if ($navitel) {
-                       printf "StreetDesc=%s\n",        convert_string($waytag{"addr:street"})         if $waytag{"addr:street"};
-                       printf "HouseNumber=%s\n",       convert_string($waytag{"addr:housenumber"})    if $waytag{"addr:housenumber"};
+                       my $housenumber = convert_string ( (grep {defined} @waytag{@housenamelist})[0] );
+                       print  "HouseNumber=$housenumber\n"                              if $housenumber;
+                       printf "StreetDesc=%s\n", convert_string($waytag{"addr:street"}) if $waytag{"addr:street"};
                        if ( $waytag{"addr:housenumber"} &&  $waytag{"addr:street"} ) {
-                           for my $i (keys %cityname) {
-                               if ( $citybound{$i}->contains([split ",",$nodes{$chain[0]}]) ) {
-                                   print "CityName=".$cityname{$i}->[0]."\n";
-                                   print "RegionName=".$cityname{$i}->[1]."\n"          if $cityname{$i}->[1];
-                                   print "CountryName=".$cityname{$i}->[2]."\n"         if $cityname{$i}->[2];
-                                   last;
-                               }
-                               print "CityName=$defaultcity\n"      if $defaultcity;
+                           if ( $city ) {
+                               print "CityName=".$cityname{$city}->[0]."\n";
+                               print "RegionName=".$cityname{$city}->[1]."\n"           if $cityname{$city}->[1];
+                               print "CountryName=".$cityname{$city}->[2]."\n"          if $cityname{$city}->[2];
+                           } elsif ( $defaultcity ) {
+                               print "CityName=$defaultcity\n";
                            }
                        }
                    }
@@ -773,6 +793,18 @@ while ($_) {
                        print  "EndLevel=$phl\n";
                        print  "Label=$polyname\n";
                        printf "Data%d=(%f,%f)\n", $pll, centroid(($polygon->points));
+
+                       my $housenumber = convert_string ( (grep {defined} @waytag{@housenamelist})[0] );
+                       print  "HouseNumber=$housenumber\n"                              if $housenumber;
+                       printf "StreetDesc=%s\n", convert_string($waytag{"addr:street"}) if $waytag{"addr:street"};
+                       if ( $city ) {
+                           print "CityName=".$cityname{$city}->[0]."\n";
+                           print "RegionName=".$cityname{$city}->[1]."\n"           if $cityname{$city}->[1];
+                           print "CountryName=".$cityname{$city}->[2]."\n"          if $cityname{$city}->[2];
+                       } elsif ( $defaultcity ) {
+                           print "CityName=$defaultcity\n";
+                       }
+
                        print  "[END]\n\n\n";
                    }
                }
@@ -1379,21 +1411,18 @@ sub convert_string {            # String
    $str = uc($str)                              if $upcase;
    $str = encode ( ($nocodepage ? "utf8" : "cp".$codepage), $str);
 
+   $str =~ s/\&#(\d+)\;/chr($1)/ge;
    $str =~ s/\&amp\;/\&/gi;
-   $str =~ s/\&#38\;/\&/gi;
-   $str =~ s/\&quot\;/\"/gi;
    $str =~ s/\&apos\;/\'/gi;
-   $str =~ s/\&#39\;/\'/gi;
-   $str =~ s/\&#47\;/\//gi;
-   $str =~ s/\&#92\;/\\/gi;
-   $str =~ s/\&#13\;/-/gi;
+   $str =~ s/\&quot\;/\"/gi;
 
-   $str =~ s/\&#\d+\;/ /gi;
    $str =~ s/[\?\"\<\>\*]/ /g;
+   $str =~ s/[\x00-\x1F]//g;
 
-   $str =~ s/ +/ /g;
    $str =~ s/^[ \;\.\,\!\-\+\_]+//;
- 
+   $str =~ s/ +/ /g;
+   $str =~ s/\s+$//;
+   
    return $str;
 }
 

@@ -1,6 +1,7 @@
 [IMG ID]
 ID=[% mapid %]
 Name=[% mapname %]
+Copyright=OpenStreetMap project contributors under CC-BY-SA
 
 [% IF codepage %]
 LblCoding=9
