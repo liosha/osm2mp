@@ -456,7 +456,7 @@ my %nodetag;
 
 while (<IN>) {
 
-   if ( /\<node.* id=["'](\-?\d+)["']/ ) {
+   if ( /\<node.* id=["']([^"']+)["']/ ) {
        $id = $1;
        %nodetag = ();
        next;
