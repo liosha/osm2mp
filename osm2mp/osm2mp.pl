@@ -8,17 +8,26 @@
 ##    * Text::Unidecode
 ##    * Math::Polygon
 ##    * Math::Geometry::Planar
-##  See http://cpan.org/ or use PPM (Perl package manager)
+##    * Math::Geometry::Planar::GPC::Polygon
+##
+##  See http://cpan.org/ or use PPM (Perl package manager) or CPAN module
+##
+
+##
+##  Licenced under GPL v2
 ##
 
 
 use Math::Polygon;
 use Math::Geometry::Planar;
+use Math::Geometry::Planar::GPC::Polygon;
+
+use Data::Dump;
 
 
 ####    Settings
 
-my $version = "0.72a";
+my $version = "0.75a";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
@@ -51,8 +60,10 @@ my $upcase         = 0;
 my $translit       = 0;
 
 my $bbox;
-my $background     = 0;
+my $bpolyfile;
 my $osmbbox        = 0;
+
+my $background     = 0;
 
 my $disableuturns  = 0;
 
@@ -77,6 +88,7 @@ my %yesno = (  "yes"            => 1,
                "0"              => 0,
                "private"        => 0);
 
+
 use Getopt::Long;
 $result = GetOptions (
                         "cfgpoi=s"              => \$cfgpoi,
@@ -100,6 +112,7 @@ $result = GetOptions (
                         "upcase!"               => \$upcase,
                         "translit!"             => \$translit,
                         "bbox=s"                => \$bbox,
+                        "bpoly=s"               => \$bpolyfile,
                         "osmbbox!"              => \$osmbbox,
                         "background!",          => \$background,
                         "disableuturns!",       => \$disableuturns,
@@ -137,6 +150,8 @@ Possible options [defaults]:
 
     --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
     --osmbbox                 use bounds from .osm              [$onoff[$osmbbox]]
+    --bpoly <poly-file>       use bounding polygon from .poly-file
+
     --background              create background object          [$onoff[$background]]
 
     --codepage <num>          codepage number                   [$codepage]
@@ -241,14 +256,39 @@ print STDERR "Processing file $ARGV[0]\n\n";
 ####    Bounds
 
 my $bounds;
-my $boundpoly = Math::Geometry::Planar->new;
+my $boundpoly = Math::Geometry::Planar->new();
+my $boundgpc = Math::Geometry::Planar::GPC::Polygon->new();
 
-$bounds = 1 if $bbox;
+my ($minlon, $minlat, $maxlon, $maxlat);
 
-my ($minlon, $minlat, $maxlon, $maxlat) = split /,/, $bbox;
-$boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat]]);
+if ($bbox) {
+    $bounds = 1 ;
+    ($minlon, $minlat, $maxlon, $maxlat) = split /,/, $bbox;
+    $boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat]]);
+}
 
+if ($bpolyfile) {
+    $bbox = 0;
+    $bounds = 1;
 
+    my $invert;
+    my $bpoints;
+
+    open (PF, $bpolyfile) || die "Could not open file: $bpolyfile: $!";
+    while (<PF>) {
+        if (/^(!?)\d/) {
+            $invert = ($1 eq "!") ? 1 : 0;
+            $bpoints = [];
+        } elsif (/^END/) {
+            ## FIXME: need advanced polygons
+            $boundpoly->points ($bpoints);
+        }
+        elsif (/^\s+([0-9.E+-]+)\s+([0-9.E+-]+)/) {
+            push(@$bpoints, [$1,$2])   if ( !(scalar @$bpoints) || $1!=$bpoints->[0][0] || $2!=$bpoints->[0][1] );
+        }
+    }
+    close (PF);
+}
 
 
 ####    1st pass 
@@ -270,10 +310,18 @@ while (<IN>) {
         $bounds = 1 if $bbox;
         $boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat]]);
     }
+    if ( $osmbbox && /\<bound / ) {
+        ($minlat, $minlon, $maxlat, $maxlon) = ( /box=["'](\-?\d+\.?\d*),(\-?\d+\.?\d*),(\-?\d+\.?\d*),(\-?\d+\.?\d*)["']/ );
+        $bbox = join ",", ($minlon, $minlat, $maxlon, $maxlat);
+        $bounds = 1 if $bbox;
+        $boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat]]);
+    }
 
     last if /\<way/;
 }
 printf STDERR "%d loaded\n", scalar keys %nodes;
+
+$boundgpc->add_polygon ($boundpoly->points(),0);
 
 
 
@@ -365,6 +413,7 @@ while ($_) {
 } continue { $_ = <IN>; }
 
 printf STDERR "%d multipolygons, %d turn restrictions\n", scalar keys %mpoly, scalar keys %trest;
+
 
 
 
@@ -534,7 +583,7 @@ my $countpolygons = 0;
 my $id;
 my @chain;
 my @chainlist;
-my $inbbox;
+my $inbounds;
 
 my $isin;
 
@@ -550,7 +599,7 @@ while ($_) {
       %waytag = ();
       @chain = ();
       @chainlist = ();
-      $inbbox = 0;
+      $inbounds = 0;
       $isin = 0;
 
       next;
@@ -561,9 +610,10 @@ while ($_) {
       if ($nodes{$1}  &&  $1 ne $chain[-1] ) {
           push @chain, $1;
           if ($bounds) {
-              if ( !$inbbox &&  insidebbox($nodes{$1}) )        { push @chainlist, ($#chain ? $#chain-1 : 0); }
-              if (  $inbbox && !insidebbox($nodes{$1}) )        { push @chainlist, $#chain; }
-              $inbbox = insidebbox($nodes{$1});
+              my $in = insidebounds($nodes{$1});
+              if ( !$inbounds &&  $in )        { push @chainlist, ($#chain ? $#chain-1 : 0); }
+              if (  $inbounds && !$in )        { push @chainlist, $#chain; }
+              $inbounds = $in;
           }
       }
       next;
@@ -629,11 +679,11 @@ while ($_) {
                $risin{"$id:$i"}  = $isin         if ($isin && $polyname);
 
                if ($bounds) {
-                   if ( !insidebbox($nodes{$chain[$chainlist[$i]]}) ) {
+                   if ( !insidebounds($nodes{$chain[$chainlist[$i]]}) ) {
                        $xnodes{ $chain[$chainlist[$i]] }        = 1;
                        $xnodes{ $chain[$chainlist[$i]+1] }      = 1;
                    }
-                   if ( !insidebbox($nodes{$chain[$chainlist[$i+1]]}) ) {
+                   if ( !insidebounds($nodes{$chain[$chainlist[$i+1]]}) ) {
                        $xnodes{ $chain[$chainlist[$i+1]] }      = 1;
                        $xnodes{ $chain[$chainlist[$i+1]-1] }    = 1;
                    }
@@ -718,12 +768,11 @@ while ($_) {
 
        ##       this way is map polygon
 
-       if ( $polytype{$poly}->[0] eq "p" ) {
-           my $d = "";
-           if ( scalar @chain < 4 ) {
+       if ( $polytype{$poly}->[0] eq "p" && scalar @chain <= 3 ) {
                print "; ERROR: WayID=$id has too few nodes near ($nodes{$chain[0]})\n";
-               $d = "; ";
            }
+
+       if ( $polytype{$poly}->[0] eq "p" && scalar @chain > 3) {
            if ( $chain[0] ne $chain[-1] ) {
                print "; ERROR: area WayID=$id is not closed at ($nodes{$chain[0]})\n";
            }
@@ -733,70 +782,48 @@ while ($_) {
            print  "; WayID = $id\n";
            print  "; $poly\n";
 
-           if (!$d && (!$bounds || scalar @chainlist)) {
+           if (!$bounds || scalar @chainlist) {
 
-               my $polygon = Math::Polygon->new( map { [split ",",$nodes{$_}] } @chain );
-               $polygon = $polygon->fillClip1 ($minlat, $minlon, $maxlat, $maxlon) if ($bounds);
+               my $city;
+               if ($navitel || ($makepoi && $polyname && $type[5])) {
+                   for my $i (keys %cityname) {
+                       if ( $citybound{$i}->contains([split ",",$nodes{$chain[0]}]) ) {
+                           $city = $i;
+                           last;
+                       }
+                   }
+               }
+
+               my $gpc= Math::Geometry::Planar::GPC::Polygon->new();
+               $gpc->add_polygon( [ map { [reverse split ",",$nodes{$_}] } @chain ], 0 );
+
+               if ($mpoly{$id}) {
+                   for my $hole (@{$mpoly{$id}}) {
+                       if ($mpholes{$hole} ne $hole && @{$mpholes{$hole}}) {
+                           $gpc->add_polygon( [ map { [reverse split ",",$nodes{$_}] } @{$mpholes{$hole}} ], 1 );
+                       }
+                   }
+               }
+
+               if ($bounds) {
+                   $gpc = $gpc->clip_to($boundgpc, "INTERSECT");
+               }
                
-               if ($polygon) {
-                   $countpolygons ++;
-           
-                   print  "[POLYGON]\n";
-                   printf "Type=%s\n",        $type[1];
-                   printf "EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
-                   print  "Label=$polyname\n"                       if ($polyname);
 
-                   my $city;
-                   if ($navitel || ($makepoi && $polyname && $type[5])) {
-                       for my $i (keys %cityname) {
-                           if ( $citybound{$i}->contains([split ",",$nodes{$chain[0]}]) ) {
-                               $city = $i;
-                               last;
-                           }
-                       }
-                   }
+               $countpolygons ++;
 
-                   ## Navitel
-                   if ($navitel) {
-                       my $housenumber = convert_string ( (grep {defined} @waytag{@housenamelist})[0] );
-                       print  "HouseNumber=$housenumber\n"                              if $housenumber;
-                       printf "StreetDesc=%s\n", convert_string($waytag{"addr:street"}) if $waytag{"addr:street"};
-                       if ( $waytag{"addr:housenumber"} &&  $waytag{"addr:street"} ) {
-                           if ( $city ) {
-                               print "CityName=".$cityname{$city}->[0]."\n";
-                               print "RegionName=".$cityname{$city}->[1]."\n"           if $cityname{$city}->[1];
-                               print "CountryName=".$cityname{$city}->[2]."\n"          if $cityname{$city}->[2];
-                           } elsif ( $defaultcity ) {
-                               print "CityName=$defaultcity\n";
-                           }
-                       }
-                   }
+               print  "[POLYGON]\n";
+               printf "Type=%s\n",        $type[1];
+               printf "EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
+               print  "Label=$polyname\n"                       if ($polyname);
 
-                   # printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@chain});
-                   printf "Data%d=(%s)\n",    $type[3], join ("), (", map {join(",", @{$_})} @{$polygon->points});
-                   if ($mpoly{$id}) {
-                       printf "; this is multipolygon with %d holes: %s\n", scalar @{$mpoly{$id}}, join (", ", @{$mpoly{$id}});
-                       for my $hole (@{$mpoly{$id}}) {
-                           if ($mpholes{$hole} ne $hole && @{$mpholes{$hole}}) {
-                               printf "Data%d=(%s)\n",    $type[3], join ("), (", @nodes{@{$mpholes{$hole}}});
-                           }
-                       }
-                   }
-                   print  "[END]\n\n\n";
 
-                   if ($makepoi && $polyname && $type[5]) {
-
-                       my ($poi,$pll,$phl) = split ",", $type[5];
-
-                       print  "[POI]\n";
-                       print  "Type=$poi\n";
-                       print  "EndLevel=$phl\n";
-                       print  "Label=$polyname\n";
-                       printf "Data%d=(%f,%f)\n", $pll, centroid(($polygon->points));
-
-                       my $housenumber = convert_string ( (grep {defined} @waytag{@housenamelist})[0] );
-                       print  "HouseNumber=$housenumber\n"                              if $housenumber;
-                       printf "StreetDesc=%s\n", convert_string($waytag{"addr:street"}) if $waytag{"addr:street"};
+               ## Navitel
+               if ($navitel) {
+                   my $housenumber = convert_string ( (grep {defined} @waytag{@housenamelist})[0] );
+                   print  "HouseNumber=$housenumber\n"                              if $housenumber;
+                   printf "StreetDesc=%s\n", convert_string($waytag{"addr:street"}) if $waytag{"addr:street"};
+                   if ( $waytag{"addr:housenumber"} &&  $waytag{"addr:street"} ) {
                        if ( $city ) {
                            print "CityName=".$cityname{$city}->[0]."\n";
                            print "RegionName=".$cityname{$city}->[1]."\n"           if $cityname{$city}->[1];
@@ -804,9 +831,38 @@ while ($_) {
                        } elsif ( $defaultcity ) {
                            print "CityName=$defaultcity\n";
                        }
-
-                       print  "[END]\n\n\n";
                    }
+               }
+
+               my @plist = sort {$#{$b} <=> $#{$a}} $gpc->get_polygons();
+               for my $polygon (@plist) {
+                   printf "Data%d=(%s)\n",    $type[3], join ("), (", map {join(",", reverse @{$_})} @{$polygon});
+               }
+
+               print  "[END]\n\n\n";
+
+               if ($makepoi && $polyname && $type[5]) {
+
+                   my ($poi,$pll,$phl) = split ",", $type[5];
+
+                   print  "[POI]\n";
+                   print  "Type=$poi\n";
+                   print  "EndLevel=$phl\n";
+                   print  "Label=$polyname\n";
+                   printf "Data%d=(%f,%f)\n", $pll, centroid(@{$plist[0]});
+
+                   my $housenumber = convert_string ( (grep {defined} @waytag{@housenamelist})[0] );
+                   print  "HouseNumber=$housenumber\n"                              if $housenumber;
+                   printf "StreetDesc=%s\n", convert_string($waytag{"addr:street"}) if $waytag{"addr:street"};
+                   if ( $city ) {
+                       print "CityName=".$cityname{$city}->[0]."\n";
+                       print "RegionName=".$cityname{$city}->[1]."\n"           if $cityname{$city}->[1];
+                       print "CountryName=".$cityname{$city}->[2]."\n"          if $cityname{$city}->[2];
+                   } elsif ( $defaultcity ) {
+                       print "CityName=$defaultcity\n";
+                   }
+
+                   print  "[END]\n\n\n";
                }
            }
        }
@@ -832,7 +888,10 @@ if ($shorelines) {
     my @keys = keys %schain;
     my $i = 0;
     while ($i < scalar @keys) {
-        while ( $schain{$keys[$i]}  &&  $schain{$schain{$keys[$i]}->[-1]}  &&  $schain{$keys[$i]}->[-1] ne $keys[$i] ) {
+        while ( $schain{$keys[$i]}  
+                && $schain{$schain{$keys[$i]}->[-1]}  
+                && $schain{$keys[$i]}->[-1] ne $keys[$i] 
+                && (!$bounds || insidebounds($nodes{$schain{$keys[$i]}->[-1]})) ) {
             my $mnode = $schain{$keys[$i]}->[-1];
             pop  @{$schain{$keys[$i]}};
             push @{$schain{$keys[$i]}}, @{$schain{$mnode}};
@@ -845,7 +904,7 @@ if ($shorelines) {
     ##  tracing bounds
     if ($bounds) {
 
-        my @bound = @{$boundpoly->points};
+        my @bound = @{$boundpoly->points()};
         push @bound, $bound[0];
 
         my @tbound;
@@ -878,9 +937,6 @@ if ($shorelines) {
             $pos += SegmentLength [$bound[$i],$bound[$i+1]];
         }
 
-#        use Data::Dump;
-#        dd (sort {$a->{pos}<=>$b->{pos}} @tbound);
-#        exit;
 
         my $tmp = (sort {$a->{pos}<=>$b->{pos}} grep {$_->{type} ne "bound"} @tbound)[0];
         if ( $tmp->{type} eq "end" ) {
@@ -1321,7 +1377,7 @@ if ($bounds && $background) {
     print  "[POLYGON]\n";
     print  "Type=0x4b\n";
     print  "EndLevel=9\n";
-    print  "Data0=($minlat,$minlon), ($minlat,$maxlon), ($maxlat,$maxlon), ($maxlat,$minlon) \n";
+    print  "Data0=(" . join("), (", map { join ",", reverse @{$_} } @{$boundpoly->points}) . ")\n";
     print  "[END]\n\n\n";
 
 }
@@ -1419,7 +1475,7 @@ sub convert_string {            # String
    $str =~ s/[\?\"\<\>\*]/ /g;
    $str =~ s/[\x00-\x1F]//g;
 
-   $str =~ s/^[ \;\.\,\!\-\+\_]+//;
+   $str =~ s/^[ \`\'\;\.\,\!\-\+\_]+//;
    $str =~ s/ +/ /g;
    $str =~ s/\s+$//;
    
@@ -1504,6 +1560,7 @@ sub insidebbox {                # $latlon
 
 
 sub insidebounds {                # $latlon
+    return insidebbox(@_)       if $bbox;
     return $boundpoly->isinside([reverse split /,/, $_[0]]);
 }
 
@@ -1550,5 +1607,6 @@ sub centroid {
         $ssq  += $tsq;
     }
 
-    return ($slat/$ssq , $slon/$ssq);
+#    return ($slat/$ssq , $slon/$ssq);
+    return ($slon/$ssq , $slat/$ssq);
 }
