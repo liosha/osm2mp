@@ -58,6 +58,7 @@ my $restrictions   = 1;
 my $nametaglist    = "name,ref,int_ref,addr:housenumber";
 my $upcase         = 0;
 my $translit       = 0;
+my $ttable         = "";
 
 my $bbox;
 my $bpolyfile;
@@ -111,6 +112,7 @@ $result = GetOptions (
                         "nametaglist=s"         => \$nametaglist,
                         "upcase!"               => \$upcase,
                         "translit!"             => \$translit,
+                        "ttable=s"              => \$ttable,
                         "bbox=s"                => \$bbox,
                         "bpoly=s"               => \$bpolyfile,
                         "osmbbox!"              => \$osmbbox,
@@ -121,8 +123,10 @@ $result = GetOptions (
                         "makepoi!",             => \$makepoi,
                       );
 
-undef $codepage         if ($nocodepage);
+undef $codepage         if $nocodepage;
 
+our %cmap;
+do $ttable              if $ttable;
 
 
 ####    Action
@@ -158,6 +162,7 @@ Possible options [defaults]:
     --nocodepage              leave all labels in utf-8         [$onoff[$nocodepage]]
     --upcase                  convert all labels to upper case  [$onoff[$upcase]]
     --translit                tranliterate labels               [$onoff[$translit]]
+    --ttable <file>           character conversion table
 
     --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
     --defaultcountry <name>   default data for street indexing  [$defaultcountry]
@@ -321,7 +326,7 @@ while (<IN>) {
 }
 printf STDERR "%d loaded\n", scalar keys %nodes;
 
-$boundgpc->add_polygon ($boundpoly->points(),0);
+$boundgpc->add_polygon ($boundpoly->points(),0)         if $bounds;
 
 
 
@@ -1454,17 +1459,13 @@ use Text::Unidecode;
 
 sub convert_string {            # String
 
-   ##  Non-standard characters
-   my %cmap = (
-       # Romanian
-       "\x{0218}" => "\x{015E}",        "\x{0219}" => "\x{015F}",       # S-comma
-       "\x{021A}" => "\x{0162}",        "\x{021B}" => "\x{0163}",       # T-comma
-   );
-
    my $str = decode("utf8", $_[0]);
+
    map { $str =~ s/$_/$cmap{$_}/g } keys %cmap  if !$translit;
+   
    $str = unidecode($str)                       if $translit;
    $str = uc($str)                              if $upcase;
+   
    $str = encode ( ($nocodepage ? "utf8" : "cp".$codepage), $str);
 
    $str =~ s/\&#(\d+)\;/chr($1)/ge;
