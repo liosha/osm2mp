@@ -1,6 +1,6 @@
 [Map]
 FileName=OSM
-MapVersion=060
+MapVersion=075
 FID=888
 ProductCode=1
 ;Color=32
@@ -14,7 +14,8 @@ Level1=13
 Zoom0=5
 Zoom1=6
 
-
+Copy1=http://openstreetmap.org/
+Copy2=liosha, xliosha@gmail.com
 MapsourceName=OpenStreetMap
 MapSetName=OpenStreetMap
 CDSetName=OpenStreetMap
