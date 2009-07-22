@@ -53,6 +53,8 @@ my $splitroads     = 1;
 my $fixclosenodes  = 1;
 my $fixclosedist   = 3.0;       # set 5.5 for cgpsmapper 0097 and earlier
 
+my $maxroadnodes   = 30;
+
 my $restrictions   = 1;
 
 my $nametaglist    = "name,ref,int_ref,addr:housenumber";
@@ -1239,7 +1241,7 @@ if ($splitroads) {
                 }
                 $rnod = 1;
             }
-            if ($rnod == 60) {
+            if ($rnod == $maxroadnodes) {
                 $countlong ++;
 #                print "; ERROR: WayID=$road has too many nodes  ($i $j)\n";
                 $break = $j;
