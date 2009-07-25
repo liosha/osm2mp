@@ -8,8 +8,6 @@
 ##    * Text::Unidecode
 ##    * Math::Polygon
 ##    * Math::Geometry::Planar
-##    * Math::Geometry::Planar::GPC::Polygon
-##
 ##  See http://cpan.org/ or use PPM (Perl package manager) or CPAN module
 ##
 
@@ -27,7 +25,7 @@ use Data::Dump;
 
 ####    Settings
 
-my $version = "0.75a";
+my $version = "0.72a";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
@@ -53,14 +51,11 @@ my $splitroads     = 1;
 my $fixclosenodes  = 1;
 my $fixclosedist   = 3.0;       # set 5.5 for cgpsmapper 0097 and earlier
 
-my $maxroadnodes   = 30;
-
 my $restrictions   = 1;
 
 my $nametaglist    = "name,ref,int_ref,addr:housenumber";
 my $upcase         = 0;
 my $translit       = 0;
-my $ttable         = "";
 
 my $bbox;
 my $bpolyfile;
@@ -114,7 +109,6 @@ $result = GetOptions (
                         "nametaglist=s"         => \$nametaglist,
                         "upcase!"               => \$upcase,
                         "translit!"             => \$translit,
-                        "ttable=s"              => \$ttable,
                         "bbox=s"                => \$bbox,
                         "bpoly=s"               => \$bpolyfile,
                         "osmbbox!"              => \$osmbbox,
@@ -125,10 +119,8 @@ $result = GetOptions (
                         "makepoi!",             => \$makepoi,
                       );
 
-undef $codepage         if $nocodepage;
+undef $codepage         if ($nocodepage);
 
-our %cmap;
-do $ttable              if $ttable;
 
 
 ####    Action
@@ -164,7 +156,6 @@ Possible options [defaults]:
     --nocodepage              leave all labels in utf-8         [$onoff[$nocodepage]]
     --upcase                  convert all labels to upper case  [$onoff[$upcase]]
     --translit                tranliterate labels               [$onoff[$translit]]
-    --ttable <file>           character conversion table
 
     --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
     --defaultcountry <name>   default data for street indexing  [$defaultcountry]
@@ -328,7 +319,7 @@ while (<IN>) {
 }
 printf STDERR "%d loaded\n", scalar keys %nodes;
 
-$boundgpc->add_polygon ($boundpoly->points(),0)         if $bounds;
+$boundgpc->add_polygon ($boundpoly->points(),0);
 
 
 
@@ -999,12 +990,12 @@ if ($shorelines) {
             }
         }
 
-#        print  "; merged coastline\n";
-#        print  "[POLYLINE]\n";
-#        print  "Type=0x15\n";
-#        print  "EndLevel=4\n";
-#        printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$i}}});
-#        print  "[END]\n\n\n";
+        print  "; merged coastline\n";
+        print  "[POLYLINE]\n";
+        print  "Type=0x15\n";
+        print  "EndLevel=4\n";
+        printf "Data0=(%s)\n",          join ("), (", @nodes{@{$schain{$i}}});
+        print  "[END]\n\n\n";
     }
 
     my $countislands = 0;
@@ -1241,7 +1232,7 @@ if ($splitroads) {
                 }
                 $rnod = 1;
             }
-            if ($rnod == $maxroadnodes) {
+            if ($rnod == 60) {
                 $countlong ++;
 #                print "; ERROR: WayID=$road has too many nodes  ($i $j)\n";
                 $break = $j;
@@ -1461,13 +1452,17 @@ use Text::Unidecode;
 
 sub convert_string {            # String
 
-   my $str = decode("utf8", $_[0]);
+   ##  Non-standard characters
+   my %cmap = (
+       # Romanian
+       "\x{0218}" => "\x{015E}",        "\x{0219}" => "\x{015F}",       # S-comma
+       "\x{021A}" => "\x{0162}",        "\x{021B}" => "\x{0163}",       # T-comma
+   );
 
+   my $str = decode("utf8", $_[0]);
    map { $str =~ s/$_/$cmap{$_}/g } keys %cmap  if !$translit;
-   
    $str = unidecode($str)                       if $translit;
    $str = uc($str)                              if $upcase;
-   
    $str = encode ( ($nocodepage ? "utf8" : "cp".$codepage), $str);
 
    $str =~ s/\&#(\d+)\;/chr($1)/ge;
@@ -1478,7 +1473,7 @@ sub convert_string {            # String
    $str =~ s/[\?\"\<\>\*]/ /g;
    $str =~ s/[\x00-\x1F]//g;
 
-   $str =~ s/^[ \`\'\;\.\,\!\-\+\_]+//;
+   $str =~ s/^[ \;\.\,\!\-\+\_]+//;
    $str =~ s/ +/ /g;
    $str =~ s/\s+$//;
    
