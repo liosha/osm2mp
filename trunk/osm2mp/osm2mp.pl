@@ -27,7 +27,7 @@ use Data::Dump;
 
 ####    Settings
 
-my $version = "0.75a";
+my $version = "0.75";
 
 my $cfgpoi      = "poi.cfg";
 my $cfgpoly     = "poly.cfg";
