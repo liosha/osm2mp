@@ -1,31 +1,31 @@
 
 use strict;
 
-use List::Util qw{first};
+use POSIX;
+use List::Util qw{first max sum};
 use Bit::Vector;
 use Getopt::Long;
 
 
-my $MAXNODES    = 500_000_000;
+my $MAXNODES    = 500_000_000;      # see current OSM values
 my $MAXWAYS     =  50_000_000;
 my $MAXRELS     =   1_000_000;
 
-my $area_nodes  = 1_500_000;
-my $mapid       = "65430001";
+
+my $mapid           = "65430001";
+my $max_tile_nodes  = 800_000;
 
 
 
 
-print STDERR "\n    ---|  OSM integrity-safe tile splitter  v0.1\n\n";
-
-
+print STDERR "\n    ---|  OSM tile splitter  v0.2    (c) liosha  2009\n\n";
 
 
 ##  reading command-line options
 
 my $opts_result = GetOptions (
         "mapid=s"       => \$mapid,
-        "maxnodes=i"    => \$area_nodes,
+        "maxnodes=i"    => \$max_tile_nodes,
     );
 
 my $filename = $ARGV[0];
@@ -40,17 +40,16 @@ binmode IN;
 
 
 
-##  loading nodes
+##  nodes 1st pass - initialising grid
 
-my %node;
-keys %node = 8_000_000;
+my $lat_cell = 0.1;        # in degrees
+my $lon_cell = 0.2;
 
-my $nodeid_min = $MAXNODES;
-my $nodeid_max = 0;
-
-print STDERR "Loading nodes...              ";
+my %grid;
 
 my $way_pos = 0;
+my $nodeid_min = $MAXNODES;
+my $nodeid_max = 0;
 
 my $area_init = {
         count   => 0,
@@ -58,107 +57,106 @@ my $area_init = {
         minlat  => 90,
         maxlon  => -180,
         maxlat  => -90,
-        sumlat  => 0,
-        sumlon  => 0,
-        nodes   => Bit::Vector->new($MAXNODES),
     };
+
+print STDERR "Initialising grid...          ";
 
 while (my $line = <IN>) {
     my ($id, $lat, $lon) = $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/;
-    next unless $id;
 
     last if $line =~ /<way /;
     $way_pos = tell IN;
 
-    $nodeid_max = $id       if $id > $nodeid_max; 
-    $nodeid_min = $id       if $id < $nodeid_min; 
+    next unless $id;
 
-    $node{$id} = node_pack ($lat, $lon);
-    $area_init->{nodes}->Bit_On($id);
+    my $glat = floor( $lat / $lat_cell );
+    my $glon = floor( $lon / $lon_cell );
+    $grid{$glat}->{$glon} ++;
 
     $area_init->{minlat} = $lat      if $lat < $area_init->{minlat};
     $area_init->{maxlat} = $lat      if $lat > $area_init->{maxlat};
     $area_init->{minlon} = $lon      if $lon < $area_init->{minlon};
     $area_init->{maxlon} = $lon      if $lon > $area_init->{maxlon};
-
-    $area_init->{sumlat} += $lat;
-    $area_init->{sumlon} += $lon;
-
     $area_init->{count} ++;
+
+    $nodeid_max = $id       if $id > $nodeid_max; 
+    $nodeid_min = $id       if $id < $nodeid_min; 
 }
 
-my @areas = ();
-push @areas, $area_init;
+printf STDERR "%d nodes -> %d cells\n", $area_init->{count}, sum map { scalar keys %$_ } values %grid;
 
-print STDERR "$area_init->{count} loaded\n";
-undef $area_init;
+my $maxcell = max map { max values %$_ } values %grid;
+die "Use --maxnodes larger than $maxcell or decrease cell size"
+    if $maxcell > $max_tile_nodes;
+
+$area_init->{minlat} -= $lat_cell;
+$area_init->{maxlat} += $lat_cell;
+$area_init->{minlon} -= $lon_cell;
+$area_init->{maxlon} += $lon_cell;
 
 
 
 
 ##  splitting
 
-print STDERR "Splitting...                  ";
+my @areas = ($area_init);
+my @tiles = ();
 
-my @areas_ok = ();
+print STDERR "Calculating...                ";
 
 while ( my $area = shift @areas ) {
-    if ( $area->{count} <= $area_nodes ) {
-        $area->{ways} = Bit::Vector->new($MAXWAYS),
-        $area->{rels} = Bit::Vector->new($MAXRELS),
-        push @areas_ok, $area;
+
+    if ( $area->{count} <= $max_tile_nodes ) {
+        print STDERR '.';
+        push @tiles, $area;
         next;
     }
 
-    my $hv;
-    if ( $area->{maxlon}-$area->{minlon} > $area->{maxlat}-$area->{minlat} ) {
-        $hv = 0;      # horisontal split
-    }
-    else {
-        $hv = 1;      # vertical split
-    }
+    print STDERR '+';
 
-    print STDERR "+";
+    # 1 -> horisontal split, 0 -> vertical split
+    my $hv = ( $area->{maxlon}-$area->{minlon} > $area->{maxlat}-$area->{minlat} );
+    
+    my $sumlat = 0;
+    my $sumlon = 0;
+    my $sumnod = 0;
+
+
+    for my $glat ( grep { $_*$lat_cell >= $area->{minlat}  &&  $_*$lat_cell <= $area->{maxlat} } keys %grid ) {
+        for my $glon ( grep { $_*$lon_cell >= $area->{minlon}  &&  $_*$lon_cell <= $area->{maxlon} } keys %{$grid{$glat}} ) {
+            my $weight = $grid{$glat}->{$glon};
+            $sumlat += $glat * $lat_cell * $weight;
+            $sumlon += $glon * $lon_cell * $weight;
+            $sumnod += $weight;
+        }
+    }
 
     my $new_area0 = {
         minlon  => $area->{minlon},
         minlat  => $area->{minlat},
-        maxlon  => $hv  ?  $area->{maxlon}                      :  ($area->{sumlon} / $area->{count}),
-        maxlat  => $hv  ?  ($area->{sumlat} / $area->{count})   :  $area->{maxlat},
-        sumlat  => 0,
-        sumlon  => 0,
+        maxlon  => $hv  ?  ($sumlon / $sumnod)  :  $area->{maxlon},
+        maxlat  => $hv  ?  $area->{maxlat}      :  ($sumlat / $sumnod),
         count   => 0,
-        nodes   => Bit::Vector->new($MAXNODES),
     };
 
     my $new_area1 = {
-        minlon  => $hv  ?  $area->{minlon}                      :  ($area->{sumlon} / $area->{count}),
-        minlat  => $hv  ?  ($area->{sumlat} / $area->{count})   :  $area->{minlat},
+        minlon  => $hv  ?  ($sumlon / $sumnod)  :  $area->{minlon},
+        minlat  => $hv  ?  $area->{minlat}      :  ($sumlat / $sumnod),
         maxlon  => $area->{maxlon},
         maxlat  => $area->{maxlat},
-        sumlat  => 0,
-        sumlon  => 0,
         count   => 0,
-        nodes   => Bit::Vector->new($MAXNODES),
     };
 
-    my $start = $nodeid_min;
-    while ( my ($min,$max) = $area->{nodes}->Interval_Scan_inc($start) ) {
-        $start = $max+2;
-        for my $node ( $min..$max ) {
-            my ($lat, $lon) = node_unpack($node{$node});
-            if ( $hv  &&  $lat < $new_area0->{maxlat}   or   !$hv  &&  $lon < $new_area0->{maxlon} ) {
-                $new_area0->{sumlat} += $lat;
-                $new_area0->{sumlon} += $lon;
-                $new_area0->{count} ++;
-                $new_area0->{nodes}->Bit_On($node);
+    for my $glat ( grep { $_*$lat_cell >= $area->{minlat}  &&  $_*$lat_cell <= $area->{maxlat} } keys %grid ) {
+        for my $glon ( grep { $_*$lon_cell >= $area->{minlon}  &&  $_*$lon_cell <= $area->{maxlon} } keys %{$grid{$glat}} ) {
+            if (  $hv  &&  $glon*$lon_cell <= $new_area0->{maxlon}
+              || !$hv  &&  $glat*$lat_cell <= $new_area0->{maxlat} ) {
+                $new_area0->{count} += $grid{$glat}->{$glon};
             }
             else {
-                $new_area1->{sumlat} += $lat;
-                $new_area1->{sumlon} += $lon;
-                $new_area1->{count} ++;
-                $new_area1->{nodes}->Bit_On($node);
+                $new_area1->{count} += $grid{$glat}->{$glon};
             }
+
         }
     }
 
@@ -166,12 +164,45 @@ while ( my $area = shift @areas ) {
     push @areas, $new_area1;
 }
 
-printf STDERR " %d tiles\n", scalar @areas_ok;
+@tiles = sort { $a->{minlon} <=> $b->{minlon}  or  $b->{minlat} <=> $a->{minlat} } @tiles;
 
-undef %node;
+printf STDERR " %d tiles\n", scalar @tiles;
 
-#for my $tile (@areas_ok) {      print "$tile->{count}\n";       }
-#for my $tile (@areas_ok) {      print $tile->{nodes}->Norm()."\n";       }
+
+
+
+print STDERR "Reserving memory...           ";
+for my $tile (@tiles) {
+    $tile->{nodes} = Bit::Vector->new($nodeid_max+1);
+    $tile->{ways}  = Bit::Vector->new($MAXWAYS);
+    $tile->{rels}  = Bit::Vector->new($MAXRELS);
+}
+print STDERR "Ok\n";
+
+
+
+
+##  nodes 2nd pass - loading
+
+print STDERR "Loading nodes...              ";
+
+seek IN, 0, 0;
+
+while (my $line = <IN>) {
+    my ($id, $lat, $lon) = $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/;
+    next unless $id;
+
+    for my $tile (@tiles) {
+        if ( $lat >= $tile->{minlat}  &&  $lat <= $tile->{maxlat}
+          && $lon >= $tile->{minlon}  &&  $lon <= $tile->{maxlon} ) {
+            $tile->{nodes}->Bit_On($id);
+            next;   # ???
+        }
+    }
+}
+
+print STDERR "Ok\n";
+
 
 
 
@@ -201,7 +232,7 @@ while ( my $line = <IN> ) {
 
     if ( $reading_way  &&  $line =~ /<\/way/ ) {
         $count_ways ++;
-        for my $area (@areas_ok) {
+        for my $area (@tiles) {
             if ( first { $area->{nodes}->contains($_) } @chain ) {
                 $area->{ways}->Bit_On($way_id);
             }
@@ -245,7 +276,7 @@ while ( my $line = <IN> ) {
     }
 
     if ( $reading_way  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
-        for my $area ( grep { $_->{ways}->contains($way_id) } @areas_ok ) {
+        for my $area ( grep { $_->{ways}->contains($way_id) } @tiles ) {
             $area->{nodes}->Bit_On($nd);
         }
         next;
@@ -258,8 +289,8 @@ print STDERR "Ok\n";
 
 
 
-##  reading relations
 
+##  reading relations
 
 seek IN, $rel_pos, 0;
 my $reading_rel = 0;
@@ -284,7 +315,7 @@ while ( my $line = <IN> ) {
     }
 
     if ( $reading_rel  &&  ( my ($type, $ref) = $line =~ /<member type=["']([^"']+)["'].* ref=["']([^"']+)["']/ ) ) {
-        for my $area (@areas_ok) {
+        for my $area (@tiles) {
             if ( $type eq "node"  &&  $area->{nodes}->contains($ref) 
               || $type eq "way"   &&  $area->{ways}->contains($ref)  ) {
                 $area->{rels}->Bit_On($rel_id);
@@ -303,11 +334,11 @@ print STDERR "Writing output files...       ";
 
 ##  creating output files
 
-for my $area (@areas_ok) {
+for my $area (@tiles) {
      open my $fh, '>', "$mapid.osm";
      $area->{file} = $fh;
      print  $fh "<?xml version='1.0' encoding='UTF-8'?>\n";
-     print  $fh "<osm version='0.6' generator='Integrity-safe Tile Splitter'>\n";
+     print  $fh "<osm version='0.6' generator='Tile Splitter'>\n";
      printf $fh "  <bound box='%f,%f,%f,%f' origin='http://www.openstreetmap.org/api/0.6'/>\n", 
             $area->{minlat},
             $area->{minlon},
@@ -320,7 +351,6 @@ for my $area (@areas_ok) {
 
 ##  writing results
 
-
 seek IN, 0, 0;
 my $reading_obj = 0;
 my $obj_id;
@@ -332,7 +362,7 @@ while ( my $line = <IN> ) {
         $reading_obj = $obj;
         @write_areas = grep {  $obj eq "node"      &&  $_->{nodes}->contains($id)
                             || $obj eq "way"       &&  $_->{ways}->contains($id)
-                            || $obj eq "relation"  &&  $_->{rels}->contains($id)  } @areas_ok;
+                            || $obj eq "relation"  &&  $_->{rels}->contains($id)  } @tiles;
     }
 
     if ( $reading_obj ) {
@@ -349,7 +379,7 @@ while ( my $line = <IN> ) {
 
 ##  closing files
 
-for my $area (@areas_ok) {
+for my $area (@tiles) {
      my $fh = $area->{file};
      print $fh "</osm>\n";
      close ($fh);
@@ -358,25 +388,11 @@ for my $area (@areas_ok) {
 
 print STDERR "Ok\n";
 
-
-
 print STDERR "All done\n";
 
-for my $tile (@areas_ok) {      printf "%d  %d  %d\n", $tile->{nodes}->Norm(), $tile->{ways}->Norm(), $tile->{rels}->Norm();       }
+
+##  log tiles data
+
+for my $tile (@tiles) {      printf "%d  %d  %d\n", $tile->{nodes}->Norm(), $tile->{ways}->Norm(), $tile->{rels}->Norm();       }
 
 
-
-
-##  Functions
-
-sub node_pack {
-    my ($lat, $lon) = @_;
-    my $latlon = pack "ll", ($lat/180*2**32, $lon/360*2**32);
-    return $latlon;
-}
-
-sub node_unpack {
-    my ($latlon) = @_;
-    my ($xlat, $xlon) = unpack "ll", $latlon;
-    return ($xlat*180.0/2**32, $xlon*360/2**32);
-}
