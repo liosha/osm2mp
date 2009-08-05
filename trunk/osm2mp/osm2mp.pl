@@ -7,7 +7,6 @@
 ##    * Getopt::Long
 ##    * Text::Unidecode
 ##    * Math::Polygon
-##    * Math::Geometry::Planar
 ##    * Math::Geometry::Planar::GPC::Polygon
 ##
 ##  See http://cpan.org/ or use PPM (Perl package manager) or CPAN module
@@ -18,178 +17,134 @@
 ##
 
 
+
+use strict;
+
+use Template;
+use Getopt::Long;
+
+use Encode;
+use Text::Unidecode;
+
 use Math::Polygon;
-use Math::Geometry::Planar;
 use Math::Geometry::Planar::GPC::Polygon;
 
-use Data::Dump;
+
 
 
 ####    Settings
 
-my $version = "0.75";
+my $version = "0.80.-1";
 
-my $cfgpoi      = "poi.cfg";
-my $cfgpoly     = "poly.cfg";
-my $cfgheader   = "header.tpl";
+my $cfgpoi          = "poi.cfg";
+my $cfgpoly         = "poly.cfg";
+my $cfgheader       = "header.tpl";
 
-my $mapid       = "88888888";
-my $mapname     = "OSM routable";
+my $mapid           = "88888888";
+my $mapname         = "OSM";
 
-my $codepage    = "1251";
-my $nocodepage;
+my $codepage        = "1251";
+my $nocodepage      = 0;
 
-my $defaultcountry = "Earth";
-my $defaultregion  = "OSM";
-my $defaultcity    = "";
+my $detectdupes     = 1;
 
-my $mergeroads     = 1;
-my $mergecos       = 0.2;
+my $mergeroads      = 1;
+my $mergecos        = 0.2;
+my $splitroads      = 1;
+my $fixclosenodes   = 1;
+my $fixclosedist    = 3.0;       # set 5.5 for cgpsmapper 0097 and earlier
+my $maxroadnodes    = 30;
+my $restrictions    = 1;
+my $disableuturns   = 0;
 
-my $detectdupes    = 1;
-
-my $splitroads     = 1;
-
-my $fixclosenodes  = 1;
-my $fixclosedist   = 3.0;       # set 5.5 for cgpsmapper 0097 and earlier
-
-my $maxroadnodes   = 30;
-
-my $restrictions   = 1;
-
-my $nametaglist    = "name,ref,int_ref,addr:housenumber";
-my $upcase         = 0;
-my $translit       = 0;
-my $ttable         = "";
+my $upcase          = 0;
+my $translit        = 0;
+my $ttable          = "";
 
 my $bbox;
 my $bpolyfile;
-my $osmbbox        = 0;
+my $osmbbox         = 0;
+my $background      = 0;
 
-my $background     = 0;
+my $shorelines      = 0;
+my $navitel         = 0;
+my $makepoi         = 1;
 
-my $disableuturns  = 0;
-
-my $shorelines     = 0;
-my $navitel        = 0;
-my $makepoi        = 1;
-
-
-# FIXME make command-line parameters?
-my @housenamelist       = ("addr:housenumber", "addr:housename");
-my @citynamelist        = ("place_name", "name");
-my @regionnamelist      = ("addr:region", "is_in:region", "addr:state", "is_in:state");
-my @countrynamelist     = ("addr:country", "is_in:country_code", "is_in:country");
+my $defaultcountry  = "Earth";
+my $defaultregion   = "OSM";
+my $defaultcity     = "";
 
 
-my %yesno = (  "yes"            => 1,
-               "true"           => 1,
-               "1"              => 1,
-               "permissive"     => 1,
-               "no"             => 0,
-               "false"          => 0,
-               "0"              => 0,
-               "private"        => 0);
+my $nametaglist     = "name,ref,int_ref,addr:housenumber";
+
+# ??? make command-line parameters?
+my @housenamelist   = qw(addr:housenumber addr:housename);
+my @citynamelist    = qw(place_name name);
+my @regionnamelist  = qw(addr:region is_in:region addr:state is_in:state);
+my @countrynamelist = qw(addr:country is_in:country_code is_in:country);
 
 
-use Getopt::Long;
-$result = GetOptions (
-                        "cfgpoi=s"              => \$cfgpoi,
-                        "cfgpoly=s"             => \$cfgpoly,
-                        "header=s"              => \$cfgheader,
-                        "mapid=s"               => \$mapid,
-                        "mapname=s"             => \$mapname,
-                        "codepage=s"            => \$codepage,
-                        "nocodepage"            => \$nocodepage,
-                        "mergeroads!"           => \$mergeroads,
-                        "mergecos=f"            => \$mergecos,
-                        "detectdupes!"          => \$detectdupes,
-                        "splitroads!"           => \$splitroads,
-                        "fixclosenodes!"        => \$fixclosenodes,
-                        "fixclosedist=f"        => \$fixclosedist,
-                        "restrictions!"         => \$restrictions,
-                        "defaultcountry=s"      => \$defaultcountry,
-                        "defaultregion=s"       => \$defaultregion,
-                        "defaultcity=s"         => \$defaultcity,
-                        "nametaglist=s"         => \$nametaglist,
-                        "upcase!"               => \$upcase,
-                        "translit!"             => \$translit,
-                        "ttable=s"              => \$ttable,
-                        "bbox=s"                => \$bbox,
-                        "bpoly=s"               => \$bpolyfile,
-                        "osmbbox!"              => \$osmbbox,
-                        "background!",          => \$background,
-                        "disableuturns!",       => \$disableuturns,
-                        "shorelines!",          => \$shorelines,
-                        "navitel!",             => \$navitel,
-                        "makepoi!",             => \$makepoi,
-                      );
+my %yesno = (
+    "yes"            => 1,
+    "true"           => 1,
+    "1"              => 1,
+    "permissive"     => 1,
+    "no"             => 0,
+    "false"          => 0,
+    "0"              => 0,
+    "private"        => 0,
+);
 
-undef $codepage         if $nocodepage;
+GetOptions (
+    "cfgpoi=s"          => \$cfgpoi,
+    "cfgpoly=s"         => \$cfgpoly,
+    "header=s"          => \$cfgheader,
+    "mapid=s"           => \$mapid,
+    "mapname=s"         => \$mapname,
+    "codepage=s"        => \$codepage,
+    "nocodepage"        => \$nocodepage,
+    "mergeroads!"       => \$mergeroads,
+    "mergecos=f"        => \$mergecos,
+    "detectdupes!"      => \$detectdupes,
+    "splitroads!"       => \$splitroads,
+    "fixclosenodes!"    => \$fixclosenodes,
+    "fixclosedist=f"    => \$fixclosedist,
+    "maxroadnodes=f"    => \$maxroadnodes,
+    "restrictions!"     => \$restrictions,
+    "defaultcountry=s"  => \$defaultcountry,
+    "defaultregion=s"   => \$defaultregion,
+    "defaultcity=s"     => \$defaultcity,
+    "nametaglist=s"     => \$nametaglist,
+    "upcase!"           => \$upcase,
+    "translit!"         => \$translit,
+    "ttable=s"          => \$ttable,
+    "bbox=s"            => \$bbox,
+    "bpoly=s"           => \$bpolyfile,
+    "osmbbox!"          => \$osmbbox,
+    "background!",      => \$background,
+    "disableuturns!",   => \$disableuturns,
+    "shorelines!",      => \$shorelines,
+    "navitel!",         => \$navitel,
+    "makepoi!",         => \$makepoi,
+);
+
+undef $codepage   if $nocodepage;
 
 our %cmap;
-do $ttable              if $ttable;
+do $ttable        if $ttable;
+
+my @nametagarray = split (/,/, $nametaglist);
+
+
 
 
 ####    Action
 
-use strict;
-use Template;
-
 print STDERR "\n  ---|   OSM -> MP converter  $version   (c) 2008,2009  liosha, xliosha\@gmail.com\n\n";
 
-
-if ($ARGV[0] eq "") {
-
-    my @onoff = ( "off", "on");
-
-    print "Usage:  osm2mp.pl [options] file.osm > file.mp
-
-Possible options [defaults]:
-
-    --mapid <id>              map id            [$mapid]
-    --mapname <name>          map name          [$mapname]
-
-    --cfgpoi <file>           poi config        [$cfgpoi]
-    --cfgpoly <file>          way config        [$cfgpoly]
-    --header <file>           header template   [$cfgheader]
-
-    --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
-    --osmbbox                 use bounds from .osm              [$onoff[$osmbbox]]
-    --bpoly <poly-file>       use bounding polygon from .poly-file
-
-    --background              create background object          [$onoff[$background]]
-
-    --codepage <num>          codepage number                   [$codepage]
-    --nocodepage              leave all labels in utf-8         [$onoff[$nocodepage]]
-    --upcase                  convert all labels to upper case  [$onoff[$upcase]]
-    --translit                tranliterate labels               [$onoff[$translit]]
-    --ttable <file>           character conversion table
-
-    --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
-    --defaultcountry <name>   default data for street indexing  [$defaultcountry]
-    --defaultregion <name>                                      [$defaultregion]
-    --defaultcity <name>                                        [$defaultcity]
-    --navitel                 write addresses for polygons              [$onoff[$navitel]]
-
-    --mergeroads              merge same ways                           [$onoff[$mergeroads]]
-    --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
-    --splitroads              split long and self-intersecting roads    [$onoff[$splitroads]]
-    --fixclosenodes           enlarge distance between too close nodes  [$onoff[$fixclosenodes]]
-    --fixclosedist <dist>     minimum allowed distance                  [$fixclosedist m]
-    --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
-
-    --restrictions            process turn restrictions                 [$onoff[$restrictions]]
-    --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
-
-    --shorelines              process shorelines                        [$onoff[$shorelines]]
-    --makepoi                 create POIs for polygons                  [$onoff[$makepoi]]
+usage() unless (@ARGV);
 
 
-You can use no<option> disable features (i.e --nomergeroads)
-";
-    exit;
-}
 
 
 ####    Reading configs
@@ -198,33 +153,36 @@ my %poitype;
 
 open CFG, $cfgpoi;
 while (<CFG>) {
-   if ( (!$_) || /^\s*[\#\;]/ ) { next; }
-   chomp;
-   my ($k, $v, $type, $llev, $hlev, $city) = split /\s+/;
-   if ($type) {
-     $llev = 0          if ($llev eq "");
-     $hlev = 1          if ($hlev eq "");
-     $city = (($city ne "") ? 1 : 0);
-     $poitype{"$k=$v"} = [ $type, $llev, $hlev, $city ];
-   }
+    next   if (!$_) || /^\s*[\#\;]/;
+    chomp;
+    my ($k, $v, $type, $llev, $hlev, $city) = split /\s+/;
+    if ($type) {
+        $llev = 0   if $llev eq "";
+        $hlev = 1   if $hlev eq "";
+        $city = ($city ne "") ? 1 : 0;
+        $poitype{"$k=$v"} = [ $type, $llev, $hlev, $city ];
+    }
 }
 close CFG;
+
 
 
 my %polytype;
 
 open CFG, $cfgpoly;
 while (<CFG>) {
-   if ( (!$_) || /^\s*[\#\;]/ ) { next; }
-   chomp;
+    next   if (!$_) || /^\s*[\#\;]/;
+    chomp;
+    my $prio = 0;
+    my ($k, $v, $mode, $type, $llev, $hlev, $rp, @p) = split /\s+/;
 
-   my $prio = 0;
-   my ($k, $v, $mode, $type, $llev, $hlev, $rp, @p) = split /\s+/;
-
-   if ($type) {
-     if ($type =~ /(.+),(\d)/) {     $type = $1;    $prio = $2;    }
-     $llev = 0          if ($llev eq "");
-     $hlev = 1          if ($hlev eq "");
+    if ($type) {
+        if ($type =~ /(.+),(\d)/) {
+            $type = $1;
+            $prio = $2;
+        }
+        $llev = 0   if ($llev eq "");
+        $hlev = 1   if ($hlev eq "");
 
      $polytype{"$k=$v"} = [ $mode, $type, $prio, $llev, $hlev, $rp ];
    }
@@ -232,66 +190,68 @@ while (<CFG>) {
 close CFG;
 
 
-my @nametagarray = split (/,/, $nametaglist);
-
 
 
 ####    Header
 
-my $tmp = Template->new({ABSOLUTE => 1});
-$tmp->process ($cfgheader, {
-        mapid           => $mapid,
-        mapname         => $mapname,
-        codepage        => $codepage,
-        defaultcountry  => $defaultcountry,
-        defaultregion   => $defaultregion,
-      }) || die $tmp->error();
+my $tmpl = Template->new( { ABSOLUTE => 1 } );
+$tmpl->process ($cfgheader, {
+    mapid           => $mapid,
+    mapname         => $mapname,
+    codepage        => $codepage,
+    defaultcountry  => $defaultcountry,
+    defaultregion   => $defaultregion,
+}) 
+or die $tmpl->error();
+
+
 
 
 ####    Info
-
 
 use POSIX qw(strftime);
 print "\n; Converted from OpenStreetMap data with  osm2mp $version  (" . strftime ("%Y-%m-%d %H:%M:%S", localtime) . ")\n\n";
 
 
-open IN, $ARGV[0];
-print STDERR "Processing file $ARGV[0]\n\n";
+my ($infile) = @ARGV;
+open IN, $infile;
+print STDERR "Processing file $infile\n\n";
+
 
 
 
 ####    Bounds
 
 my $bounds;
-my $boundpoly = Math::Geometry::Planar->new();
-my $boundgpc = Math::Geometry::Planar::GPC::Polygon->new();
-
+my $boundpoly;
 my ($minlon, $minlat, $maxlon, $maxlat);
+
 
 if ($bbox) {
     $bounds = 1 ;
     ($minlon, $minlat, $maxlon, $maxlat) = split /,/, $bbox;
-    $boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat]]);
+    $boundpoly = Math::Polygon->new( [$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat],[$minlon,$minlat] );
 }
 
 if ($bpolyfile) {
     $bbox = 0;
     $bounds = 1;
 
-    my $invert;
-    my $bpoints;
+    my @bpoints;
 
-    open (PF, $bpolyfile) || die "Could not open file: $bpolyfile: $!";
+    open (PF, $bpolyfile) 
+        or die "Could not open file: $bpolyfile: $!";
+
+    ## ??? need advanced polygon?
     while (<PF>) {
-        if (/^(!?)\d/) {
-            $invert = ($1 eq "!") ? 1 : 0;
-            $bpoints = [];
-        } elsif (/^END/) {
-            ## FIXME: need advanced polygons
-            $boundpoly->points ($bpoints);
-        }
+        if (/^\d/) {
+            @bpoints = ();
+        } 
         elsif (/^\s+([0-9.E+-]+)\s+([0-9.E+-]+)/) {
-            push(@$bpoints, [$1,$2])   if ( !(scalar @$bpoints) || $1!=$bpoints->[0][0] || $2!=$bpoints->[0][1] );
+            push @bpoints, [$1,$2];
+        }
+        elsif (/^END/) {
+            $boundpoly = Math::Polygon->new( @bpoints );
         }
     }
     close (PF);
@@ -301,46 +261,52 @@ if ($bpolyfile) {
 ####    1st pass 
 ###     loading nodes
 
+my ( $waypos, $relpos ) = ( 0, 0 );
+
 my %nodes;
+
 print STDERR "Loading nodes...          ";
 
-while (<IN>) {
+while ( my $line = <IN> ) {
 
-    if ( /\<node.* id=["'](\-?\d+)["'].*lat=["'](\-?\d+\.?\d*)["'].*lon=["'](\-?\d+\.?\d*)["'].*$/ ) {
+    if ( $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/ ) {
         $nodes{$1} = "$2,$3";
         next;
     }
 
-    if ( $osmbbox && /\<bounds/ ) {
-        ($minlat, $minlon, $maxlat, $maxlon) = ( /minlat=["'](\-?\d+\.?\d*)["'] minlon=["'](\-?\d+\.?\d*)["'] maxlat=["'](\-?\d+\.?\d*)["'] maxlon=["'](\-?\d+\.?\d*)["']/ );
+    if ( $osmbbox  &&  $line =~ /<bounds?/ ) {
+        if ( $line =~ /<bounds/ ) {
+            ($minlat, $minlon, $maxlat, $maxlon) 
+                = ( $line =~ /minlat=["']([^"']+)["'] minlon=["']([^"']+)["'] maxlat=["']([^"']+)["'] maxlon=["']([^"']+)["']/ );
+        } 
+        else {
+            ($minlat, $minlon, $maxlat, $maxlon) 
+                = ( $line =~ /box=["']([^"',]+),([^"',]+),([^"',]+),([^"']+)["']/ );
+        }
         $bbox = join ",", ($minlon, $minlat, $maxlon, $maxlat);
-        $bounds = 1 if $bbox;
-        $boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat]]);
-    }
-    if ( $osmbbox && /\<bound / ) {
-        ($minlat, $minlon, $maxlat, $maxlon) = ( /box=["'](\-?\d+\.?\d*),(\-?\d+\.?\d*),(\-?\d+\.?\d*),(\-?\d+\.?\d*)["']/ );
-        $bbox = join ",", ($minlon, $minlat, $maxlon, $maxlat);
-        $bounds = 1 if $bbox;
-        $boundpoly->points ([[$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat]]);
+        $bounds = 1     if $bbox;
+        $boundpoly = Math::Polygon->new( [$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat],[$minlon,$minlat] );
     }
 
-    last if /\<way/;
+    last    if $line =~ /<way/;
 }
+continue { $waypos = tell IN }
+
+
 printf STDERR "%d loaded\n", scalar keys %nodes;
 
-$boundgpc->add_polygon ($boundpoly->points(),0)         if $bounds;
+
+my $boundgpc = Math::Geometry::Planar::GPC::Polygon->new();
+$boundgpc->add_polygon ( [$boundpoly->points()], 0 )    if $bounds;
 
 
+### skipping ways
 
-###     saving file positions
+while ( <IN> ) {
+    last if /<relation/;
+}
+continue { $relpos = tell IN }
 
-my $waypos  = tell IN;
-my $waystr  = $_;
-
-while (<IN>) {     last if /\<relation/;     }
-
-my $relpos  = tell IN;
-my $relstr  = $_;
 
 
 
@@ -363,7 +329,8 @@ my @mp_inner;
 
 my ($tr_from, $tr_via, $tr_to, $tr_type);
 
-while ($_) {
+seek IN, $relpos, 0;
+while (<IN>) {
 
     if ( /\<relation/ ) {
         /^.* id=["'](\-?\d+)["'].*$/;
@@ -417,7 +384,7 @@ while ($_) {
         next;
     }
 
-} continue { $_ = <IN>; }
+}
 
 printf STDERR "%d multipolygons, %d turn restrictions\n", scalar keys %mpoly, scalar keys %trest;
 
@@ -434,14 +401,13 @@ my %citybound;
 print STDERR "Loading cities...         ";
 
 seek IN, $waypos, 0;
-$_ = $waystr;
 
 my $id;
 my %waytag;
 my @chain;
 my $dupcount;
 
-while ($_) {
+while (<IN>) {
 
    if ( /\<way.* id=["'](\-?\d+)["'].*$/ ) {
       $id = $1;
@@ -490,7 +456,7 @@ while ($_) {
    }
 
    last if /\<relation/;
-} continue { $_ = <IN>; }
+}
 
 printf STDERR "%d loaded\n", scalar keys %cityname;
 
@@ -594,7 +560,8 @@ my $inbounds;
 
 my $isin;
 
-while ($_) {
+seek IN, $waypos, 0;
+while (<IN>) {
 
    last if /\<relation/;
 
@@ -875,7 +842,7 @@ while ($_) {
        }
    }
 
-} continue { $_ = <IN>; }
+}
 
 printf STDERR "%d roads and %d coastlines loaded
                           $countlines lines and $countpolygons polygons dumped\n", scalar keys %rchain, scalar keys %schain;
@@ -911,8 +878,8 @@ if ($shorelines) {
     ##  tracing bounds
     if ($bounds) {
 
-        my @bound = @{$boundpoly->points()};
-        push @bound, $bound[0];
+        my @bound = $boundpoly->points();
+        #push @bound, $bound[0];
 
         my @tbound;
         my $pos = 0;
@@ -921,7 +888,7 @@ if ($shorelines) {
             for my $sline (keys %schain) {
                 my $p1 = [ reverse split /,/, $nodes{$schain{$sline}->[0]} ];
                 my $p2 = [ reverse split /,/, $nodes{$schain{$sline}->[1]} ];
-                my $ipoint = SegmentIntersection [$bound[$i],$bound[$i+1],$p1,$p2];
+                my $ipoint = SegmentIntersection( [$bound[$i],$bound[$i+1],$p1,$p2] );
                 $ipoint = $p2           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p2])==0 && !insidebounds($nodes{$schain{$sline}->[0]}));
                 $ipoint = $p1           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p1])==0);
                 if ($ipoint) {  unless ( grep { $_->{type} eq "end" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1] } @tbound ) {
@@ -932,7 +899,7 @@ if ($shorelines) {
 
                 my $p1 = [ reverse split /,/, $nodes{$schain{$sline}->[-1]} ];
                 my $p2 = [ reverse split /,/, $nodes{$schain{$sline}->[-2]} ];
-                my $ipoint = SegmentIntersection [$bound[$i],$bound[$i+1],$p1,$p2];
+                my $ipoint = SegmentIntersection( [$bound[$i],$bound[$i+1],$p1,$p2] );
                 $ipoint = $p2           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p2])==0 && !insidebounds($nodes{$schain{$sline}->[-1]}));
                 $ipoint = $p1           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p1])==0);
                 if ($ipoint) {  unless ( grep { $_->{type} eq "start" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1] } @tbound ) {
@@ -941,7 +908,7 @@ if ($shorelines) {
                     @tbound = grep { !($_->{type} eq "start" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1]) } @tbound;
                 }}
             }
-            $pos += SegmentLength [$bound[$i],$bound[$i+1]];
+            $pos += SegmentLength( [$bound[$i],$bound[$i+1]] );
         }
 
 
@@ -1384,7 +1351,7 @@ if ($bounds && $background) {
     print  "[POLYGON]\n";
     print  "Type=0x4b\n";
     print  "EndLevel=9\n";
-    print  "Data0=(" . join("), (", map { join ",", reverse @{$_} } @{$boundpoly->points}) . ")\n";
+    print  "Data0=(" . join( "), (", map { join ",", reverse @{$_} } $boundpoly->points() ) . ")\n";
     print  "[END]\n\n\n";
 
 }
@@ -1455,9 +1422,6 @@ print STDERR "All done!!\n\n";
 
 
 ####    Functions
-
-use Encode;
-use Text::Unidecode;
 
 sub convert_string {            # String
 
@@ -1564,7 +1528,7 @@ sub insidebbox {                # $latlon
 
 sub insidebounds {                # $latlon
     return insidebbox(@_)       if $bbox;
-    return $boundpoly->isinside([reverse split /,/, $_[0]]);
+    return $boundpoly->contains( [reverse split /,/, $_[0]] );
 }
 
 
@@ -1612,4 +1576,269 @@ sub centroid {
 
 #    return ($slat/$ssq , $slon/$ssq);
     return ($slon/$ssq , $slat/$ssq);
+}
+
+
+sub usage  {
+
+    my @onoff = ( "off", "on");
+
+    print "Usage:  osm2mp.pl [options] file.osm > file.mp
+
+Possible options [defaults]:
+
+    --mapid <id>              map id            [$mapid]
+    --mapname <name>          map name          [$mapname]
+
+    --cfgpoi <file>           poi config        [$cfgpoi]
+    --cfgpoly <file>          way config        [$cfgpoly]
+    --header <file>           header template   [$cfgheader]
+
+    --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
+    --osmbbox                 use bounds from .osm              [$onoff[$osmbbox]]
+    --bpoly <poly-file>       use bounding polygon from .poly-file
+
+    --background              create background object          [$onoff[$background]]
+
+    --codepage <num>          codepage number                   [$codepage]
+    --nocodepage              leave all labels in utf-8         [$onoff[$nocodepage]]
+    --upcase                  convert all labels to upper case  [$onoff[$upcase]]
+    --translit                tranliterate labels               [$onoff[$translit]]
+    --ttable <file>           character conversion table
+
+    --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
+    --defaultcountry <name>   default data for street indexing  [$defaultcountry]
+    --defaultregion <name>                                      [$defaultregion]
+    --defaultcity <name>                                        [$defaultcity]
+    --navitel                 write addresses for polygons              [$onoff[$navitel]]
+
+    --mergeroads              merge same ways                           [$onoff[$mergeroads]]
+    --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
+    --splitroads              split long and self-intersecting roads    [$onoff[$splitroads]]
+    --fixclosenodes           enlarge distance between too close nodes  [$onoff[$fixclosenodes]]
+    --fixclosedist <dist>     minimum allowed distance                  [$fixclosedist m]
+    --maxroadnodes <dist>     maximum number of nodes in road segment   [$maxroadnodes]
+    --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
+
+    --restrictions            process turn restrictions                 [$onoff[$restrictions]]
+    --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
+
+    --shorelines              process shorelines                        [$onoff[$shorelines]]
+    --makepoi                 create POIs for polygons                  [$onoff[$makepoi]]
+
+
+You can use no<option> disable features (i.e --nomergeroads)
+";
+    exit;
+}
+
+
+
+
+####    Functions from Math::Geometry::Planar
+##      should be optimised!
+
+
+use Carp;
+
+################################################################################
+#  
+#  The determinant for the matrix  | x1 y1 |
+#                                  | x2 y2 |
+#
+# args : x1,y1,x2,y2
+#
+sub Determinant {
+  my ($x1,$y1,$x2,$y2) = @_;
+  return ($x1*$y2 - $x2*$y1);
+}
+
+################################################################################
+#
+# vector dot product
+# calculates dotproduct vectors p1p2 and p3p4
+# The dot product of a and b  is written as a.b and is
+# defined by a.b = |a|*|b|*cos q 
+#
+# args : reference to an array with 4 points p1,p2,p3,p4 defining 2 vectors
+#        a = vector p1p2 and b = vector p3p4
+#        or
+#        reference to an array with 3 points p1,p2,p3 defining 2 vectors
+#        a = vector p1p2 and b = vector p1p3
+#
+sub DotProduct {
+  my $pointsref = $_[0];
+  my @points = @$pointsref;
+  my (@p1,@p2,@p3,@p4);
+  if (@points == 4) {
+    @p1 = @{$points[0]};
+    @p2 = @{$points[1]};
+    @p3 = @{$points[2]};
+    @p4 = @{$points[3]};
+  } elsif (@points == 3) {
+    @p1 = @{$points[0]};
+    @p2 = @{$points[1]};
+    @p3 = @{$points[0]};
+    @p4 = @{$points[2]};
+  } else {
+    carp("Need 3 or 4 points for a dot product");
+    return;
+  }
+  return ($p2[0]-$p1[0])*($p4[0]-$p3[0]) + ($p2[1]-$p1[1])*($p4[1]-$p3[1]);
+}
+
+################################################################################
+#
+# returns vector cross product of vectors p1p2 and p1p3
+# using Cramer's rule
+#
+# args : reference to an array with 3 points p1,p2 and p3
+#
+sub CrossProduct {
+  my $pointsref = $_[0];
+  my @points = @$pointsref;
+  if (@points != 3) {
+    carp("Need 3 points for a cross product");
+    return;
+  }
+  my @p1 = @{$points[0]};
+  my @p2 = @{$points[1]};
+  my @p3 = @{$points[2]};
+  my $det_p2p3 = &Determinant($p2[0], $p2[1], $p3[0], $p3[1]);
+  my $det_p1p3 = &Determinant($p1[0], $p1[1], $p3[0], $p3[1]);
+  my $det_p1p2 = &Determinant($p1[0], $p1[1], $p2[0], $p2[1]);
+  return ($det_p2p3-$det_p1p3+$det_p1p2);
+}
+
+
+
+################################################################################
+#
+# calculate length of a line segment
+#
+# args : reference to array with 2 points defining line segment
+#
+sub SegmentLength {
+  my $pointsref = $_[0];
+  my @points = @$pointsref;
+  if (@points != 2) {
+    carp("Need 2 points for a segment length calculation");
+    return;
+  }
+  my @a = @{$points[0]};
+  my @b = @{$points[1]};
+  my $length = sqrt(DotProduct([$points[0],$points[1],$points[0],$points[1]]));
+  return $length;
+}
+
+################################################################################
+#
+# Calculate distance from point p to line segment p1p2
+#
+# args: reference to array with 3 points: p1,p2,p3
+#       p1p2 = segment
+#       p3   = point for which distance is to be calculated
+# returns distance from p3 to line segment p1p2
+#         which is the smallest value from:
+#            distance p3p1
+#            distance p3p2
+#            perpendicular distance from p3 to line p1p2
+#
+sub DistanceToSegment {
+  my $pointsref = $_[0];
+  my @points = @$pointsref;
+  if (@points < 3) {
+    carp("DistanceToSegment needs 3 points defining a segment and a point");
+    return;
+  }
+  # the perpendicular distance is the height of the parallelogram defined
+  # by the 3 points devided by the base
+  # Note the this is a signed value so it can be used to check at which
+  # side the point is located
+  # we use dot products to find out where point is located1G/dotpro
+  my $d1 = DotProduct([$points[0],$points[1],$points[0],$points[2]]);
+  my $d2 = DotProduct([$points[0],$points[1],$points[0],$points[1]]);
+  my $dp = CrossProduct([$points[2],$points[0],$points[1]]) / sqrt $d2;
+  if ($d1 <= 0) {
+    return SegmentLength([$points[2],$points[0]]);
+  } elsif ($d2 <= $d1) {
+    return SegmentLength([$points[2],$points[1]]);
+  } else {
+    return $dp;
+  }
+}
+
+
+
+################################################################################
+#
+# calculate intersection point of 2 line segments
+# returns false if segments don't intersect
+# The theory:
+#
+#  Parametric representation of a line
+#    if p1 (x1,y1) and p2 (x2,y2) are 2 points on a line and
+#       P1 is the vector from (0,0) to (x1,y1)
+#       P2 is the vector from (0,0) to (x2,y2)
+#    then the parametric representation of the line is P = P1 + k (P2 - P1)
+#    where k is an arbitrary scalar constant.
+#    for a point on the line segement (p1,p2)  value of k is between 0 and 1
+#
+#  for the 2 line segements we get
+#      Pa = P1 + k (P2 - P1)
+#      Pb = P3 + l (P4 - P3)
+#
+#  For the intersection point Pa = Pb so we get the following equations
+#      x1 + k (x2 - x1) = x3 + l (x4 - x3)
+#      y1 + k (y2 - y1) = y3 + l (y4 - y3)
+#  Which using Cramer's Rule results in
+#          (x4 - x3)(y1 - y3) - (y4 - x3)(x1 - x3)
+#      k = ---------------------------------------
+#          (y4 - y3)(x2 - x1) - (x4 - x3)(y2 - y1)
+#   and
+#          (x2 - x1)(y1 - y3) - (y2 - y1)(x1 - x3)
+#      l = ---------------------------------------
+#          (y4 - y3)(x2 - x1) - (x4 - x3)(y2 - y1)
+#
+#  Note that the denominators are equal.  If the denominator is 9,
+#  the lines are parallel.  Intersection is detected by checking if
+#  both k and l are between 0 and 1.
+#
+#  The intersection point p5 (x5,y5) is:
+#     x5 = x1 + k (x2 - x1)
+#     y5 = y1 + k (y2 - y1)
+#
+# 'Touching' segments are considered as not intersecting
+#
+# args : reference to an array with 4 points p1,p2,p3,p4
+#
+sub SegmentIntersection {
+  my $pointsref = $_[0];
+  my @points = @$pointsref;
+  if (@points != 4) {
+    carp("SegmentIntersection needs 4 points");
+    return;
+  }
+
+  my $precision = 7;
+  my $delta = 10 ** (-$precision);
+  
+  my @p1 = @{$points[0]}; # p1,p2 = segment 1
+  my @p2 = @{$points[1]};
+  my @p3 = @{$points[2]}; # p3,p4 = segment 2
+  my @p4 = @{$points[3]};
+  my @p5;
+  my $n1 = Determinant(($p3[0]-$p1[0]),($p3[0]-$p4[0]),($p3[1]-$p1[1]),($p3[1]-$p4[1]));
+  my $n2 = Determinant(($p2[0]-$p1[0]),($p3[0]-$p1[0]),($p2[1]-$p1[1]),($p3[1]-$p1[1]));
+  my $d  = Determinant(($p2[0]-$p1[0]),($p3[0]-$p4[0]),($p2[1]-$p1[1]),($p3[1]-$p4[1]));
+  if (abs($d) < $delta) {
+    return 0; # parallel
+  }
+  if (!(($n1/$d < 1) && ($n2/$d < 1) &&
+        ($n1/$d > 0) && ($n2/$d > 0))) {
+    return 0;
+  }
+  $p5[0] = $p1[0] + $n1/$d * ($p2[0] - $p1[0]);
+  $p5[1] = $p1[1] + $n1/$d * ($p2[1] - $p1[1]);
+  return \@p5; # intersection point
 }
