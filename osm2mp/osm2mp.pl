@@ -25,7 +25,7 @@ use Getopt::Long;
 
 use Encode;
 use Text::Unidecode;
-use List::Util qw{first};
+use List::Util qw{ first };
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon;
@@ -49,6 +49,7 @@ my $nocodepage      = 0;
 
 my $detectdupes     = 1;
 
+my $routing         = 1;
 my $mergeroads      = 1;
 my $mergecos        = 0.2;
 my $splitroads      = 1;
@@ -79,21 +80,21 @@ my $defaultcity     = "";
 my $nametaglist     = "name,ref,int_ref,addr:housenumber";
 
 # ??? make command-line parameters?
-my @housenamelist   = qw(addr:housenumber addr:housename);
-my @citynamelist    = qw(place_name name);
-my @regionnamelist  = qw(addr:region is_in:region addr:state is_in:state);
-my @countrynamelist = qw(addr:country is_in:country_code is_in:country);
+my @housenamelist   = qw{ addr:housenumber addr:housename };
+my @citynamelist    = qw{ place_name name };
+my @regionnamelist  = qw{ addr:region is_in:region addr:state is_in:state };
+my @countrynamelist = qw{ addr:country is_in:country_code is_in:country };
 
 
 my %yesno = (
-    "yes"            => 1,
-    "true"           => 1,
-    "1"              => 1,
-    "permissive"     => 1,
-    "no"             => 0,
-    "false"          => 0,
-    "0"              => 0,
-    "private"        => 0,
+    "yes"            => '1',
+    "true"           => '1',
+    "1"              => '1',
+    "permissive"     => '1',
+    "no"             => '0',
+    "false"          => '0',
+    "0"              => '0',
+    "private"        => '0',
 );
 
 GetOptions (
@@ -104,6 +105,7 @@ GetOptions (
     "mapname=s"         => \$mapname,
     "codepage=s"        => \$codepage,
     "nocodepage"        => \$nocodepage,
+    "routing!"          => \$routing,
     "mergeroads!"       => \$mergeroads,
     "mergecos=f"        => \$mergecos,
     "detectdupes!"      => \$detectdupes,
@@ -200,6 +202,7 @@ $tmpl->process ($cfgheader, {
     mapid           => $mapid,
     mapname         => $mapname,
     codepage        => $codepage,
+    routing         => $routing,
     defaultcountry  => $defaultcountry,
     defaultregion   => $defaultregion,
 }) 
@@ -300,13 +303,6 @@ my $boundgpc = Math::Geometry::Planar::GPC::Polygon->new();
 $boundgpc->add_polygon ( [$boundpoly->points()], 0 )    if $bounds;
 
 
-### skipping ways
-
-while ( <IN> ) {
-    last if /<relation/;
-}
-continue { $relpos = tell IN }
-
 
 
 
@@ -331,7 +327,13 @@ my @mp_inner;
 
 my ($tr_from, $tr_via, $tr_to, $tr_type);
 
+
+while ( <IN> ) {
+    last if /<relation/;
+}
+continue { $relpos = tell IN }
 seek IN, $relpos, 0;
+
 
 while ( my $line = <IN> ) {
 
@@ -378,7 +380,7 @@ while ( my $line = <IN> ) {
                 $mphole{$hole} = 1;
             }
         }
-        if ( $restrictions  &&  $reltype eq "restriction" ) {
+        if ( $routing  &&  $restrictions  &&  $reltype eq "restriction" ) {
             $tr_to = $tr_from       if  $tr_type eq "no_u_turn"  &&  !$tr_to;
 
             if ( $tr_from && $tr_via && $tr_to ) {
@@ -566,336 +568,343 @@ printf STDERR "%d written\n", $countpoi;
 
 ####    Loading roads and coastlines, and writing other ways
 
-my %rchain;
-my %rprops;
-my %risin;
+my %road;
+my %coast;
 
-my %xnodes;
-my %schain;
+my %xnode;
 
 print STDERR "Processing ways...        ";
+
 print "\n\n\n; ### Lines and polygons\n\n";
 
 my $countlines    = 0;
 my $countpolygons = 0;
 
-my $id;
+my $wayid;
+my $city;
 my @chain;
 my @chainlist;
 my $inbounds;
 
-my $isin;
-
 seek IN, $waypos, 0;
-while (<IN>) {
 
-   last if /\<relation/;
+while ( my $line = <IN> ) {
 
-   if ( /\<way/ ) {
-      /^.* id=["'](\-?\d+)["'].*$/;
+    if ( $line =~ /<way/ ) {
+        ($wayid)  =  $line =~ / id=["']([^"']+)["']/;
 
-      $id = $1;
+        %waytag       = ();
+        @chain        = ();
+        @chainlist    = ();
+        $inbounds     = 0;
+        $city         = 0;
 
-      %waytag = ();
-      @chain = ();
-      @chainlist = ();
-      $inbounds = 0;
-      $isin = 0;
+        next;
+    }
 
-      next;
-   }
+    if ( $line =~ /<nd/ ) {
+        my ($ref)  =  $line =~ / ref=["']([^"']*)["']/;
+        if ( $node{$ref}  &&  $ref ne $chain[-1] ) {
+            push @chain, $ref;
+            if ($bounds) {
+                my $in = insidebounds( $node{$ref} );
+                if ( !$inbounds &&  $in )   { push @chainlist, ($#chain ? $#chain-1 : 0); }
+                if (  $inbounds && !$in )   { push @chainlist, $#chain; }
+                $inbounds = $in;
+            }
+        }
+        next;
+    }
 
-   if ( /\<nd/ ) {
-      /^.*ref=["'](.*)["'].*$/;
-      if ($node{$1}  &&  $1 ne $chain[-1] ) {
-          push @chain, $1;
-          if ($bounds) {
-              my $in = insidebounds($node{$1});
-              if ( !$inbounds &&  $in )        { push @chainlist, ($#chain ? $#chain-1 : 0); }
-              if (  $inbounds && !$in )        { push @chainlist, $#chain; }
-              $inbounds = $in;
-          }
-      }
-      next;
-   }
+    if ( $line =~ /<tag/ ) {
+        $line =~ / k=["']([^"']*)["'].* v=["']([^"']*)["']/;
+        $waytag{$1} = $2;
+        next;
+    }
 
-   if ( /\<tag/ ) {
-       /^.*k=["'](.*)["'].*v=["'](.*)["'].*$/;
-       $waytag{$1} = $2;
-       next;
-   }
+    if ( $line =~ /<\/way/ ) {
 
-   if ( /\<\/way/ ) {
+        my $poly  =  ( sort { @polytype{$b}->[2] <=> @polytype{$a}->[2] }  grep {@polytype{$_}}  map {"$_=$waytag{$_}"} keys %waytag )[0];
+        next  unless $poly;
 
-       my @typelist = sort {@polytype{$b}->[2] cmp @polytype{$a}->[2]} grep {@polytype{$_}} map {"$_=$waytag{$_}"} keys %waytag;
-       my $poly = $typelist[0];
+        my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
 
-       my @namelist = grep {defined} @waytag{@nametagarray};
-       my $polyname = convert_string ($namelist[0]);
+        my $name = convert_string( first {defined} @waytag{@nametagarray} );
 
-       if ( !$bounds )                  {   @chainlist = (0);   }
-       if ( !($#chainlist % 2) )        {   push @chainlist, $#chain;   }
-
-       ##       this way is road
-       if ( $polytype{$poly}->[0] eq "r"  &&  scalar @chain <= 1 ) {
-           print "; ERROR: Road WayID=$id has too few nodes at ($node{$chain[0]})\n";
-       }
-       if ( $polytype{$poly}->[0] eq "r"  &&  scalar @chain > 1 ) {
-           my @rp = split /,/, $polytype{$poly}->[5];
-           if ($waytag{"maxspeed"}>0) {
-               if ($waytag{"maxspeed"} =~ /mph$/i)   {  $waytag{"maxspeed"} *= 1.61;  }
-               $rp[0]  = speedcode($waytag{"maxspeed"});
-           }
-
-           $rp[2]  = $yesno{$waytag{"oneway"}}                  if exists $waytag{"oneway"};
-           $rp[3]  = $yesno{$waytag{"toll"}}                    if exists $waytag{"toll"};
-
-           $rp[5]=$rp[6]=$rp[7]=$rp[8]=$rp[9]=$rp[10]=$rp[11] = 1-$yesno{$waytag{"access"}}
-                                                                if exists $waytag{"access"};
-           $rp[5]=$rp[6]=$rp[7]=$rp[8]=$rp[10] = 1-$yesno{$waytag{"auto"}}
-                                                                if exists $waytag{"auto"};
-           $rp[5]=$rp[6]=$rp[7]=$rp[8]=$rp[10] = 1-$yesno{$waytag{"vehicle"}}
-                                                                if exists $waytag{"vehicle"};
-           $rp[9]=$rp[10] = $yesno{$waytag{"motorroad"}}        if exists $waytag{"motorroad"};
-           
-           $rp[5]=$rp[6]=$rp[8] = 1-$yesno{$waytag{"motorcar"}} if exists $waytag{"motorcar"};
-           $rp[9]  = 1-$yesno{$waytag{"foot"}}                  if exists $waytag{"foot"};
-           $rp[10] = 1-$yesno{$waytag{"bicycle"}}               if exists $waytag{"bicycle"};
-           $rp[7]  = 1-$yesno{$waytag{"psv"}}                   if exists $waytag{"psv"};
-           $rp[11] = 1-$yesno{$waytag{"hgv"}}                   if exists $waytag{"hgv"};
+        @chainlist = (0)            unless $bounds;
+        push @chainlist, $#chain    unless ($#chainlist % 2);
 
 
-           for my $i (keys %city) {
-               if ( $city{$i}->{bound}->contains([split ",",$node{$chain[0]}]) 
-                 && $city{$i}->{bound}->contains([split ",",$node{$chain[-1]}]) ) {
-                   $isin = $i;
-                   last;
-               }
-           }
+        ##  this way is map line - dump it
 
-           for (my $i=0; $i<$#chainlist+1; $i+=2) {
-               $rchain{"$id:$i"} = [ @chain[$chainlist[$i]..$chainlist[$i+1]] ];
-               $rprops{"$id:$i"} = [ $poly, $polyname, join (",",@rp) ];
-               $risin{"$id:$i"}  = $isin         if ($isin && $polyname);
+        if ( $mode eq 'l'  ||  $mode eq 's'  || ( !$routing && $mode eq 'r' ) ) {
+            if ( scalar @chain < 2 ) {
+                print "; ERROR: WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
+                next;
+            }
 
-               if ($bounds) {
-                   if ( !insidebounds($node{$chain[$chainlist[$i]]}) ) {
-                       $xnodes{ $chain[$chainlist[$i]] }        = 1;
-                       $xnodes{ $chain[$chainlist[$i]+1] }      = 1;
-                   }
-                   if ( !insidebounds($node{$chain[$chainlist[$i+1]]}) ) {
-                       $xnodes{ $chain[$chainlist[$i+1]] }      = 1;
-                       $xnodes{ $chain[$chainlist[$i+1]-1] }    = 1;
-                   }
-               }
-           }
+            for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
+                $countlines ++;
 
-           # processing associated turn restrictions
-
-           if ($restrictions) {
-               if ( $chainlist[0] == 0 ) {
-                   for my $relid (@{$nodetr{$chain[0]}}) {
-                       if ( $trest{$relid}->{fr_way} eq $id ) {
-                           $trest{$relid}->{fr_way} = "$id:0";
-                           $trest{$relid}->{fr_dir} = -1;
-                           $trest{$relid}->{fr_pos} = 0;
-                       }
-                       if ( $trest{$relid}->{to_way} eq $id ) {
-                           $trest{$relid}->{to_way} = "$id:0";
-                           $trest{$relid}->{to_dir} = 1;
-                           $trest{$relid}->{to_pos} = 0;
-                       }
-                   }
-               }
-               if ( $chainlist[-1] == $#chain ) {
-                   for my $relid (@{$nodetr{$chain[-1]}}) {
-                       if ( $trest{$relid}->{fr_way} eq $id ) {
-                           $trest{$relid}->{fr_way} = "$id:" . (($#chainlist-1)>>1);
-                           $trest{$relid}->{fr_dir} = 1;
-                           $trest{$relid}->{fr_pos} = $chainlist[-1] - $chainlist[-2];
-                       }
-                       if ( $trest{$relid}->{to_way} eq $id ) {
-                           $trest{$relid}->{to_way} = "$id:" . (($#chainlist-1)>>1);
-                           $trest{$relid}->{to_dir} = -1;
-                           $trest{$relid}->{to_pos} = $chainlist[-1] - $chainlist[-2];
-                       }
-                   }
-               }
-           }
-       }
+                print  "; WayID = $wayid\n";
+                print  "; $poly\n";
+                print  "[POLYLINE]\n";
+                printf "Type=%s\n",         $type;
+                printf "EndLevel=%d\n",     $hlev       if  $hlev > $llev;
+                print  "Label=$name\n"                  if  $name;
+                printf "Data%d=(%s)\n",     $llev, join( q{), (}, @node{@chain[$chainlist[$i]..$chainlist[$i+1]]} );
+                print  "[END]\n\n\n";
+            }
+        }
 
 
-       ##       this way is map line
+        ##  this way is coastline - load it
 
-#       if ( $polytype{$poly}->[0] eq "l" || ($polytype{$poly}->[0] eq "s" && !$shorelines) ) {
-       if ( $polytype{$poly}->[0] eq "l" || $polytype{$poly}->[0] eq "s" ) {
-           my $d = "";
-           if ( scalar @chain < 2 ) {
-               print "; ERROR: WayID=$id has too few nodes at ($node{$chain[0]})\n";
-               $d = "; ";
-           }
-
-           my @type = @{$polytype{$poly}};
-
-           for (my $i=0; $i<$#chainlist+1; $i+=2) {
-               $countlines ++;
-
-               print  "; WayID = $id\n";
-               print  "; $poly\n";
-               print  "${d}[POLYLINE]\n";
-               printf "${d}Type=%s\n",        $type[1];
-               printf "${d}EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
-               print  "${d}Label=$polyname\n"                       if ($polyname);
-               # print  "${d}DirIndicator=$polydir\n"                 if defined $polydir;
-               printf "${d}Data%d=(%s)\n",    $type[3], join ("), (", @node{@chain[$chainlist[$i]..$chainlist[$i+1]]});
-               print  "${d}[END]\n\n\n";
-           }
-       }
+        if ( $mode eq "s"  &&  $shorelines ) {
+            if ( scalar @chain < 2 ) {
+                print "; ERROR: WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
+            } 
+            else {
+                for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
+                    $coast{$chain[$chainlist[$i]]} = [ @chain[$chainlist[$i]..$chainlist[$i+1]] ];
+                }
+            }
+        }
 
 
-       ##       this way is coastline
+        ##  this way is map polygon - clip it and dump
 
-       if ( $polytype{$poly}->[0] eq "s" && $shorelines ) {
-           if ( scalar @chain < 2 ) {
-               print "; ERROR: WayID=$id has too few nodes at ($node{$chain[0]})\n";
-           } else {
-               for (my $i=0; $i<$#chainlist+1; $i+=2) {
-                   $schain{$chain[$chainlist[$i]]} = [ @chain[$chainlist[$i]..$chainlist[$i+1]] ];
-               }
-           }
-       }
+        if ( $mode eq "p" ) {
+            if ( scalar @chain <= 3 ) {
+                print "; ERROR: area WayID=$wayid has too few nodes near ($node{$chain[0]})\n";
+                next;
+            }
 
+            if ( $chain[0] ne $chain[-1] ) {
+                print "; ERROR: area WayID=$wayid is not closed at ($node{$chain[0]})\n";
+            }
 
-       ##       this way is map polygon
+            print  "; WayID = $wayid\n";
+            print  "; $poly\n";
 
-       if ( $polytype{$poly}->[0] eq "p" && scalar @chain <= 3 ) {
-               print "; ERROR: WayID=$id has too few nodes near ($node{$chain[0]})\n";
-           }
+            if ( !$bounds  ||  scalar @chainlist ) {
 
-       if ( $polytype{$poly}->[0] eq "p" && scalar @chain > 3) {
-           if ( $chain[0] ne $chain[-1] ) {
-               print "; ERROR: area WayID=$id is not closed at ($node{$chain[0]})\n";
-           }
+                if ( $navitel  ||  ($makepoi && $rp && $name) ) {
+                    for my $i (keys %city) {
+                        if ( $city{$i}->{bound}->contains( [ split q{,}, $node{$chain[0]} ] ) ) {
+                            $city = $i;
+                            last;
+                        }
+                    }
+                }
 
-           my @type = @{$polytype{$poly}};
+                my $gpc = Math::Geometry::Planar::GPC::Polygon->new();
+                $gpc->add_polygon( [ map { [reverse split q{,}, $node{$_}] } @chain ], 0 );
 
-           print  "; WayID = $id\n";
-           print  "; $poly\n";
+                if ( $mpoly{$wayid} ) {
+                    for my $hole ( @{$mpoly{$wayid}} ) {
+                        if ( $mphole{$hole} ne $hole  &&  ref $mphole{$hole} ) {
+                            $gpc->add_polygon( [ map { [reverse split q{,}, $node{$_}] } @{$mphole{$hole}} ], 1 );
+                        }
+                    }
+                }
 
-           if (!$bounds || scalar @chainlist) {
-
-               my $city;
-               if ($navitel || ($makepoi && $polyname && $type[5])) {
-                   for my $i (keys %city) {
-                       if ( $city{$i}->{bound}->contains([split ",",$node{$chain[0]}]) ) {
-                           $city = $i;
-                           last;
-                       }
-                   }
-               }
-
-               my $gpc= Math::Geometry::Planar::GPC::Polygon->new();
-               $gpc->add_polygon( [ map { [reverse split ",",$node{$_}] } @chain ], 0 );
-
-               if ($mpoly{$id}) {
-                   for my $hole (@{$mpoly{$id}}) {
-                       if ($mphole{$hole} ne $hole  &&  ref $mphole{$hole}) {
-                           $gpc->add_polygon( [ map { [reverse split ",",$node{$_}] } @{$mphole{$hole}} ], 1 );
-                       }
-                   }
-               }
-
-               if ($bounds) {
-                   $gpc = $gpc->clip_to($boundgpc, "INTERSECT");
-               }
+                if ($bounds) {
+                    $gpc = $gpc->clip_to( $boundgpc, "INTERSECT" );
+                }
                
 
-               $countpolygons ++;
+                my @plist  =  sort  { $#{$b} <=> $#{$a} }  $gpc->get_polygons();
+                if ( @plist ) {
+                    $countpolygons ++;
 
-               print  "[POLYGON]\n";
-               printf "Type=%s\n",        $type[1];
-               printf "EndLevel=%d\n",    $type[4]              if ($type[4] > $type[3]);
-               print  "Label=$polyname\n"                       if ($polyname);
+                    print  "[POLYGON]\n";
+                    printf "Type=%s\n",        $type;
+                    printf "EndLevel=%d\n",    $hlev    if  $hlev > $llev;
+                    print  "Label=$name\n"              if  $name;
 
 
-               ## Navitel
-               if ($navitel) {
-                   my $housenumber = convert_string ( (grep {defined} @waytag{@housenamelist})[0] );
-                   print  "HouseNumber=$housenumber\n"                              if $housenumber;
-                   printf "StreetDesc=%s\n", convert_string($waytag{"addr:street"}) if $waytag{"addr:street"};
-                   if ( $waytag{"addr:housenumber"} &&  $waytag{"addr:street"} ) {
-                       if ( $city ) {
-                           print "CityName="    . $city{$city}->{name}      . "\n";
-                           print "RegionName="  . $city{$city}->{region}    . "\n"      if $city{$city}->{region};
-                           print "CountryName=" . $city{$city}->{country}   . "\n"      if $city{$city}->{country};
-                       } elsif ( $defaultcity ) {
-                           print "CityName=$defaultcity\n";
-                       }
-                   }
-               }
+                    ## Navitel
+                    if ( $navitel ) {
+                        my $housenumber = convert_string( first {defined} @waytag{@housenamelist} );
+                        if ( $housenumber && $waytag{'addr:street'} ) {
+                            print  "HouseNumber=$housenumber\n";
+                            printf "StreetDesc=%s\n", convert_string( $waytag{'addr:street'} );
+                            if ( $city ) {
+                                print "CityName="    . $city{$city}->{name}      . "\n";
+                                print "RegionName="  . $city{$city}->{region}    . "\n"      if $city{$city}->{region};
+                                print "CountryName=" . $city{$city}->{country}   . "\n"      if $city{$city}->{country};
+                            } 
+                            elsif ( $defaultcity ) {
+                                print "CityName=$defaultcity\n";
+                            }
+                        }
+                    }
+            
+                    for my $polygon ( @plist ) {
+                        printf "Data%d=(%s)\n", $llev, join( q{), (}, map {join( q{,}, reverse @{$_} )} @{$polygon} );
+                    }
+            
+                    print "[END]\n\n\n";
+            
 
-               my @plist = sort {$#{$b} <=> $#{$a}} $gpc->get_polygons();
-               for my $polygon (@plist) {
-                   printf "Data%d=(%s)\n",    $type[3], join ("), (", map {join(",", reverse @{$_})} @{$polygon});
-               }
+                    if ( $makepoi && $rp && $name ) {
+            
+                        my ($poi, $pll, $phl) = split q{,}, $rp;
+            
+                        print  "[POI]\n";
+                        print  "Type=$poi\n";
+                        print  "EndLevel=$phl\n";
+                        print  "Label=$name\n";
+                        printf "Data%d=(%f,%f)\n", $pll, centroid( @{$plist[0]} );
+            
+                        my $housenumber = convert_string ( first {defined} @waytag{@housenamelist} );
+                        if ( $housenumber && $waytag{'addr:street'} ) {
+                            print  "HouseNumber=$housenumber\n";
+                            printf "StreetDesc=%s\n", convert_string( $waytag{'addr:street'} );
+                            if ( $city ) {
+                                print "CityName="    . $city{$city}->{name}      . "\n";
+                                print "RegionName="  . $city{$city}->{region}    . "\n"      if $city{$city}->{region};
+                                print "CountryName=" . $city{$city}->{country}   . "\n"      if $city{$city}->{country};
+                            } 
+                            elsif ( $defaultcity ) {
+                                print "CityName=$defaultcity\n";
+                            }
+                        }
+            
+                        print  "[END]\n\n\n";
+                    }
+                }
+            }
+        }
 
-               print  "[END]\n\n\n";
 
-               if ($makepoi && $polyname && $type[5]) {
+        ##  this way is road - load
 
-                   my ($poi,$pll,$phl) = split ",", $type[5];
+        if ( $mode eq "r"  &&  $routing ) {
+            if ( scalar @chain <= 1 ) {
+                print "; ERROR: Road WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
+                next;
+            }
 
-                   print  "[POI]\n";
-                   print  "Type=$poi\n";
-                   print  "EndLevel=$phl\n";
-                   print  "Label=$polyname\n";
-                   printf "Data%d=(%f,%f)\n", $pll, centroid(@{$plist[0]});
 
-                   my $housenumber = convert_string ( (grep {defined} @waytag{@housenamelist})[0] );
-                   print  "HouseNumber=$housenumber\n"                              if $housenumber;
-                   printf "StreetDesc=%s\n", convert_string($waytag{"addr:street"}) if $waytag{"addr:street"};
-                   if ( $city ) {
-                       print "CityName="    . $city{$city}->{name}      . "\n";
-                       print "RegionName="  . $city{$city}->{region}    . "\n"      if $city{$city}->{region};
-                       print "CountryName=" . $city{$city}->{country}   . "\n"      if $city{$city}->{country};
-                   } elsif ( $defaultcity ) {
-                       print "CityName=$defaultcity\n";
-                   }
+            # set routing parameters and access rules
+            my @rp = split q{,}, $rp;
 
-                   print  "[END]\n\n\n";
-               }
-           }
-       }
-   }
+            if ( $waytag{'maxspeed'} > 0 ) {
+               $waytag{'maxspeed'} *= 1.61      if  $waytag{'maxspeed'} =~ /mph$/i;
+               $rp[0]  = speedcode( $waytag{'maxspeed'} );
+            }
 
+            $rp[2] = $yesno{$waytag{'oneway'}}                                  if exists $yesno{$waytag{'oneway'}};
+
+            $rp[3] = $yesno{$waytag{'toll'}}                                    if exists $yesno{$waytag{'toll'}};
+
+            @rp[5,6,7,8,9,10,11]  =  (1-$yesno{$waytag{'access'}})      x 7     if exists $yesno{$waytag{'access'}};
+            @rp[5,6,7,8,  10,  ]  =  (1-$yesno{$waytag{'auto'}})        x 5     if exists $yesno{$waytag{'auto'}};
+            @rp[5,6,7,8,  10,  ]  =  (1-$yesno{$waytag{'vehicle'}})     x 5     if exists $yesno{$waytag{'vehicle'}};
+            @rp[        9,10,  ]  =  (  $yesno{$waytag{'motorroad'}})   x 2     if exists $yesno{$waytag{'motorroad'}};
+            @rp[5,6,  8,       ]  =  (1-$yesno{$waytag{'motorcar'}})    x 3     if exists $yesno{$waytag{'motorcar'}};
+            @rp[        9,     ]  =  (1-$yesno{$waytag{'foot'}})        x 1     if exists $yesno{$waytag{'foot'}};
+            @rp[          10,  ]  =  (1-$yesno{$waytag{'bicycle'}})     x 1     if exists $yesno{$waytag{'bicycle'}};
+            @rp[    7,         ]  =  (1-$yesno{$waytag{'psv'}})         x 1     if exists $yesno{$waytag{'psv'}};
+            @rp[             11]  =  (1-$yesno{$waytag{'hgv'}})         x 1     if exists $yesno{$waytag{'hgv'}};
+
+
+            # determine city
+            if ( $name ) {
+                for my $i ( keys %city ) {
+                    if ( $city{$i}->{bound}->contains( [split q{,}, $node{$chain[0]}] ) 
+                      && $city{$i}->{bound}->contains( [split q{,} ,$node{$chain[-1]}] ) ) {
+                        $city = $i;
+                        last;
+                    }
+                }
+            }
+
+            # load roads and external nodes
+            for ( my $i = 0;  $i < $#chainlist;  $i += 2 ) {
+                $road{"$wayid:$i"} = {
+                    type    =>  $poly,
+                    name    =>  $name,
+                    chain   =>  [ @chain[$chainlist[$i]..$chainlist[$i+1]] ],
+                    city    =>  $city,
+                    rp      =>  join( q{,}, @rp ),
+                };
+
+                if ( $bounds ) {
+                    if ( !insidebounds($node{$chain[$chainlist[$i]]}) ) {
+                        $xnode{ $chain[$chainlist[$i]]   }    = 1;
+                        $xnode{ $chain[$chainlist[$i]+1] }    = 1;
+                    }
+                    if ( !insidebounds($node{$chain[$chainlist[$i+1]]}) ) {
+                        $xnode{ $chain[$chainlist[$i+1]]   }  = 1;
+                        $xnode{ $chain[$chainlist[$i+1]-1] }  = 1;
+                    }
+                }
+            }
+
+            # process associated turn restrictions
+            if ($restrictions) {
+                if ( $chainlist[0] == 0 ) {
+                    for my $relid ( grep { $trest{$_}->{fr_way} eq $wayid } @{$nodetr{$chain[0]}} ) {
+                        $trest{$relid}->{fr_way} = "$wayid:0";
+                        $trest{$relid}->{fr_dir} = -1;
+                        $trest{$relid}->{fr_pos} = 0;
+                    }
+                    for my $relid ( grep { $trest{$_}->{to_way} eq $wayid } @{$nodetr{$chain[0]}} ) {
+                        $trest{$relid}->{to_way} = "$wayid:0";
+                        $trest{$relid}->{to_dir} = 1;
+                        $trest{$relid}->{to_pos} = 0;
+                    }
+                }
+                if ( $chainlist[-1] == $#chain ) {
+                    for my $relid ( grep { $trest{$_}->{fr_way} eq $wayid } @{$nodetr{$chain[-1]}} ) {
+                        $trest{$relid}->{fr_way} = "$wayid:" . ($#chainlist-1);
+                        $trest{$relid}->{fr_dir} = 1;
+                        $trest{$relid}->{fr_pos} = $chainlist[-1] - $chainlist[-2];
+                    }
+                    for my $relid ( grep { $trest{$_}->{to_way} eq $wayid } @{$nodetr{$chain[-1]}} ) {
+                        $trest{$relid}->{to_way} = "$wayid:" . ($#chainlist-1);
+                        $trest{$relid}->{to_dir} = -1;
+                        $trest{$relid}->{to_pos} = $chainlist[-1] - $chainlist[-2];
+                    }
+                }
+            }
+        } # if road
+    } # </way>
+
+    last  if $line =~ /<relation/;
 }
 
-printf STDERR "%d roads and %d coastlines loaded
-                          $countlines lines and $countpolygons polygons dumped\n", scalar keys %rchain, scalar keys %schain;
+print  STDERR "$countlines lines and $countpolygons polygons dumped\n";
+printf STDERR "                          %d roads loaded\n",      scalar keys %road     if  $routing;
+printf STDERR "                          %d coastlines loaded\n", scalar keys %coast    if  $shorelines;
 
 
 
 
 
-####    Processing shorelines
+####    Processing coastlines
 
-if ($shorelines) {
+if ( $shorelines ) {
+
     print "\n\n\n";
     print STDERR "Processing shorelines...  ";
 
 
     ##  merging
-    my @keys = keys %schain;
+    my @keys = keys %coast;
     my $i = 0;
     while ($i < scalar @keys) {
-        while ( $schain{$keys[$i]}  
-                && $schain{$schain{$keys[$i]}->[-1]}  
-                && $schain{$keys[$i]}->[-1] ne $keys[$i] 
-                && (!$bounds || insidebounds($node{$schain{$keys[$i]}->[-1]})) ) {
-            my $mnode = $schain{$keys[$i]}->[-1];
-            pop  @{$schain{$keys[$i]}};
-            push @{$schain{$keys[$i]}}, @{$schain{$mnode}};
-            delete $schain{$mnode};
+        while (    $coast{$keys[$i]}  
+                && $coast{$coast{$keys[$i]}->[-1]}  
+                && $coast{$keys[$i]}->[-1] ne $keys[$i] 
+                && ( !$bounds  ||  insidebounds( $node{$coast{$keys[$i]}->[-1]} ) ) ) {
+            my $mnode = $coast{$keys[$i]}->[-1];
+            pop  @{$coast{$keys[$i]}};
+            push @{$coast{$keys[$i]}}, @{$coast{$mnode}};
+            delete $coast{$mnode};
         }
         $i++;
     }
@@ -905,63 +914,117 @@ if ($shorelines) {
     if ($bounds) {
 
         my @bound = $boundpoly->points();
-        #push @bound, $bound[0];
-
         my @tbound;
         my $pos = 0;
-        for (my $i=0; $i<$#bound; $i++) {
-            push @tbound, {type=>"bound", point=>$bound[$i], pos=>$pos};
-            for my $sline (keys %schain) {
-                my $p1 = [ reverse split /,/, $node{$schain{$sline}->[0]} ];
-                my $p2 = [ reverse split /,/, $node{$schain{$sline}->[1]} ];
-                my $ipoint = SegmentIntersection( [$bound[$i],$bound[$i+1],$p1,$p2] );
-                $ipoint = $p2           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p2])==0 && !insidebounds($node{$schain{$sline}->[0]}));
-                $ipoint = $p1           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p1])==0);
-                if ($ipoint) {  unless ( grep { $_->{type} eq "end" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1] } @tbound ) {
-                    push @tbound, {type=>"start", point=>$ipoint, pos=>$pos+SegmentLength([$bound[$i],$ipoint]), line=>$sline };
-                } else { 
-                    @tbound = grep { !($_->{type} eq "end" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1]) } @tbound;
-                }}
 
-                my $p1 = [ reverse split /,/, $node{$schain{$sline}->[-1]} ];
-                my $p2 = [ reverse split /,/, $node{$schain{$sline}->[-2]} ];
-                my $ipoint = SegmentIntersection( [$bound[$i],$bound[$i+1],$p1,$p2] );
-                $ipoint = $p2           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p2])==0 && !insidebounds($node{$schain{$sline}->[-1]}));
-                $ipoint = $p1           if (!$ipoint && DistanceToSegment([$bound[$i],$bound[$i+1],$p1])==0);
-                if ($ipoint) {  unless ( grep { $_->{type} eq "start" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1] } @tbound ) {
-                    push @tbound, {type=>"end", point=>$ipoint, pos=>$pos+SegmentLength([$bound[$i],$ipoint]), line=>$sline };
-                } else { 
-                    @tbound = grep { !($_->{type} eq "start" && $_->{point}->[0]==$ipoint->[0] && $_->{point}->[1]==$ipoint->[1]) } @tbound;
-                }}
+        for ( my $i = 0;  $i < $#bound;  $i++ ) {
+
+            push @tbound, {
+                type    =>  'bound', 
+                point   =>  $bound[$i], 
+                pos     =>  $pos
+            };
+
+            for my $sline ( keys %coast ) {
+
+                # check start of coastline
+                my $p1      = [ reverse  split q{,}, $node{$coast{$sline}->[0]} ];
+                my $p2      = [ reverse  split q{,}, $node{$coast{$sline}->[1]} ];
+                my $ipoint  = SegmentIntersection( [ $bound[$i], $bound[$i+1], $p1, $p2 ] );
+
+                if ( $ipoint ) {
+                    if ( grep { $_->{type} eq 'end' 
+                             && $_->{point}->[0] == $ipoint->[0] 
+                             && $_->{point}->[1] == $ipoint->[1] } @tbound ) {
+                        @tbound = grep { !( $_->{type} eq 'end'
+                                         && $_->{point}->[0] == $ipoint->[0]
+                                         && $_->{point}->[1] == $ipoint->[1]) } @tbound;
+                    } 
+                    else { 
+                        push @tbound, {
+                            type    =>  'start', 
+                            point   =>  $ipoint, 
+                            pos     =>  $pos + SegmentLength( [$bound[$i],$ipoint] ), 
+                            line    =>  $sline,
+                        };
+                    }
+                }
+                else {
+                    if ( DistanceToSegment( [ $bound[$i], $bound[$i+1], $p1 ] ) == 0 ) {
+                        $ipoint = $p1;
+                    }
+                    if ( DistanceToSegment( [ $bound[$i], $bound[$i+1], $p2 ] ) == 0 
+                      && !insidebounds( $node{$coast{$sline}->[0]} ) ) {
+                        $ipoint = $p2;
+                    }
+                }
+
+                # check end of coastline
+                my $p1      = [ reverse  split q{,}, $node{$coast{$sline}->[-1]} ];
+                my $p2      = [ reverse  split q{,}, $node{$coast{$sline}->[-2]} ];
+                my $ipoint  = SegmentIntersection( [ $bound[$i], $bound[$i+1], $p1, $p2 ] );
+
+                if ( $ipoint ) {
+                    if ( grep { $_->{type} eq 'start' 
+                             && $_->{point}->[0] == $ipoint->[0] 
+                             && $_->{point}->[1] == $ipoint->[1] } @tbound ) {
+                        @tbound = grep { !( $_->{type} eq 'start'
+                                         && $_->{point}->[0] == $ipoint->[0]
+                                         && $_->{point}->[1] == $ipoint->[1]) } @tbound;
+                    } 
+                    else { 
+                        push @tbound, {
+                            type    =>  'end', 
+                            point   =>  $ipoint, 
+                            pos     =>  $pos + SegmentLength( [$bound[$i],$ipoint] ), 
+                            line    =>  $sline,
+                        };
+                    }
+                }
+                else {
+                    if ( DistanceToSegment( [ $bound[$i], $bound[$i+1], $p1 ] ) == 0 ) {
+                        $ipoint = $p1;
+                    }
+                    if ( DistanceToSegment( [ $bound[$i], $bound[$i+1], $p2 ] ) == 0 
+                      && !insidebounds( $node{$coast{$sline}->[-1]} ) ) {
+                        $ipoint = $p2;
+                    }
+                }
             }
-            $pos += SegmentLength( [$bound[$i],$bound[$i+1]] );
+
+            $pos += SegmentLength( [ $bound[$i], $bound[$i+1] ] );
         }
 
-
-        my $tmp = (sort {$a->{pos}<=>$b->{pos}} grep {$_->{type} ne "bound"} @tbound)[0];
-        if ( $tmp->{type} eq "end" ) {
-            map {$_->{pos} += $pos} grep {$_->{pos} <= $tmp->{pos}} @tbound;
+        # rotate if sea at $tbound[0]
+        my $tmp = ( sort { $a->{pos}<=>$b->{pos} }  grep { $_->{type} ne 'bound' } @tbound )[0];
+        if ( $tmp->{type} eq 'end' ) {
+            for ( grep { $_->{pos} <= $tmp->{pos} } @tbound ) {
+                 $_->{pos} += $pos;
+            }
         }
 
+        # merge lines
         my $tmp = 0;
-        for my $node (sort {$a->{pos}<=>$b->{pos}} @tbound) {
-            my $ll = join ",", reverse @{$node->{point}};
-            $node{$ll} = $ll;
+        for my $node ( sort { $a->{pos}<=>$b->{pos} } @tbound ) {
+            my $latlon = join q{,}, reverse @{$node->{point}};
+            $node{$latlon} = $latlon;
 
-            if ($node->{type} eq "start") {
+            if ( $node->{type} eq 'start' ) {
                 $tmp = $node;
-                $schain{$tmp->{line}}->[0] = $ll;
+                $coast{$tmp->{line}}->[0] = $latlon;
             } 
-            if ($node->{type} eq "bound" && $tmp) {
-                unshift @{$schain{$tmp->{line}}}, ($ll);
+            if ( $node->{type} eq 'bound'  &&  $tmp ) {
+                unshift @{$coast{$tmp->{line}}}, ($latlon);
             } 
-            if ($node->{type} eq "end" && $tmp) {
-                $schain{$node->{line}}->[-1] = $ll;
-                if ($node->{line} eq $tmp->{line}) {
-                    push @{$schain{$node->{line}}}, $schain{$node->{line}}->[0];
+            if ( $node->{type} eq 'end'  &&  $tmp ) {
+                $coast{$node->{line}}->[-1] = $latlon;
+                if ( $node->{line} eq $tmp->{line} ) {
+                    push @{$coast{$node->{line}}}, $coast{$node->{line}}->[0];
                 } else {
-                    push @{$schain{$node->{line}}}, @{$schain{$tmp->{line}}};
-                    map { $_->{line} = $node->{line} } grep { $_->{line} eq $tmp->{line} } @tbound;
+                    push @{$coast{$node->{line}}}, @{$coast{$tmp->{line}}};
+                    for ( grep { $_->{line} eq $tmp->{line} } @tbound ) {
+                        $_->{line} = $node->{line};
+                    }
                 }
                 $tmp = 0;
             }
@@ -969,402 +1032,403 @@ if ($shorelines) {
     }
 
 
-
     ##  detecting lakes and islands
-    my %loops;
-    my @islands;
+    my %loop;
+    my %island;
 
-    for my $i (keys %schain) {
+    for my $loop ( grep { $coast{$_}->[0] eq $coast{$_}->[-1] } keys %coast ) {
 
+        # filter huge polygons to avoid cgpsmapper's crash
+        next if scalar @{$coast{$loop}} > 30000;
 
-        if ($schain{$i}->[0] eq $schain{$i}->[-1]) {
-
-            # FIXME   filtering huge polygons
-            next if scalar @{$schain{$i}} > 30000;
-
-            $loops{$i} = Math::Polygon->new( map {  [split ",",$node{$_}] } @{$schain{$i}}  );
-            if ($loops{$i}->isClockwise) {
-#                print "; island\n";
-                push @islands, $i;
-                delete $loops{$i};
-            } else {
-#                print "; lake\n";
-            }
-        }
-
-#        print  "; merged coastline\n";
-#        print  "[POLYLINE]\n";
-#        print  "Type=0x15\n";
-#        print  "EndLevel=4\n";
-#        printf "Data0=(%s)\n",          join ("), (", @node{@{$schain{$i}}});
-#        print  "[END]\n\n\n";
+        $loop{$loop} = Math::Polygon->new( map { [ split q{,}, $node{$_} ] } @{$coast{$loop}} );
+        if ( $loop{$loop}->isClockwise ) {
+            $island{$loop} = 1;
+            delete $loop{$loop};
+        } 
     }
 
+    
+    ##  writing
     my $countislands = 0;
-    for my $i (keys %loops) {
-        print  "; lake\n";
+    for my $sea ( keys %loop ) {
+        print  "; sea $sea\n";
         print  "[POLYGON]\n";
         print  "Type=0x3c\n";
         print  "EndLevel=4\n";
-        printf "Data0=(%s)\n",          join ("), (", @node{@{$schain{$i}}});
-        for my $j (@islands) {
-            if ($loops{$i}->contains( [split ",", $node{$j}] )) {
-                $countislands++;
-                printf "Data0=(%s)\n",          join ("), (", @node{@{$schain{$j}}});
-                # delete $loops{$i};
-            }
+        printf "Data0=(%s)\n",  join ( q{), (}, @node{@{$coast{$sea}}} );
+        
+        for my $island  ( grep { $loop{$sea}->contains( [ split q{,}, $node{$_} ] ) } keys %island ) {
+            $countislands ++;
+            printf "Data0=(%s)\n",  join ( q{), (}, @node{@{$coast{$island}}} );
+            delete $island{$island};
         }
+        
         print  "[END]\n\n\n";
 
     }
 
-    printf STDERR "%d lakes, %d islands\n", scalar keys %loops, $countislands;
+    printf STDERR "%d lakes, %d islands\n", scalar keys %loop, $countislands;
 }
 
 
 
 
-####    Detecting end nodes
+####    Process roads
 
-my %enodes;
-my %rstart;
-
-while (my ($road, $pchain) = each %rchain) {
-    $enodes{$pchain->[0]}  ++;
-    $enodes{$pchain->[-1]} ++;
-    push @{$rstart{$pchain->[0]}}, $road;
-}
-
-
-
-
-
-####    Merging roads
-
-my %rmove;
-
-if ($mergeroads) {
-    print "\n\n\n";
-    print STDERR "Merging roads...          ";
-
-    my $countmerg = 0;
-    my @keys = keys %rchain;
-
-    my $i = 0;
-    while ($i < scalar @keys) {
-
-        my $r1 = $keys[$i];
-        if ($rmove{$r1}) {      $i++;   next;   }
-        my $p1 = $rchain{$r1};
-
-        my @list = ();
-        for my $r2 (@{$rstart{$p1->[-1]}}) {
-            if ( $r1 ne $r2  &&  $rprops{$r2}
-              && join(":",@{$rprops{$r1}})  eq  join(":",@{$rprops{$r2}})
-              && $risin{$r1} eq $risin{$r2}
-              && lcos($p1->[-2],$p1->[-1],$rchain{$r2}->[1]) > $mergecos ) {
-                push @list, $r2
-            }
-        }
-
-        if (scalar @list) {
-            $countmerg ++;
-            @list = sort { lcos($p1->[-2],$p1->[-1],$rchain{$b}->[1]) <=> lcos($p1->[-2],$p1->[-1],$rchain{$a}->[1]) }  @list;
-            printf "; FIX: Road WayID=$r1 may be merged with %s at (%s)\n", join (", ", @list), $node{$p1->[-1]};
-
-            my $r2 = $list[0];
-            $rmove{$r2} = $r1;
-
-            if ($restrictions) {
-                while ( my ($relid, $tr) = each %trest )  {
-                    if ( $tr->{fr_way} eq $r2 )  {
-                        print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
-                        $tr->{fr_way} = $r1;
-                        $tr->{fr_pos} += ( (scalar @{$rchain{$r1}}) - 1 );
-                    }
-                    if ( $tr->{to_way} eq $r2 )  {
-                        print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
-                        $tr->{to_way} = $r1;
-                        $tr->{to_pos} += ( (scalar @{$rchain{$r1}}) - 1 );
-                    }
-                }
-            }
-
-            $enodes{$rchain{$r2}->[0]} -= 2;
-            push @{$rchain{$r1}}, @{$rchain{$r2}}[1..$#{$rchain{$r2}}];
-            delete $rchain{$r2};
-            delete $rprops{$r2};
-            delete $risin{$r2};
-            @{$rstart{$p1->[-1]}} = grep { $_ ne $r2 } @{$rstart{$p1->[-1]}};
-        } else {
-            $i ++;
-        }
-    }
-
-    print STDERR "$countmerg merged\n";
-}
-
-
-
-
-
-####    Generating routing graph
-
-my %rnodes;
 my %nodid;
+my %roadid;
 my %nodeways;
 
-print STDERR "Detecting road nodes...   ";
+if ( $routing ) {
 
-while (my ($road, $pchain) = each %rchain) {
-    for my $node (@{$pchain}) {
-        $rnodes{$node} ++;
-        push @{$nodeways{$node}}, $road         if ($nodetr{$node} || ($disableuturns && $enodes{$node}==2));
+    ###     detecting end nodes
+
+    my %enode;
+    my %rstart;
+
+    while ( my ($roadid, $road) = each %road ) {
+        $enode{$road->{chain}->[0]}  ++;
+        $enode{$road->{chain}->[-1]} ++;
+        push @{$rstart{$road->{chain}->[0]}}, $roadid;
     }
-}
-
-my $nodcount = 1;
-my $utcount  = 0;
-for my $node (keys %rnodes) {
-    if ( $rnodes{$node}>1 || $enodes{$node}>0 || $xnodes{$node} || (defined($nodetr{$node}) && scalar @{$nodetr{$node}}) ) {
-#        printf "; NodID=$nodcount - NodeID=$node at (%s) - $rnodes{$node} roads, $enodes{$node} ends, X=$xnodes{$node}, %d trs\n", $node{$node}, (defined($nodetr{$node}) && scalar @{$nodetr{$node}});
-        $nodid{$node} = $nodcount++;
-    }
-    if ($disableuturns && $rnodes{$node}==2 && $enodes{$node}==2) {
-        if ( $rprops{$nodeways{$node}->[0]}[2] =~ /^.,.,0/ ) {
-            my $dir = indexof ($rchain{$nodeways{$node}->[0]}, $node);
-            $trest{"ut".$utcount++} = { node => $node,  type => "no",
-                        fr_way => $nodeways{$node}->[0],
-                        fr_dir => ($dir>0) ? 1 : -1,
-                        fr_pos => $dir,
-                        to_way => $nodeways{$node}->[0],
-                        to_dir => ($dir>0) ? -1 : 1,
-                        to_pos => $dir };
-        }
-        if ( $rprops{$nodeways{$node}->[1]}[2] =~ /^.,.,0/ ) {
-            my $dir = indexof ($rchain{$nodeways{$node}->[1]}, $node);
-            $trest{"ut".$utcount++} = { node => $node,  type => "no",
-                        fr_way => $nodeways{$node}->[1],
-                        fr_dir => ($dir>0) ? 1 : -1,
-                        fr_pos => $dir,
-                        to_way => $nodeways{$node}->[1],
-                        to_dir => ($dir>0) ? -1 : 1,
-                        to_pos => $dir };
-        }
-    }
-}
-
-printf STDERR "%d found\n", scalar keys %nodid;
 
 
 
 
+    ###     merging roads
 
-####    Detecting duplicate road segments
-
-
-if ($detectdupes) {
-
-    my %segways;
-
-    print STDERR "Detecting duplicates...   ";
-    print "\n\n\n; ### Duplicate roads\n\n";
-
-    while (my ($road, $pchain) = each %rchain) {
-        for (my $i=0; $i<$#{$pchain}; $i++) {
-            if ( $nodid{$pchain->[$i]} && $nodid{$pchain->[$i+1]} )   {
-                push @{$segways{join(":",( sort {$a cmp $b} ($pchain->[$i],$pchain->[$i+1]) ))}}, $road;
+    if ( $mergeroads ) {
+        print "\n\n\n";
+        print STDERR "Merging roads...          ";
+    
+        my $countmerg = 0;
+        my @keys = keys %road;
+    
+        my $i = 0;
+        while ($i < scalar @keys) {
+            
+            my $r1 = $keys[$i];
+            
+            unless ( exists $road{$r1} ) {
+                $i++;
+                next;
             }
-        }
-    }
-
-    my $countdupsegs  = 0;
-    my $countduproads = 0;
-
-    my %roadsegs;
-    my %roadpos;
-
-    for my $seg (keys %segways) {
-        if ( $#{$segways{$seg}} > 0 ) {
-            $countdupsegs ++;
-            my $roads = join ", ", ( sort {$a cmp $b} @{$segways{$seg}} );
-            $roadsegs{$roads} ++;
-            my ($point) = split (":", $seg);
-            $roadpos{$roads} = $node{$point};
-        }
-    }
-
-    for my $road (keys %roadsegs) {
-        $countduproads ++;
-        printf "; ERROR: Roads $road has $roadsegs{$road} duplicate segments near ($roadpos{$road})\n";
-    }
-
-    printf STDERR "$countdupsegs segments, $countduproads roads\n";
-}
-
-
-
-
-####    Fixing self-intersections and long roads
-
-if ($splitroads) {
-    my $countself = 0;
-    my $countlong = 0;
-    print "\n\n\n";
-
-    print STDERR "Splitting roads...        ";
-    while (my ($road, $pchain) = each %rchain) {
-        my $j = 0;
-        my @breaks = ();
-        my $break = 0;
-        my $rnod = 1;
-        for (my $i=1; $i < scalar @{$pchain}; $i++) {
-            $rnod ++  if ( ${nodid{$pchain->[$i]}} );
-            if (scalar (grep { $_ eq $pchain->[$i] } @{$pchain}[$break..$i-1]) > 0) {
-                $countself ++;
-#                print "; ERROR: WayID=$road has self-intersecton near (${nodes{$pchain->[$i]}})  ($i $j)\n";
-                if ($pchain->[$i] ne $pchain->[$j]) {
-                    $break = $j;
-                    push @breaks, $break;
-                } else {
-                    $break = ($i + $j) >> 1;
-                    push @breaks, $break;
-                    $nodid{$pchain->[$break]} = $nodcount++;
-                    printf "; FIX: Added NodID=%d for NodeID=%s at (%s)\n", $nodid{$pchain->[$break]}, $pchain->[$break], $node{$pchain->[$break]};
+    
+            my $p1 = $road{$r1}->{chain};
+    
+            my @list = ();
+            for my $r2 (@{$rstart{$p1->[-1]}}) {
+                if ( $r1 ne $r2  
+                  && $road{$r1}->{name} eq $road{$r2}->{name}
+                  && $road{$r1}->{city} eq $road{$r2}->{city}
+                  && $road{$r1}->{rp}   eq $road{$r2}->{rp}
+                  && lcos( $p1->[-2], $p1->[-1], $road{$r2}->{chain}->[1] ) > $mergecos ) {
+                    push @list, $r2
                 }
-                $rnod = 1;
             }
-            if ($rnod == $maxroadnodes) {
-                $countlong ++;
-#                print "; ERROR: WayID=$road has too many nodes  ($i $j)\n";
-                $break = $j;
-                push @breaks, $break;
-                $rnod = 1;
-            }
-            $j = $i             if ($nodid{$pchain->[$i]});
-        }
-        if (scalar @breaks > 0) {
-            printf "; FIX: WayID=$road is splitted at %s\n", join (", ", @breaks);
-            push @breaks, $#{$pchain};
-            for (my $i=0; $i<$#breaks; $i++) {
-                my $id = $road."/".($i+1);
-                printf "; FIX: Added road %s, nodes from %d to %d\n", $id, $breaks[$i], $breaks[$i+1];
-                $rchain{$id} = [ @{$pchain}[$breaks[$i] .. $breaks[$i+1]] ];
-                $rprops{$id} = $rprops{$road};
-                $risin{$id}  = $risin{$road};
 
+            # merging
+            if ( @list ) {
+                $countmerg ++;
+                @list  =  sort {  lcos( $p1->[-2], $p1->[-1], $road{$b}->{chain}->[1] ) 
+                              <=> lcos( $p1->[-2], $p1->[-1], $road{$a}->{chain}->[1] )  }  @list;
+
+                printf "; FIX: Road WayID=$r1 may be merged with %s at (%s)\n", join ( q{, }, @list ), $node{$p1->[-1]};
+    
+                my $r2 = $list[0];
+    
+                # process associated restrictions
                 if ($restrictions) {
                     while ( my ($relid, $tr) = each %trest )  {
-                        if ( $tr->{to_way} eq $road ) {
-                            #print "; Rel=$relid   ". join (" : ", %{$tr}) ."\n";
-                            if ( $tr->{to_pos} > $breaks[$i]-(1+$tr->{to_dir})/2 && $tr->{to_pos} <= $breaks[$i+1]-(1+$tr->{to_dir})/2 ) {
-                                $tr->{to_way} = $id;
-                                $tr->{to_pos} -= $breaks[$i];
-                                print "; FIX: Turn restriction RelID=$relid moved to WayID=$id\n";
-                                #print "; now Rel=$relid   ". join (" : ", %{$tr}) ."\n";
-                            }
+                        if ( $tr->{fr_way} eq $r2 )  {
+                            print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
+                            $tr->{fr_way} = $r1;
+                            $tr->{fr_pos} += ( scalar @{$road{$r1}->{chain}} - 1 );
                         }
-                        if ( $tr->{fr_way} eq $road ) {
-                            #print "; Rel=$relid   ". join (" : ", %{$tr}) ."\n";
-                            if ( $tr->{fr_pos} > $breaks[$i]+($tr->{fr_dir}-1)/2 && $tr->{fr_pos} <= $breaks[$i+1]+($tr->{fr_dir}-1)/2 ) {
-                                $tr->{fr_way} = $id;
-                                $tr->{fr_pos} -= $breaks[$i];
-                                print "; FIX: Turn restriction RelID=$relid moved to WayID=$id\n";
-                                #print "; now Rel=$relid   ". join (" : ", %{$tr}) ."\n";
+                        if ( $tr->{to_way} eq $r2 )  {
+                            print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
+                            $tr->{to_way} = $r1;
+                            $tr->{to_pos} += ( scalar @{$road{$r1}->{chain}} - 1 );
+                        }
+                    }
+                }
+    
+                $enode{$road{$r2}->{chain}->[0]} -= 2;
+                pop  @{$road{$r1}->{chain}};
+                push @{$road{$r1}->{chain}}, @{$road{$r2}->{chain}};
+    
+                delete $road{$r2};
+                @{$rstart{$p1->[-1]}} = grep { $_ ne $r2 } @{$rstart{$p1->[-1]}};
+    
+            } else {
+                $i ++;
+            }
+        }
+    
+        print STDERR "$countmerg merged\n";
+    }
+
+
+
+
+
+    ###    generating routing graph
+
+    my %rnodes;
+
+    print STDERR "Detecting road nodes...   ";
+
+    while (my ($roadid, $road) = each %road) {
+        for my $node (@{$road->{chain}}) {
+            $rnodes{$node} ++;
+            push @{$nodeways{$node}}, $roadid         if ($nodetr{$node} || ($disableuturns && $enode{$node}==2));
+        }
+    }
+
+    my $nodcount = 1;
+    my $utcount  = 0;
+    for my $node (keys %rnodes) {
+        if ( $rnodes{$node}>1 || $enode{$node}>0 || $xnode{$node} || (defined($nodetr{$node}) && scalar @{$nodetr{$node}}) ) {
+            $nodid{$node} = $nodcount++;
+        }
+        if ($disableuturns && $rnodes{$node}==2 && $enode{$node}==2) {
+            if ( $road{$nodeways{$node}->[0]}->{rp} =~ /^.,.,0/ ) {
+                my $dir = indexof ($road{$nodeways{$node}->[0]}->{chain}, $node);
+                $trest{"ut".$utcount++} = { node => $node,  type => "no",
+                            fr_way => $nodeways{$node}->[0],
+                            fr_dir => ($dir>0) ? 1 : -1,
+                            fr_pos => $dir,
+                            to_way => $nodeways{$node}->[0],
+                            to_dir => ($dir>0) ? -1 : 1,
+                            to_pos => $dir };
+            }
+            if ( $road{$nodeways{$node}->[1]}->{rp} =~ /^.,.,0/ ) {
+                my $dir = indexof ($road{$nodeways{$node}->[1]}->{chain}, $node);
+                $trest{"ut".$utcount++} = { node => $node,  type => "no",
+                            fr_way => $nodeways{$node}->[1],
+                            fr_dir => ($dir>0) ? 1 : -1,
+                            fr_pos => $dir,
+                            to_way => $nodeways{$node}->[1],
+                            to_dir => ($dir>0) ? -1 : 1,
+                            to_pos => $dir };
+            }
+        }
+    }
+
+    printf STDERR "%d found\n", scalar keys %nodid;
+
+
+
+
+
+    ###    detecting duplicate road segments
+
+
+    if ($detectdupes) {
+
+        my %segways;
+    
+        print STDERR "Detecting duplicates...   ";
+        print "\n\n\n; ### Duplicate roads\n\n";
+    
+        while (my ($roadid, $road) = each %road) {
+            for (my $i=0; $i < $#{$road->{chain}}; $i++) {
+                if ( $nodid{$road->{chain}->[$i]} && $nodid{$road->{chain}->[$i+1]} )   {
+                    push @{$segways{join(":",( sort {$a cmp $b} ($road->{chain}->[$i],$road->{chain}->[$i+1]) ))}}, $roadid;
+                }
+            }
+        }
+    
+        my $countdupsegs  = 0;
+        my $countduproads = 0;
+    
+        my %roadsegs;
+        my %roadpos;
+    
+        for my $seg (keys %segways) {
+            if ( $#{$segways{$seg}} > 0 ) {
+                $countdupsegs ++;
+                my $roads = join ", ", ( sort {$a cmp $b} @{$segways{$seg}} );
+                $roadsegs{$roads} ++;
+                my ($point) = split (":", $seg);
+                $roadpos{$roads} = $node{$point};
+            }
+        }
+    
+        for my $road (keys %roadsegs) {
+            $countduproads ++;
+            printf "; ERROR: Roads $road has $roadsegs{$road} duplicate segments near ($roadpos{$road})\n";
+        }
+    
+        printf STDERR "$countdupsegs segments, $countduproads roads\n";
+    }
+
+
+
+
+    ####    fixing self-intersections and long roads
+
+    if ($splitroads) {
+        my $countself = 0;
+        my $countlong = 0;
+        print "\n\n\n";
+        
+        print STDERR "Splitting roads...        ";
+        while (my ($roadid, $road) = each %road) {
+            my $j = 0;
+            my @breaks = ();
+            my $break = 0;
+            my $rnod = 1;
+            for (my $i=1; $i < scalar @{$road->{chain}}; $i++) {
+                $rnod ++  if ( ${nodid{$road->{chain}->[$i]}} );
+                if (scalar (grep { $_ eq $road->{chain}->[$i] } @{$road->{chain}}[$break..$i-1]) > 0) {
+                    $countself ++;
+                    if ($road->{chain}->[$i] ne $road->{chain}->[$j]) {
+                        $break = $j;
+                        push @breaks, $break;
+                    } else {
+                        $break = ($i + $j) >> 1;
+                        push @breaks, $break;
+                        $nodid{$road->{chain}->[$break]} = $nodcount++;
+                        printf "; FIX: Added NodID=%d for NodeID=%s at (%s)\n", $nodid{$road->{chain}->[$break]}, $road->{chain}->[$break], $node{$road->{chain}->[$break]};
+                    }
+                    $rnod = 1;
+                }
+                if ($rnod == $maxroadnodes) {
+                    $countlong ++;
+                    $break = $j;
+                    push @breaks, $break;
+                    $rnod = 1;
+                }
+                $j = $i             if ($nodid{$road->{chain}->[$i]});
+            }
+            if (scalar @breaks > 0) {
+                printf "; FIX: WayID=$road is splitted at %s\n", join (", ", @breaks);
+                push @breaks, $#{$road->{chain}};
+                for (my $i=0; $i<$#breaks; $i++) {
+                    my $id = $roadid."/".($i+1);
+                    printf "; FIX: Added road %s, nodes from %d to %d\n", $id, $breaks[$i], $breaks[$i+1];
+                    $road{$id}->{chain} = [ @{$road->{chain}}[$breaks[$i] .. $breaks[$i+1]] ];
+                    $road{$id}->{type}  = $road{$roadid}->{type};
+                    $road{$id}->{name}  = $road{$roadid}->{name};
+                    $road{$id}->{city}  = $road{$roadid}->{city};
+                    $road{$id}->{rp}    = $road{$roadid}->{rp};
+        
+                    if ($restrictions) {
+                        while ( my ($relid, $tr) = each %trest )  {
+                            if ( $tr->{to_way} eq $roadid ) {
+                                if ( $tr->{to_pos} > $breaks[$i]-(1+$tr->{to_dir})/2 && $tr->{to_pos} <= $breaks[$i+1]-(1+$tr->{to_dir})/2 ) {
+                                    #print "; Rel=$relid   ". join (" : ", %{$tr}) ."\n";
+                                    $tr->{to_way} = $id;
+                                    $tr->{to_pos} -= $breaks[$i];
+                                    print "; FIX: Turn restriction RelID=$relid moved to WayID=$id\n";
+                                    #print "; now Rel=$relid   ". join (" : ", %{$tr}) ."\n";
+                                }
+                            }
+                            if ( $tr->{fr_way} eq $roadid ) {
+                                if ( $tr->{fr_pos} > $breaks[$i]+($tr->{fr_dir}-1)/2 && $tr->{fr_pos} <= $breaks[$i+1]+($tr->{fr_dir}-1)/2 ) {
+                                    #print "; Rel=$relid   ". join (" : ", %{$tr}) ."\n";
+                                    $tr->{fr_way} = $id;
+                                    $tr->{fr_pos} -= $breaks[$i];
+                                    print "; FIX: Turn restriction RelID=$relid moved to WayID=$id\n";
+                                    #print "; now Rel=$relid   ". join (" : ", %{$tr}) ."\n";
+                                }
                             }
                         }
                     }
                 }
+                $#{$road->{chain}} = $breaks[0];
             }
-            $#{$pchain} = $breaks[0];
         }
+        print STDERR "$countself self-intersections, $countlong long roads\n";
     }
-    print STDERR "$countself self-intersections, $countlong long roads\n";
-}
+    
 
 
 
 
+    ###    fixing too close nodes
 
-####    Fixing "too close nodes" error
-
-if ($fixclosenodes) {
-    my $countclose = 0;
-
-    print "\n\n\n";
-    print STDERR "Fixing close nodes...     ";
-    while (my ($road, $pchain) = each %rchain) {
-        my $cnode = $pchain->[0];
-        for my $node (@{$pchain}[1..$#{$pchain}]) {
-            if ($node ne $cnode && $nodid{$node}) {
-                if (closenodes($cnode, $node)) {
-                    print "; ERROR: too close nodes $cnode and $node, WayID=$road near (${node{$node}})\n";
-                    $countclose ++;
+    if ($fixclosenodes) {
+        my $countclose = 0;
+        
+        print "\n\n\n";
+        print STDERR "Fixing close nodes...     ";
+        while (my ($roadid, $road) = each %road) {
+            my $cnode = $road->{chain}->[0];
+            for my $node (@{$road->{chain}}[1..$#{$road->{chain}}]) {
+                if ($node ne $cnode && $nodid{$node}) {
+                    if (closenodes($cnode, $node)) {
+                        print "; ERROR: too close nodes $cnode and $node, WayID=$roadid near (${node{$node}})\n";
+                        $countclose ++;
+                    }
+                    $cnode = $node;
                 }
-                $cnode = $node;
             }
         }
-    }
-    print STDERR "$countclose pairs fixed\n";
-}
-
-
-
-
-
-
-####    Dumping roads
-
-my %roadid;
-
-print STDERR "Writing roads...          ";
-print "\n\n\n; ### Roads\n\n";
-
-my $roadcount = 1;
-while (my ($road, $pchain) = each %rchain) {
-    my ($poly, $name, $rp) = @{$rprops{$road}};
-    my @type = @{$polytype{$poly}};
-
-    $roadid{$road} = $roadcount;
-
-    #  @type == [ $mode, $type, $prio, $llev, $hlev, $rp ]
-    print  "; WayID = $road\n";
-    print  "; $poly\n";
-    print  "[POLYLINE]\n";
-    printf "Type=%s\n",        $type[1];
-    printf "EndLevel=%d\n",    $type[4]             if ($type[4] > $type[3]);
-    print  "Label=$name\n"                          if ($name);
-    print  "StreetDesc=$name\n"                     if ($name && $navitel);
-    print  "DirIndicator=1\n"                       if ((split /\,/, $rp)[2]);
-
-
-    if ($risin{$road}) {
-        my $rcity = $city{$risin{$road}};
-        print "CityName=$rcity->{name}\n";
-        print "RegionName=$rcity->{region}\n"       if ($rcity->{region});
-        print "CountryName=$rcity->{country}\n"     if ($rcity->{country});
-    } elsif ($name && $defaultcity) {
-        print "CityName=$defaultcity\n";
+        print STDERR "$countclose pairs fixed\n";
     }
 
-    printf "Data%d=(%s)\n", $type[3], join ("), (", @node{@{$pchain}});
-    printf "RoadID=%d\n", $roadcount++;
-    printf "RouteParams=%s\n", $rp;
 
-    my $nodcount=0;
-    for (my $i=0; $i < scalar @{$pchain}; $i++) {
-        my $node = $pchain->[$i];
-        if ($nodid{$node}) {
-            printf "Nod%d=%d,%d,%d\n", $nodcount++, $i, $nodid{$node}, $xnodes{$node};
+
+
+
+
+    ###    dumping roads
+
+
+    print STDERR "Writing roads...          ";
+    print "\n\n\n; ### Roads\n\n";
+
+    my $roadcount = 1;
+    while (my ($roadid, $road) = each %road) {
+
+        next unless @{$road->{chain}};  ### FIX!!! 
+        
+        my ($poly, $name, $rp) = ($road->{type}, $road->{name}, $road->{rp});
+        my @type = @{$polytype{$poly}};
+        
+        $roadid{$roadid} = $roadcount;
+        
+        #  @type == [ $mode, $type, $prio, $llev, $hlev, $rp ]
+        print  "; WayID = $roadid\n";
+        print  "; $poly\n";
+        print  "[POLYLINE]\n";
+        printf "Type=%s\n",        $type[1];
+        printf "EndLevel=%d\n",    $type[4]             if ($type[4] > $type[3]);
+        print  "Label=$name\n"                          if ($name);
+        print  "StreetDesc=$name\n"                     if ($name && $navitel);
+        print  "DirIndicator=1\n"                       if ((split /\,/, $rp)[2]);
+        
+        
+        if ($road->{city}) {
+            my $rcity = $city{$road->{city}};
+            print "CityName=$rcity->{name}\n";
+            print "RegionName=$rcity->{region}\n"       if ($rcity->{region});
+            print "CountryName=$rcity->{country}\n"     if ($rcity->{country});
+        } elsif ($name && $defaultcity) {
+            print "CityName=$defaultcity\n";
         }
+        
+        printf "Data%d=(%s)\n", $type[3], join ("), (", @node{@{$road->{chain}}});
+        printf "RoadID=%d\n", $roadcount++;
+        printf "RouteParams=%s\n", $rp;
+        
+        my $nodcount=0;
+        for (my $i=0; $i < scalar @{$road->{chain}}; $i++) {
+            my $node = $road->{chain}->[$i];
+            if ($nodid{$node}) {
+                printf "Nod%d=%d,%d,%d\n", $nodcount++, $i, $nodid{$node}, $xnode{$node};
+            }
+        }
+        
+        print  "[END]\n\n\n";
     }
 
-    print  "[END]\n\n\n";
-}
+    printf STDERR "%d written\n", $roadcount-1;
 
-printf STDERR "%d written\n", $roadcount-1;
-
-
+} # if $routing
 
 
 
@@ -1388,7 +1452,8 @@ if ($bounds && $background) {
 ####    Writing turn restrictions
 
 my $counttrest = 0;
-if ($restrictions) {
+
+if ( $routing && $restrictions  ) {
 
     print "\n\n\n; ### Turn restrictions\n\n";
 
@@ -1414,16 +1479,16 @@ if ($restrictions) {
                     fr_dir  => $tr->{fr_dir},
                     fr_pos  => $tr->{fr_pos}
                 );
-            for my $road (@{$nodeways{$trest{$relid}->{node}}}) {
-                print "; To road $road \n";
-                $newtr{to_way} = $road;
-                $newtr{to_pos} = indexof( $rchain{$road}, $tr->{node} );
+            for my $roadid (@{$nodeways{$trest{$relid}->{node}}}) {
+                print "; To road $roadid \n";
+                $newtr{to_way} = $roadid;
+                $newtr{to_pos} = indexof( $road{$roadid}->{chain}, $tr->{node} );
 
-                if ( $newtr{to_pos} > 0 && !($tr->{to_way} eq $road && $tr->{to_dir} eq -1) && ($rprops{$road}[2] !~ /^.,.,1/) ) {
+                if ( $newtr{to_pos} > 0 && !($tr->{to_way} eq $roadid && $tr->{to_dir} eq -1) && ($road{$roadid}->{rp} !~ /^.,.,1/) ) {
                     $newtr{to_dir} = -1;
                     dumptrest (\%newtr);
                 }
-                if ( $newtr{to_pos} < $#{$rchain{$road}} && !($tr->{to_way} eq $road && $tr->{to_dir} eq 1) ) {
+                if ( $newtr{to_pos} < $#{$road{$roadid}->{chain}} && !($tr->{to_way} eq $roadid && $tr->{to_dir} eq 1) ) {
                     $newtr{to_dir} = 1;
                     dumptrest (\%newtr);
                 }
@@ -1565,9 +1630,9 @@ sub dumptrest {                 # \%trest
     my $tr = $_[0];
 
     my $i = $tr->{fr_pos} - $tr->{fr_dir};
-    $i -= $tr->{fr_dir}         while ( !$nodid{$rchain{$tr->{fr_way}}->[$i]} && $i>=0 && $i < $#{$rchain{$tr->{fr_way}}} );
+    $i -= $tr->{fr_dir}         while ( !$nodid{$road{$tr->{fr_way}}->{chain}->[$i]} && $i>=0 && $i < $#{$road{$tr->{fr_way}}->{chain}} );
     my $j = $tr->{to_pos} + $tr->{to_dir};
-    $j += $tr->{to_dir}         while ( !$nodid{$rchain{$tr->{to_way}}->[$j]} && $j>=0 && $j < $#{$rchain{$tr->{to_way}}} );
+    $j += $tr->{to_dir}         while ( !$nodid{$road{$tr->{to_way}}->{chain}->[$j]} && $j>=0 && $j < $#{$road{$tr->{to_way}}->{chain}} );
 
     unless ( ${nodid{$tr->{node}}} ) {
         print "; Restriction is outside boundaries\n";
@@ -1576,7 +1641,7 @@ sub dumptrest {                 # \%trest
     
     print  "[Restrict]\n";
     printf "Nod=${nodid{$tr->{node}}}\n";
-    print  "TraffPoints=${nodid{$rchain{$tr->{fr_way}}->[$i]}},${nodid{$tr->{node}}},${nodid{$rchain{$tr->{to_way}}->[$j]}}\n";
+    print  "TraffPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
     print  "TraffRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
     print  "Time=\n";
     print  "[END-Restrict]\n\n";
@@ -1638,6 +1703,7 @@ Possible options [defaults]:
     --defaultcity <name>                                        [$defaultcity]
     --navitel                 write addresses for polygons              [$onoff[$navitel]]
 
+    --routing                 produce routable map                      [$onoff[$routing]]
     --mergeroads              merge same ways                           [$onoff[$mergeroads]]
     --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
     --splitroads              split long and self-intersecting roads    [$onoff[$splitroads]]
