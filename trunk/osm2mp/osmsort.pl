@@ -31,6 +31,7 @@ while (<>) {
         $minlon = $minln    if $minln < $minlon;
         $maxlat = $maxlt    if $maxlt > $maxlat;
         $maxlon = $maxln    if $maxln > $maxlon;
+        next;
     }
 
     if ( /<\/?osm/ )                    { next; }
