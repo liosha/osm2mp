@@ -115,7 +115,8 @@ while ( my $area = shift @areas ) {
     print STDERR '+';
 
     # 1 -> horisontal split, 0 -> vertical split
-    my $hv = ( $area->{maxlon}-$area->{minlon} > $area->{maxlat}-$area->{minlat} );
+    my $hv = ( ($area->{maxlon}-$area->{minlon}) * cos( ($area->{maxlat}+$area->{minlat})/2 / 180 * 3.14159 )
+             > ($area->{maxlat}-$area->{minlat}) );
     
     my $sumlat = 0;
     my $sumlon = 0;
@@ -173,7 +174,8 @@ printf STDERR " %d tiles\n", scalar @tiles;
 
 print STDERR "Reserving memory...           ";
 for my $tile (@tiles) {
-    $tile->{nodes} = Bit::Vector->new($nodeid_max+1);
+#    $tile->{nodes} = Bit::Vector->new($nodeid_max+1);
+    $tile->{nodes} = Bit::Vector->new($MAXNODES);
     $tile->{ways}  = Bit::Vector->new($MAXWAYS);
     $tile->{rels}  = Bit::Vector->new($MAXRELS);
 }
@@ -341,9 +343,9 @@ for my $area (@tiles) {
      print  $fh "<osm version='0.6' generator='Tile Splitter'>\n";
      printf $fh "  <bound box='%f,%f,%f,%f' origin='http://www.openstreetmap.org/api/0.6'/>\n", 
             $area->{minlat},
-            $area->{minlon},
+            $area->{minlon} < -180  ?  -180  :  $area->{minlon},
             $area->{maxlat},
-            $area->{maxlon};
+            $area->{maxlon} >  180  ?   180  :  $area->{maxlon};
 
      $mapid ++;
 }
