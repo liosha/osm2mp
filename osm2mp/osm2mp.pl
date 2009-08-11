@@ -360,37 +360,37 @@ while ( my $line = <IN> ) {
         my ($mtype, $mid, $mrole)  = 
             $line =~ / type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']+)["']/;
 
-        $mp_outer   = $mid      if  $mtype eq "way"  &&  $mrole eq "outer";
-        push @mp_inner, $mid    if  $mtype eq "way"  &&  $mrole eq "inner";
+        $mp_outer   = $mid      if  $mtype eq 'way'  &&  $mrole eq 'outer';
+        push @mp_inner, $mid    if  $mtype eq 'way'  &&  $mrole eq 'inner';
 
-        $tr_from    = $mid      if  $mtype eq "way"  &&  $mrole eq "from";
-        $tr_to      = $mid      if  $mtype eq "way"  &&  $mrole eq "to";
-        $tr_via     = $mid      if  $mtype eq "node" &&  $mrole eq "via";
+        $tr_from    = $mid      if  $mtype eq 'way'  &&  $mrole eq 'from';
+        $tr_to      = $mid      if  $mtype eq 'way'  &&  $mrole eq 'to';
+        $tr_via     = $mid      if  $mtype eq 'node' &&  $mrole eq 'via';
 
         next;
     }
 
     if ( $line =~ /<tag/ ) {
         my ($key, $val)  =  $line =~ / k=["']([^"']+)["'].* v=["']([^"']+)["']/;
-        $reltype = $val         if  $key eq "type";
-        $tr_type = $val         if  $key eq "restriction";
+        $reltype = $val         if  $key eq 'type';
+        $tr_type = $val         if  $key eq 'restriction';
         next;
     }
 
     if ( $line =~ /<\/relation/ ) {
-        if ( $reltype eq "multipolygon" ) {
+        if ( $reltype eq 'multipolygon' ) {
             $mpoly{$mp_outer}   = [ @mp_inner ];
             for my $hole (@mp_inner) {
                 $mphole{$hole} = 1;
             }
         }
-        if ( $routing  &&  $restrictions  &&  $reltype eq "restriction" ) {
-            $tr_to = $tr_from       if  $tr_type eq "no_u_turn"  &&  !$tr_to;
+        if ( $routing  &&  $restrictions  &&  $reltype eq 'restriction' ) {
+            $tr_to = $tr_from       if  $tr_type eq 'no_u_turn'  &&  !$tr_to;
 
             if ( $tr_from && $tr_via && $tr_to ) {
                 $trest{$relid} = { 
                     node    => $tr_via,
-                    type    => ($tr_type =~ /^only_/) ? "only" : "no",
+                    type    => ($tr_type =~ /^only_/) ? 'only' : 'no',
                     fr_way  => $tr_from,
                     fr_dir  => 0,
                     fr_pos  => -1,
@@ -466,7 +466,7 @@ while ( my $line = <IN> ) {
        }
 
        ##       this way is city bound
-       if ( $waytag{"place"} eq "city"  ||  $waytag{"place"} eq "town" ) { 
+       if ( $waytag{'place'} eq 'city'  ||  $waytag{'place'} eq 'town' ) { 
            my $name = convert_string ( first {defined} @waytag{@citynamelist} );
 
            if ( $name  &&  $chain[0] eq $chain[-1] ) {
@@ -927,7 +927,7 @@ if ( $shorelines ) {
         my @tbound;
         my $pos = 0;
 
-        for ( my $i = 0;  $i < $#bound;  $i++ ) {
+        for my $i ( 0 .. $#bound-1 ) {
 
             push @tbound, {
                 type    =>  'bound', 
@@ -940,20 +940,7 @@ if ( $shorelines ) {
                 # check start of coastline
                 my $p1      = [ reverse  split q{,}, $node{$coast{$sline}->[0]} ];
                 my $p2      = [ reverse  split q{,}, $node{$coast{$sline}->[1]} ];
-                my $ipoint  = SegmentIntersection( [ $bound[$i], $bound[$i+1], $p1, $p2 ] );
-
-                use Data::Dump;
-
-
-                unless ( $ipoint ) {
-                    if ( DistanceToSegment( [ $bound[$i], $bound[$i+1], $p1 ] ) == 0 ) {
-                        $ipoint = $p1;
-                    }
-                    if ( DistanceToSegment( [ $bound[$i], $bound[$i+1], $p2 ] ) == 0 
-                      && !is_inside_bounds( $node{$coast{$sline}->[0]} ) ) {
-                        $ipoint = $p2;
-                    }
-                }
+                my $ipoint  = segment_intersection( $bound[$i], $bound[$i+1], $p1, $p2 );
 
                 if ( $ipoint ) {
                     if ( grep { $_->{type} eq 'end'  &&  $_->{point} ~~ $ipoint } @tbound ) {
@@ -963,7 +950,7 @@ if ( $shorelines ) {
                         push @tbound, {
                             type    =>  'start', 
                             point   =>  $ipoint, 
-                            pos     =>  $pos + SegmentLength( [$bound[$i],$ipoint] ), 
+                            pos     =>  $pos + segment_length( $bound[$i], $ipoint ), 
                             line    =>  $sline,
                         };
                     }
@@ -972,17 +959,7 @@ if ( $shorelines ) {
                 # check end of coastline
                 my $p1      = [ reverse  split q{,}, $node{$coast{$sline}->[-1]} ];
                 my $p2      = [ reverse  split q{,}, $node{$coast{$sline}->[-2]} ];
-                my $ipoint  = SegmentIntersection( [ $bound[$i], $bound[$i+1], $p1, $p2 ] );
-
-                unless ( $ipoint ) {
-                    if ( DistanceToSegment( [ $bound[$i], $bound[$i+1], $p1 ] ) == 0 ) {
-                        $ipoint = $p1;
-                    }
-                    if ( DistanceToSegment( [ $bound[$i], $bound[$i+1], $p2 ] ) == 0 
-                      && !is_inside_bounds( $node{$coast{$sline}->[-1]} ) ) {
-                        $ipoint = $p2;
-                    }
-                }
+                my $ipoint  = segment_intersection( $bound[$i], $bound[$i+1], $p1, $p2 );
 
                 if ( $ipoint ) {
                     if ( grep { $_->{type} eq 'start'  &&  $_->{point} ~~ $ipoint } @tbound ) {
@@ -992,14 +969,14 @@ if ( $shorelines ) {
                         push @tbound, {
                             type    =>  'end', 
                             point   =>  $ipoint, 
-                            pos     =>  $pos + SegmentLength( [$bound[$i],$ipoint] ), 
+                            pos     =>  $pos + segment_length( $bound[$i], $ipoint ), 
                             line    =>  $sline,
                         };
                     }
                 }
             }
 
-            $pos += SegmentLength( [ $bound[$i], $bound[$i+1] ] );
+            $pos += segment_length( $bound[$i], $bound[$i+1] );
         }
 
         # rotate if sea at $tbound[0]
@@ -1147,14 +1124,16 @@ if ( $routing ) {
                 if ( $restrictions ) {
                     while ( my ($relid, $tr) = each %trest )  {
                         if ( $tr->{fr_way} eq $r2 )  {
-                            print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
-                            $tr->{fr_way} = $r1;
-                            $tr->{fr_pos} += ( scalar @{$road{$r1}->{chain}} - 1 );
+                            print "; FIX: RelID=$relid FROM moved from WayID=$r2($tr->{fr_pos})";
+                            $tr->{fr_way}  = $r1;
+                            $tr->{fr_pos} += $#{$road{$r1}->{chain}};
+                            print " to WayID=$r1($tr->{fr_pos})\n";
                         }
                         if ( $tr->{to_way} eq $r2 )  {
-                            print "; FIX: RelID=$relid FROM moved from WayID=$r2 to WayID=$r1\n";
-                            $tr->{to_way} = $r1;
-                            $tr->{to_pos} += ( scalar @{$road{$r1}->{chain}} - 1 );
+                            print "; FIX: RelID=$relid TO moved from WayID=$r2($tr->{to_pos})";
+                            $tr->{to_way}  = $r1;
+                            $tr->{to_pos} += $#{$road{$r1}->{chain}};
+                            print " to WayID=$r1($tr->{to_pos})\n";
                         }
                     }
                 }
@@ -1251,7 +1230,7 @@ if ( $routing ) {
         print "\n\n\n; ### Duplicate roads\n\n";
     
         while ( my ($roadid, $road) = each %road ) {
-            for ( my $i = 0;  $i < $#{$road->{chain}};  $i ++ ) {
+            for my $i ( 0 .. $#{$road->{chain}} - 1 ) {
                 if (  $nodid{ $road->{chain}->[$i] } 
                   &&  $nodid{ $road->{chain}->[$i+1] } ) {
                     my $seg = join q{:}, sort {$a cmp $b} ($road->{chain}->[$i], $road->{chain}->[$i+1]);
@@ -1300,7 +1279,8 @@ if ( $routing ) {
             my $rnod    = 1;
             my $prev    = 0;
 
-            for ( my $i = 1;  $i < scalar @{$road->{chain}};  $i++ ) {
+            #   test for split conditions
+            for my $i ( 1 .. $#{$road->{chain}} ) {
                 $rnod ++    if  $nodid{ $road->{chain}->[$i] };
 
                 if ( grep { $_ eq $road->{chain}->[$i] } @{$road->{chain}}[$break..$i-1] ) {
@@ -1317,24 +1297,27 @@ if ( $routing ) {
                             $road->{chain}->[$break],
                             $node{$road->{chain}->[$break]};
                     }
-                    $rnod = 1;
+                    $rnod = 2;
                 }
 
                 if ( $rnod == $maxroadnodes ) {
                     $countlong ++;
                     $break = $prev;
                     push @breaks, $break;
-                    $rnod = 1;
+                    $rnod = 2;
                 }
 
                 $prev = $i      if  $nodid{ $road->{chain}->[$i] };
             }
 
+
+
+            #   split
             if ( @breaks ) {
-                printf "; FIX: WayID=$road is splitted at %s\n", join( q{, }, @breaks );
+                printf "; FIX: WayID=$roadid is splitted at %s\n", join( q{, }, @breaks );
                 push @breaks, $#{$road->{chain}};
 
-                for ( my $i = 0;  $i < $#breaks;  $i++ ) {
+                for my $i ( 0 .. $#breaks - 1 ) {
                     my $id = $roadid.'/'.($i+1);
                     printf "; FIX: Added road %s, nodes from %d to %d\n", $id, $breaks[$i], $breaks[$i+1];
                     
@@ -1346,26 +1329,39 @@ if ( $routing ) {
                         rp      => $road{$roadid}->{rp},
                     };
 
+                    #   update nod->road list
+                    for my $nod ( grep { exists $nodid{$_} } @{$road{$id}->{chain}} ) {
+                        push @{$nodeways{$nod}}, $id;
+                    }
+
+                    #   move restrictions
                     if ( $restrictions ) {
                         while ( my ($relid, $tr) = each %trest )  {
                             if (  $tr->{to_way} eq $roadid 
                               &&  $tr->{to_pos} >  $breaks[$i]   - (1 + $tr->{to_dir}) / 2 
                               &&  $tr->{to_pos} <= $breaks[$i+1] - (1 + $tr->{to_dir}) / 2 ) {
+                                print "; FIX: Turn restriction RelID=$relid TO moved from $roadid($tr->{to_pos})";
                                 $tr->{to_way}  =  $id;
                                 $tr->{to_pos}  -= $breaks[$i];
-                                print "; FIX: Turn restriction RelID=$relid moved to WayID=$id\n";
+                                print " to $id($tr->{to_pos})\n";
                             }
                             if (  $tr->{fr_way} eq $roadid 
                               &&  $tr->{fr_pos} >  $breaks[$i]   + ($tr->{fr_dir} - 1) / 2
                               &&  $tr->{fr_pos} <= $breaks[$i+1] + ($tr->{fr_dir} - 1) / 2 ) {
+                                print "; FIX: Turn restriction RelID=$relid FROM moved from $roadid($tr->{fr_pos})";
                                 $tr->{fr_way} =  $id;
                                 $tr->{fr_pos} -= $breaks[$i];
-                                print "; FIX: Turn restriction RelID=$relid moved to WayID=$id\n";
-                                
+                                print " to $id($tr->{fr_pos})\n";
                             }
                         }
                     }
                 }
+
+                #   update nod->road list
+                for my $nod ( grep { exists $nodid{$_} } @{$road->{chain}}[$breaks[0]+1 ..$#{$road->{chain}}] ) {
+                    @{$nodeways{$nod}} = grep { $_ ne $roadid } @{$nodeways{$nod}};
+                }
+
                 $#{$road->{chain}} = $breaks[0];
             }
         }
@@ -1417,7 +1413,6 @@ if ( $routing ) {
         
         $roadid{$roadid} = $roadcount++;
         
-        #  @type == [ $mode, $type, $prio, $llev, $hlev, $rp ]
         print  "; WayID = $roadid\n";
         print  "; $poly\n";
         print  "[POLYLINE]\n";
@@ -1442,7 +1437,7 @@ if ( $routing ) {
         
         
         my $nodcount = 0;
-        for my $i (0..$#{$road->{chain}}) {
+        for my $i ( 0 .. $#{$road->{chain}} ) {
             my $node = $road->{chain}->[$i];
             if ( $nodid{$node} ) {
                 printf "Nod%d=%d,%d,%d\n", $nodcount++, $i, $nodid{$node}, $xnode{$node};
@@ -1497,6 +1492,7 @@ if ( $routing && $restrictions  ) {
             next;
         }
 
+        print "\n; RelID = $relid (from $tr->{fr_way} $tr->{type} $tr->{to_way})\n\n";
 
         if ( $tr->{type} eq 'no' ) {
             $counttrest ++;
@@ -1513,12 +1509,12 @@ if ( $routing && $restrictions  ) {
                 );
 
             for my $roadid ( @{$nodeways{ $trest{$relid}->{node} }} ) {
-                print "; To road $roadid \n";
                 $newtr{to_way} = $roadid;
                 $newtr{to_pos} = indexof( $road{$roadid}->{chain}, $tr->{node} );
 
                 if (  $newtr{to_pos} < $#{$road{$roadid}->{chain}} 
                   &&  !( $tr->{to_way} eq $roadid  &&  $tr->{to_dir} eq 1 ) ) {
+                    print "; To road $roadid forward\n";
                     $newtr{to_dir} = 1;
                     $counttrest ++;
                     write_turn_restriction (\%newtr);
@@ -1527,6 +1523,7 @@ if ( $routing && $restrictions  ) {
                 if (  $newtr{to_pos} > 0 
                   &&  !( $tr->{to_way} eq $roadid  &&  $tr->{to_dir} eq -1 ) 
                   &&  $road{$roadid}->{rp} !~ /^.,.,1/ ) {
+                    print "; To road $roadid backward\n";
                     $newtr{to_dir} = -1;
                     $counttrest ++;
                     write_turn_restriction (\%newtr);
@@ -1635,7 +1632,7 @@ sub lcos {                      # NodeID1, NodeID2, NodeID3
 
 
 
-sub speed_code {                 # $speed
+sub speed_code {                        # $speed
     my ($spd) = @_;
     return 7        if $spd >= 110;
     return 6        if $spd >= 90;
@@ -1648,19 +1645,22 @@ sub speed_code {                 # $speed
 }
 
 
-sub is_inside_bbox {                # $latlon
+
+sub is_inside_bbox {                    # $latlon
     my ($lat, $lon) = split q{,}, $_[0];
     return  ( $lat > $minlat  &&  $lon > $minlon  &&  $lat < $maxlat  &&  $lon < $maxlon );
 }
 
 
-sub is_inside_bounds {                # $latlon
+
+sub is_inside_bounds {                  # $latlon
     return is_inside_bbox( @_ )     if  $bbox;
     return $boundpoly->contains( [ reverse split q{,}, $_[0] ] );
 }
 
 
-sub write_turn_restriction {                 # \%trest
+
+sub write_turn_restriction {            # \%trest
 
     my ($tr) = @_;
 
@@ -1688,17 +1688,19 @@ sub write_turn_restriction {                 # \%trest
 }
 
 
+
 sub centroid {
 
     my $slat = 0;
     my $slon = 0;
     my $ssq  = 0;
 
-    for (my $i = 1; $i < scalar(@_) - 1; $i++ ) {
-        my $tlat = ($_[0]->[0]+$_[$i]->[0]+$_[$i+1]->[0])/3;
-        my $tlon = ($_[0]->[1]+$_[$i]->[1]+$_[$i+1]->[1])/3;
+    for my $i ( 1 .. $#_-1 ) {
+        my $tlat = ( $_[0]->[0] + $_[$i]->[0] + $_[$i+1]->[0] ) / 3;
+        my $tlon = ( $_[0]->[1] + $_[$i]->[1] + $_[$i+1]->[1] ) / 3;
 
-        my $tsq = (($_[$i]->[0]-$_[0]->[0])*($_[$i+1]->[1]-$_[0]->[1]) - ($_[$i+1]->[0]-$_[0]->[0])*($_[$i]->[1]-$_[0]->[1]));
+        my $tsq = ( ( $_[$i]  ->[0] - $_[0]->[0] ) * ( $_[$i+1]->[1] - $_[0]->[1] ) 
+                  - ( $_[$i+1]->[0] - $_[0]->[0] ) * ( $_[$i]  ->[1] - $_[0]->[1] ) );
         
         $slat += $tlat * $tsq;
         $slon += $tlon * $tsq;
@@ -1708,6 +1710,21 @@ sub centroid {
 #    return ($slat/$ssq , $slon/$ssq);
     return ($slon/$ssq , $slat/$ssq);
 }
+
+
+
+sub indexof {                   # \@array, $elem
+
+    my ($arr, $el) = @_;
+
+    return -1       unless defined $arr;
+    for ( my $i=0; $i < scalar @$arr; $i++ ) {
+        return $i     if $arr->[$i] eq $el;
+    }
+    return -1;
+}
+
+
 
 
 sub usage  {
@@ -1766,218 +1783,28 @@ You can use no<option> disable features (i.e --nomergeroads)
 
 
 
-sub indexof {                   # \@array, $elem
+###     geometry functions
 
-    return -1   if ( !defined($_[0]) );
-    for (my $i=0; $i < scalar @{$_[0]}; $i++)
-        { return $i if ($_[0]->[$i] eq $_[1]); }
-    return -1;
+sub segment_length {
+  my ($p1,$p2) = @_;
+  return sqrt( ($p2->[0] - $p1->[0])**2 + ($p2->[1] - $p1->[1])**2 );
 }
 
-####    Functions from Math::Geometry::Planar
-##      should be optimised!
+sub segment_intersection {
+    my ($p11, $p12, $p21, $p22) = @_;
 
+    my $Z  = ($p12->[1]-$p11->[1]) * ($p21->[0]-$p22->[0]) - ($p21->[1]-$p22->[1]) * ($p12->[0]-$p11->[0]);
+    my $Ca = ($p12->[1]-$p11->[1]) * ($p21->[0]-$p11->[0]) - ($p21->[1]-$p11->[1]) * ($p12->[0]-$p11->[0]);
+    my $Cb = ($p21->[1]-$p11->[1]) * ($p21->[0]-$p22->[0]) - ($p21->[1]-$p22->[1]) * ($p21->[0]-$p11->[0]);
 
-use Carp;
+    return undef    if  $Z == 0;
 
-################################################################################
-#  
-#  The determinant for the matrix  | x1 y1 |
-#                                  | x2 y2 |
-#
-# args : x1,y1,x2,y2
-#
-sub Determinant {
-  my ($x1,$y1,$x2,$y2) = @_;
-  return ($x1*$y2 - $x2*$y1);
+    my $Ua = $Ca / $Z;
+    my $Ub = $Cb / $Z;
+
+    return undef    if  $Ua < 0  ||  $Ua > 1  ||  $Ub < 0  ||  $Ub > 1;
+
+    return [ $p11->[0] + ( $p12->[0] - $p11->[0] ) * $Ub,
+             $p11->[1] + ( $p12->[1] - $p11->[1] ) * $Ub ];
 }
 
-################################################################################
-#
-# vector dot product
-# calculates dotproduct vectors p1p2 and p3p4
-# The dot product of a and b  is written as a.b and is
-# defined by a.b = |a|*|b|*cos q 
-#
-# args : reference to an array with 4 points p1,p2,p3,p4 defining 2 vectors
-#        a = vector p1p2 and b = vector p3p4
-#        or
-#        reference to an array with 3 points p1,p2,p3 defining 2 vectors
-#        a = vector p1p2 and b = vector p1p3
-#
-sub DotProduct {
-  my $pointsref = $_[0];
-  my @points = @$pointsref;
-  my (@p1,@p2,@p3,@p4);
-  if (@points == 4) {
-    @p1 = @{$points[0]};
-    @p2 = @{$points[1]};
-    @p3 = @{$points[2]};
-    @p4 = @{$points[3]};
-  } elsif (@points == 3) {
-    @p1 = @{$points[0]};
-    @p2 = @{$points[1]};
-    @p3 = @{$points[0]};
-    @p4 = @{$points[2]};
-  } else {
-    carp("Need 3 or 4 points for a dot product");
-    return;
-  }
-  return ($p2[0]-$p1[0])*($p4[0]-$p3[0]) + ($p2[1]-$p1[1])*($p4[1]-$p3[1]);
-}
-
-################################################################################
-#
-# returns vector cross product of vectors p1p2 and p1p3
-# using Cramer's rule
-#
-# args : reference to an array with 3 points p1,p2 and p3
-#
-sub CrossProduct {
-  my $pointsref = $_[0];
-  my @points = @$pointsref;
-  if (@points != 3) {
-    carp("Need 3 points for a cross product");
-    return;
-  }
-  my @p1 = @{$points[0]};
-  my @p2 = @{$points[1]};
-  my @p3 = @{$points[2]};
-  my $det_p2p3 = &Determinant($p2[0], $p2[1], $p3[0], $p3[1]);
-  my $det_p1p3 = &Determinant($p1[0], $p1[1], $p3[0], $p3[1]);
-  my $det_p1p2 = &Determinant($p1[0], $p1[1], $p2[0], $p2[1]);
-  return ($det_p2p3-$det_p1p3+$det_p1p2);
-}
-
-
-
-################################################################################
-#
-# calculate length of a line segment
-#
-# args : reference to array with 2 points defining line segment
-#
-sub SegmentLength {
-  my $pointsref = $_[0];
-  my @points = @$pointsref;
-  if (@points != 2) {
-    carp("Need 2 points for a segment length calculation");
-    return;
-  }
-  my @a = @{$points[0]};
-  my @b = @{$points[1]};
-  my $length = sqrt(DotProduct([$points[0],$points[1],$points[0],$points[1]]));
-  return $length;
-}
-
-################################################################################
-#
-# Calculate distance from point p to line segment p1p2
-#
-# args: reference to array with 3 points: p1,p2,p3
-#       p1p2 = segment
-#       p3   = point for which distance is to be calculated
-# returns distance from p3 to line segment p1p2
-#         which is the smallest value from:
-#            distance p3p1
-#            distance p3p2
-#            perpendicular distance from p3 to line p1p2
-#
-sub DistanceToSegment {
-  my $pointsref = $_[0];
-  my @points = @$pointsref;
-  if (@points < 3) {
-    carp("DistanceToSegment needs 3 points defining a segment and a point");
-    return;
-  }
-  # the perpendicular distance is the height of the parallelogram defined
-  # by the 3 points devided by the base
-  # Note the this is a signed value so it can be used to check at which
-  # side the point is located
-  # we use dot products to find out where point is located1G/dotpro
-  my $d1 = DotProduct([$points[0],$points[1],$points[0],$points[2]]);
-  my $d2 = DotProduct([$points[0],$points[1],$points[0],$points[1]]);
-  my $dp = CrossProduct([$points[2],$points[0],$points[1]]) / sqrt $d2;
-  if ($d1 <= 0) {
-    return SegmentLength([$points[2],$points[0]]);
-  } elsif ($d2 <= $d1) {
-    return SegmentLength([$points[2],$points[1]]);
-  } else {
-    return $dp;
-  }
-}
-
-
-
-################################################################################
-#
-# calculate intersection point of 2 line segments
-# returns false if segments don't intersect
-# The theory:
-#
-#  Parametric representation of a line
-#    if p1 (x1,y1) and p2 (x2,y2) are 2 points on a line and
-#       P1 is the vector from (0,0) to (x1,y1)
-#       P2 is the vector from (0,0) to (x2,y2)
-#    then the parametric representation of the line is P = P1 + k (P2 - P1)
-#    where k is an arbitrary scalar constant.
-#    for a point on the line segement (p1,p2)  value of k is between 0 and 1
-#
-#  for the 2 line segements we get
-#      Pa = P1 + k (P2 - P1)
-#      Pb = P3 + l (P4 - P3)
-#
-#  For the intersection point Pa = Pb so we get the following equations
-#      x1 + k (x2 - x1) = x3 + l (x4 - x3)
-#      y1 + k (y2 - y1) = y3 + l (y4 - y3)
-#  Which using Cramer's Rule results in
-#          (x4 - x3)(y1 - y3) - (y4 - x3)(x1 - x3)
-#      k = ---------------------------------------
-#          (y4 - y3)(x2 - x1) - (x4 - x3)(y2 - y1)
-#   and
-#          (x2 - x1)(y1 - y3) - (y2 - y1)(x1 - x3)
-#      l = ---------------------------------------
-#          (y4 - y3)(x2 - x1) - (x4 - x3)(y2 - y1)
-#
-#  Note that the denominators are equal.  If the denominator is 9,
-#  the lines are parallel.  Intersection is detected by checking if
-#  both k and l are between 0 and 1.
-#
-#  The intersection point p5 (x5,y5) is:
-#     x5 = x1 + k (x2 - x1)
-#     y5 = y1 + k (y2 - y1)
-#
-# 'Touching' segments are considered as not intersecting
-#
-# args : reference to an array with 4 points p1,p2,p3,p4
-#
-sub SegmentIntersection {
-  my $pointsref = $_[0];
-  my @points = @$pointsref;
-  if (@points != 4) {
-    carp("SegmentIntersection needs 4 points");
-    return;
-  }
-
-  my $precision = 7;
-  my $delta = 10 ** (-$precision);
-  
-  my @p1 = @{$points[0]}; # p1,p2 = segment 1
-  my @p2 = @{$points[1]};
-  my @p3 = @{$points[2]}; # p3,p4 = segment 2
-  my @p4 = @{$points[3]};
-  my @p5;
-  my $n1 = Determinant(($p3[0]-$p1[0]),($p3[0]-$p4[0]),($p3[1]-$p1[1]),($p3[1]-$p4[1]));
-  my $n2 = Determinant(($p2[0]-$p1[0]),($p3[0]-$p1[0]),($p2[1]-$p1[1]),($p3[1]-$p1[1]));
-  my $d  = Determinant(($p2[0]-$p1[0]),($p3[0]-$p4[0]),($p2[1]-$p1[1]),($p3[1]-$p4[1]));
-  if (abs($d) < $delta) {
-    return 0; # parallel
-  }
-  if (!(($n1/$d < 1) && ($n2/$d < 1) &&
-        ($n1/$d > 0) && ($n2/$d > 0))) {
-    return 0;
-  }
-  $p5[0] = $p1[0] + $n1/$d * ($p2[0] - $p1[0]);
-  $p5[1] = $p1[1] + $n1/$d * ($p2[1] - $p1[1]);
-  return \@p5; # intersection point
-}
