@@ -125,24 +125,30 @@ while ( my $area = shift @areas ) {
 
     for my $glat ( grep { $_*$lat_cell >= $area->{minlat}  &&  $_*$lat_cell <= $area->{maxlat} } keys %grid ) {
         for my $glon ( grep { $_*$lon_cell >= $area->{minlon}  &&  $_*$lon_cell <= $area->{maxlon} } keys %{$grid{$glat}} ) {
-            my $weight = $grid{$glat}->{$glon};
+            my $weight = sqrt( $grid{$glat}->{$glon} );
             $sumlat += $glat * $lat_cell * $weight;
             $sumlon += $glon * $lon_cell * $weight;
             $sumnod += $weight;
         }
     }
 
+    my $avglon  =  $sumlon / $sumnod;
+    my $avglat  =  $sumlat / $sumnod;
+
+    # special case!
+    $avglon     =  -32      if  $area->{minlon} < -100  &&  $area->{maxlon} > 0;
+
     my $new_area0 = {
         minlon  => $area->{minlon},
         minlat  => $area->{minlat},
-        maxlon  => $hv  ?  ($sumlon / $sumnod)  :  $area->{maxlon},
-        maxlat  => $hv  ?  $area->{maxlat}      :  ($sumlat / $sumnod),
+        maxlon  => $hv  ?  $avglon          :  $area->{maxlon},
+        maxlat  => $hv  ?  $area->{maxlat}  :  $avglat,
         count   => 0,
     };
 
     my $new_area1 = {
-        minlon  => $hv  ?  ($sumlon / $sumnod)  :  $area->{minlon},
-        minlat  => $hv  ?  $area->{minlat}      :  ($sumlat / $sumnod),
+        minlon  => $hv  ?  $avglon          :  $area->{minlon},
+        minlat  => $hv  ?  $area->{minlat}  :  $avglat,
         maxlon  => $area->{maxlon},
         maxlat  => $area->{maxlat},
         count   => 0,
