@@ -6,6 +6,7 @@
 ##    * Template-toolkit
 ##    * Getopt::Long
 ##    * Text::Unidecode
+##    * List::MoreUtils
 ##    * Math::Polygon
 ##    * Math::Geometry::Planar::GPC::Polygon
 ##
@@ -25,13 +26,15 @@ use Getopt::Long;
 
 use Encode;
 use Text::Unidecode;
-use List::Util qw{ first };
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon;
 
+use List::Util qw{ first reduce };
+use List::MoreUtils qw{ any first_index };
+
 # debug
-use Data::Dump;
+use Data::Dump qw{ dd };
 
 
 
@@ -39,16 +42,16 @@ use Data::Dump;
 
 ####    Settings
 
-my $version = "0.80.-1";
+my $version = '0.80.-1';
 
-my $cfgpoi          = "poi.cfg";
-my $cfgpoly         = "poly.cfg";
-my $cfgheader       = "header.tpl";
+my $cfgpoi          = 'poi.cfg';
+my $cfgpoly         = 'poly.cfg';
+my $cfgheader       = 'header.tpl';
 
-my $mapid           = "88888888";
-my $mapname         = "OSM";
+my $mapid           = '88888888';
+my $mapname         = 'OSM';
 
-my $codepage        = "1251";
+my $codepage        = '1251';
 my $nocodepage      = 0;
 
 my $detectdupes     = 1;
@@ -65,7 +68,7 @@ my $disableuturns   = 0;
 
 my $upcase          = 0;
 my $translit        = 0;
-my $ttable          = "";
+my $ttable          = '';
 
 my $bbox;
 my $bpolyfile;
@@ -78,7 +81,7 @@ my $makepoi         = 1;
 
 my $defaultcountry  = "Earth";
 my $defaultregion   = "OSM";
-my $defaultcity     = "";
+my $defaultcity     = '';
 
 
 my $nametaglist     = "name,ref,int_ref,addr:housenumber";
@@ -91,48 +94,48 @@ my @countrynamelist = qw{ addr:country is_in:country_code is_in:country };
 
 
 my %yesno = (
-    "yes"            => '1',
-    "true"           => '1',
-    "1"              => '1',
-    "permissive"     => '1',
-    "no"             => '0',
-    "false"          => '0',
-    "0"              => '0',
-    "private"        => '0',
+    'yes'            => '1',
+    'true'           => '1',
+    '1'              => '1',
+    'permissive'     => '1',
+    'no'             => '0',
+    'false'          => '0',
+    '0'              => '0',
+    'private'        => '0',
 );
 
 GetOptions (
-    "cfgpoi=s"          => \$cfgpoi,
-    "cfgpoly=s"         => \$cfgpoly,
-    "header=s"          => \$cfgheader,
-    "mapid=s"           => \$mapid,
-    "mapname=s"         => \$mapname,
-    "codepage=s"        => \$codepage,
-    "nocodepage"        => \$nocodepage,
-    "routing!"          => \$routing,
-    "mergeroads!"       => \$mergeroads,
-    "mergecos=f"        => \$mergecos,
-    "detectdupes!"      => \$detectdupes,
-    "splitroads!"       => \$splitroads,
-    "fixclosenodes!"    => \$fixclosenodes,
-    "fixclosedist=f"    => \$fixclosedist,
-    "maxroadnodes=f"    => \$maxroadnodes,
-    "restrictions!"     => \$restrictions,
-    "defaultcountry=s"  => \$defaultcountry,
-    "defaultregion=s"   => \$defaultregion,
-    "defaultcity=s"     => \$defaultcity,
-    "nametaglist=s"     => \$nametaglist,
-    "upcase!"           => \$upcase,
-    "translit!"         => \$translit,
-    "ttable=s"          => \$ttable,
-    "bbox=s"            => \$bbox,
-    "bpoly=s"           => \$bpolyfile,
-    "osmbbox!"          => \$osmbbox,
-    "background!",      => \$background,
-    "disableuturns!",   => \$disableuturns,
-    "shorelines!",      => \$shorelines,
-    "navitel!",         => \$navitel,
-    "makepoi!",         => \$makepoi,
+    'cfgpoi=s'          => \$cfgpoi,
+    'cfgpoly=s'         => \$cfgpoly,
+    'header=s'          => \$cfgheader,
+    'mapid=s'           => \$mapid,
+    'mapname=s'         => \$mapname,
+    'codepage=s'        => \$codepage,
+    'nocodepage'        => \$nocodepage,
+    'routing!'          => \$routing,
+    'mergeroads!'       => \$mergeroads,
+    'mergecos=f'        => \$mergecos,
+    'detectdupes!'      => \$detectdupes,
+    'splitroads!'       => \$splitroads,
+    'fixclosenodes!'    => \$fixclosenodes,
+    'fixclosedist=f'    => \$fixclosedist,
+    'maxroadnodes=f'    => \$maxroadnodes,
+    'restrictions!'     => \$restrictions,
+    'defaultcountry=s'  => \$defaultcountry,
+    'defaultregion=s'   => \$defaultregion,
+    'defaultcity=s'     => \$defaultcity,
+    'nametaglist=s'     => \$nametaglist,
+    'upcase!'           => \$upcase,
+    'translit!'         => \$translit,
+    'ttable=s'          => \$ttable,
+    'bbox=s'            => \$bbox,
+    'bpoly=s'           => \$bpolyfile,
+    'osmbbox!'          => \$osmbbox,
+    'background!'       => \$background,
+    'disableuturns!'    => \$disableuturns,
+    'shorelines!'       => \$shorelines,
+    'navitel!'          => \$navitel,
+    'makepoi!'          => \$makepoi,
 );
 
 undef $codepage   if $nocodepage;
@@ -164,9 +167,9 @@ while (<CFG>) {
     chomp;
     my ($k, $v, $type, $llev, $hlev, $city) = split /\s+/;
     if ($type) {
-        $llev = 0   if $llev eq "";
-        $hlev = 1   if $hlev eq "";
-        $city = ($city ne "") ? 1 : 0;
+        $llev = 0   if $llev eq '';
+        $hlev = 1   if $hlev eq '';
+        $city = ($city ne '') ? 1 : 0;
         $poitype{"$k=$v"} = [ $type, $llev, $hlev, $city ];
     }
 }
@@ -188,8 +191,8 @@ while (<CFG>) {
             $type = $1;
             $prio = $2;
         }
-        $llev = 0   if ($llev eq "");
-        $hlev = 1   if ($hlev eq "");
+        $llev = 0   if ($llev eq '');
+        $hlev = 1   if ($hlev eq '');
 
      $polytype{"$k=$v"} = [ $mode, $type, $prio, $llev, $hlev, $rp ];
    }
@@ -628,7 +631,9 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<\/way/ ) {
 
-        my $poly  =  ( sort { $polytype{$b}->[2] <=> $polytype{$a}->[2] }  grep { exists $polytype{$_} }  map {"$_=$waytag{$_}"} keys %waytag )[0];
+        my $poly  =  reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
+                        grep { exists $polytype{$_} }
+                        map {"$_=$waytag{$_}"}  keys %waytag;
         next  unless $poly;
 
         my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
@@ -664,7 +669,7 @@ while ( my $line = <IN> ) {
 
         ##  this way is coastline - load it
 
-        if ( $mode eq "s"  &&  $shorelines ) {
+        if ( $mode eq 's'  &&  $shorelines ) {
             if ( scalar @chain < 2 ) {
                 print "; ERROR: WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
             } 
@@ -678,7 +683,7 @@ while ( my $line = <IN> ) {
 
         ##  this way is map polygon - clip it and dump
 
-        if ( $mode eq "p" ) {
+        if ( $mode eq 'p' ) {
             if ( scalar @chain <= 3 ) {
                 print "; ERROR: area WayID=$wayid has too few nodes near ($node{$chain[0]})\n";
                 next;
@@ -785,7 +790,7 @@ while ( my $line = <IN> ) {
 
         ##  this way is road - load
 
-        if ( $mode eq "r"  &&  $routing ) {
+        if ( $mode eq 'r'  &&  $routing ) {
             if ( scalar @chain <= 1 ) {
                 print "; ERROR: Road WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
                 next;
@@ -798,7 +803,7 @@ while ( my $line = <IN> ) {
 
             if ( $waytag{'maxspeed'} > 0 ) {
                $waytag{'maxspeed'} *= 1.61      if  $waytag{'maxspeed'} =~ /mph$/i;
-               $rp[0]  = speed_code( $waytag{'maxspeed'} );
+               $rp[0]  = speed_code( $waytag{'maxspeed'} / 1.3 ); # real speed ?
             }
 
             $rp[2] = $yesno{$waytag{'oneway'}}                                    if exists $yesno{$waytag{'oneway'}};
@@ -817,6 +822,8 @@ while ( my $line = <IN> ) {
             @rp[          9,     ]  =  (1-$yesno{$waytag{'foot'}})          x 1   if exists $yesno{$waytag{'foot'}};
             @rp[            10,  ]  =  (1-$yesno{$waytag{'bicycle'}})       x 1   if exists $yesno{$waytag{'bicycle'}};
             @rp[      7,8,       ]  =  (1-$yesno{$waytag{'psv'}})           x 2   if exists $yesno{$waytag{'psv'}};
+            @rp[        8,       ]  =  (1-$yesno{$waytag{'taxi'}})          x 1   if exists $yesno{$waytag{'taxi'}};
+            @rp[      7,         ]  =  (1-$yesno{$waytag{'bus'}})           x 1   if exists $yesno{$waytag{'bus'}};
             @rp[               11]  =  (1-$yesno{$waytag{'hgv'}})           x 1   if exists $yesno{$waytag{'hgv'}};
             @rp[  5,             ]  =  (1-$yesno{$waytag{'goods'}})         x 1   if exists $yesno{$waytag{'goods'}};
 
@@ -855,7 +862,7 @@ while ( my $line = <IN> ) {
             }
 
             # process associated turn restrictions
-            if ($restrictions) {
+            if ( $restrictions ) {
                 if ( $chainlist[0] == 0 ) {
                     for my $relid ( grep { $trest{$_}->{fr_way} eq $wayid } @{$nodetr{$chain[0]}} ) {
                         $trest{$relid}->{fr_way} = "$wayid:0";
@@ -921,7 +928,7 @@ if ( $shorelines ) {
 
 
     ##  tracing bounds
-    if ($bounds) {
+    if ( $bounds ) {
 
         my @bound = $boundpoly->points();
         my @tbound;
@@ -943,7 +950,7 @@ if ( $shorelines ) {
                 my $ipoint  = segment_intersection( $bound[$i], $bound[$i+1], $p1, $p2 );
 
                 if ( $ipoint ) {
-                    if ( grep { $_->{type} eq 'end'  &&  $_->{point} ~~ $ipoint } @tbound ) {
+                    if ( any { $_->{type} eq 'end'  &&  $_->{point} ~~ $ipoint } @tbound ) {
                         @tbound = grep { !( $_->{type} eq 'end'  &&  $_->{point} ~~ $ipoint ) } @tbound;
                     } 
                     else { 
@@ -962,7 +969,7 @@ if ( $shorelines ) {
                 my $ipoint  = segment_intersection( $bound[$i], $bound[$i+1], $p1, $p2 );
 
                 if ( $ipoint ) {
-                    if ( grep { $_->{type} eq 'start'  &&  $_->{point} ~~ $ipoint } @tbound ) {
+                    if ( any { $_->{type} eq 'start'  &&  $_->{point} ~~ $ipoint } @tbound ) {
                         @tbound = grep { !( $_->{type} eq 'start'  &&  $_->{point} ~~ $ipoint ) } @tbound;
                     } 
                     else { 
@@ -980,7 +987,7 @@ if ( $shorelines ) {
         }
 
         # rotate if sea at $tbound[0]
-        my $tmp = ( sort { $a->{pos}<=>$b->{pos} }  grep { $_->{type} ne 'bound' } @tbound )[0];
+        my $tmp  =  reduce { $a->{pos} < $b->{pos} ? $a : $b }  grep { $_->{type} ne 'bound' } @tbound;
         if ( $tmp->{type} eq 'end' ) {
             for ( grep { $_->{pos} <= $tmp->{pos} } @tbound ) {
                  $_->{pos} += $pos;
@@ -1035,7 +1042,7 @@ if ( $shorelines ) {
     
     ##  writing
     my $countislands = 0;
-    for my $sea ( keys %loop ) {
+    for my $sea ( sort { $loop{$b}->nrPoints() <=> $loop{$a}->nrPoints() } keys %loop ) {
         print  "; sea $sea\n";
         print  "[POLYGON]\n";
         print  "Type=0x3c\n";
@@ -1182,7 +1189,7 @@ if ( $routing ) {
         
         if ( $disableuturns  &&  $rnode{$node} == 2  &&  $enode{$node} == 2 ) {
             if ( $road{ $nodeways{$node}->[0] }->{rp}  =~  /^.,.,0/ ) {
-                my $pos = indexof( $road{ $nodeways{$node}->[0] }->{chain}, $node);
+                my $pos = first_index { $_ eq $node } @{$road{ $nodeways{$node}->[0] }->{chain}};
                 $trest{ 'ut'.$utcount++ } = { 
                     node    => $node,
                     type    => 'no',
@@ -1195,7 +1202,7 @@ if ( $routing ) {
                 };
             }
             if ( $road{ $nodeways{$node}->[1] }->{rp}  =~  /^.,.,0/ ) {
-                my $pos = indexof( $road{ $nodeways{$node}->[1] }->{chain}, $node);
+                my $pos = first_index { $_ eq $node } @{$road{ $nodeways{$node}->[1] }->{chain}};
                 $trest{ 'ut'.$utcount++ } = {
                     node    => $node,
                     type    => 'no',
@@ -1283,7 +1290,7 @@ if ( $routing ) {
             for my $i ( 1 .. $#{$road->{chain}} ) {
                 $rnod ++    if  $nodid{ $road->{chain}->[$i] };
 
-                if ( grep { $_ eq $road->{chain}->[$i] } @{$road->{chain}}[$break..$i-1] ) {
+                if ( any { $_ eq $road->{chain}->[$i] } @{$road->{chain}}[$break..$i-1] ) {
                     $countself ++;
                     if ( $road->{chain}->[$i] ne $road->{chain}->[$prev] ) {
                         $break = $prev;
@@ -1330,7 +1337,7 @@ if ( $routing ) {
                     };
 
                     #   update nod->road list
-                    for my $nod ( grep { exists $nodid{$_} } @{$road{$id}->{chain}} ) {
+                    for my $nod ( grep { exists $nodeways{$_} } @{$road{$id}->{chain}} ) {
                         push @{$nodeways{$nod}}, $id;
                     }
 
@@ -1358,8 +1365,8 @@ if ( $routing ) {
                 }
 
                 #   update nod->road list
-                for my $nod ( grep { exists $nodid{$_} } @{$road->{chain}}[$breaks[0]+1 ..$#{$road->{chain}}] ) {
-                    @{$nodeways{$nod}} = grep { $_ ne $roadid } @{$nodeways{$nod}};
+                for my $nod ( grep { exists $nodeways{$_} } @{$road->{chain}}[$breaks[0]+1 ..$#{$road->{chain}}] ) {
+                    $nodeways{$nod} = [ grep { $_ ne $roadid } @{$nodeways{$nod}} ];
                 }
 
                 $#{$road->{chain}} = $breaks[0];
@@ -1510,7 +1517,7 @@ if ( $routing && $restrictions  ) {
 
             for my $roadid ( @{$nodeways{ $trest{$relid}->{node} }} ) {
                 $newtr{to_way} = $roadid;
-                $newtr{to_pos} = indexof( $road{$roadid}->{chain}, $tr->{node} );
+                $newtr{to_pos} = first_index { $_ eq $tr->{node} } @{$road{$roadid}->{chain}};
 
                 if (  $newtr{to_pos} < $#{$road{$roadid}->{chain}} 
                   &&  !( $tr->{to_way} eq $roadid  &&  $tr->{to_dir} eq 1 ) ) {
@@ -1552,7 +1559,7 @@ print STDERR "All done!!\n\n";
 
 sub convert_string {            # String
 
-    my $str = decode("utf8", $_[0]);
+    my $str = decode('utf8', $_[0]);
    
     unless ( $translit ) {
         for my $repl ( keys %cmap ) {
@@ -1563,7 +1570,7 @@ sub convert_string {            # String
     $str = unidecode($str)      if $translit;
     $str = uc($str)             if $upcase;
     
-    $str = encode( ($nocodepage ? "utf8" : "cp".$codepage), $str );
+    $str = encode( ($nocodepage ? 'utf8' : 'cp'.$codepage), $str );
    
     $str =~ s/\&#(\d+)\;/chr($1)/ge;
     $str =~ s/\&amp\;/\&/gi;
@@ -1585,8 +1592,8 @@ sub convert_string {            # String
 
 sub fix_close_nodes {                # NodeID1, NodeID2
 
-    my ($lat1, $lon1) = split ",", $node{$_[0]};
-    my ($lat2, $lon2) = split ",", $node{$_[1]};
+    my ($lat1, $lon1) = split q{,}, $node{$_[0]};
+    my ($lat2, $lon2) = split q{,}, $node{$_[1]};
 
     my ($clat, $clon) = ( ($lat1+$lat2)/2, ($lon1+$lon2)/2 );
     my ($dlat, $dlon) = ( ($lat2-$lat1),   ($lon2-$lon1)   );
@@ -1689,6 +1696,93 @@ sub write_turn_restriction {            # \%trest
 
 
 
+
+sub usage  {
+
+    my @onoff = ( "off", "on");
+
+    my $usage = <<"END_USAGE";
+Usage:  osm2mp.pl [options] file.osm > file.mp
+
+Possible options [defaults]:
+
+ --mapid <id>              map id            [$mapid]
+ --mapname <name>          map name          [$mapname]
+
+ --cfgpoi <file>           poi config        [$cfgpoi]
+ --cfgpoly <file>          way config        [$cfgpoly]
+ --header <file>           header template   [$cfgheader]
+
+ --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
+ --osmbbox                 use bounds from .osm              [$onoff[$osmbbox]]
+ --bpoly <poly-file>       use bounding polygon from .poly-file
+
+ --background              create background object          [$onoff[$background]]
+
+ --codepage <num>          codepage number                   [$codepage]
+ --nocodepage              leave all labels in utf-8         [$onoff[$nocodepage]]
+ --upcase                  convert all labels to upper case  [$onoff[$upcase]]
+ --translit                tranliterate labels               [$onoff[$translit]]
+ --ttable <file>           character conversion table
+
+ --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
+ --defaultcountry <name>   default data for street indexing  [$defaultcountry]
+ --defaultregion <name>                                      [$defaultregion]
+ --defaultcity <name>                                        [$defaultcity]
+ --navitel                 write addresses for polygons              [$onoff[$navitel]]
+
+ --routing                 produce routable map                      [$onoff[$routing]]
+ --mergeroads              merge same ways                           [$onoff[$mergeroads]]
+ --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
+ --splitroads              split long and self-intersecting roads    [$onoff[$splitroads]]
+ --fixclosenodes           enlarge distance between too close nodes  [$onoff[$fixclosenodes]]
+ --fixclosedist <dist>     minimum allowed distance                  [$fixclosedist m]
+ --maxroadnodes <dist>     maximum number of nodes in road segment   [$maxroadnodes]
+ --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
+
+ --restrictions            process turn restrictions                 [$onoff[$restrictions]]
+ --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
+
+ --shorelines              process shorelines                        [$onoff[$shorelines]]
+ --makepoi                 create POIs for polygons                  [$onoff[$makepoi]]
+
+
+You can use no<option> disable features (i.e --nomergeroads)
+END_USAGE
+
+    print $usage;
+    exit;
+}
+
+
+
+###     geometry functions
+
+sub segment_length {
+  my ($p1,$p2) = @_;
+  return sqrt( ($p2->[0] - $p1->[0])**2 + ($p2->[1] - $p1->[1])**2 );
+}
+
+
+sub segment_intersection {
+    my ($p11, $p12, $p21, $p22) = @_;
+
+    my $Z  = ($p12->[1]-$p11->[1]) * ($p21->[0]-$p22->[0]) - ($p21->[1]-$p22->[1]) * ($p12->[0]-$p11->[0]);
+    my $Ca = ($p12->[1]-$p11->[1]) * ($p21->[0]-$p11->[0]) - ($p21->[1]-$p11->[1]) * ($p12->[0]-$p11->[0]);
+    my $Cb = ($p21->[1]-$p11->[1]) * ($p21->[0]-$p22->[0]) - ($p21->[1]-$p22->[1]) * ($p21->[0]-$p11->[0]);
+
+    return undef    if  $Z == 0;
+
+    my $Ua = $Ca / $Z;
+    my $Ub = $Cb / $Z;
+
+    return undef    if  $Ua < 0  ||  $Ua > 1  ||  $Ub < 0  ||  $Ub > 1;
+
+    return [ $p11->[0] + ( $p12->[0] - $p11->[0] ) * $Ub,
+             $p11->[1] + ( $p12->[1] - $p11->[1] ) * $Ub ];
+}
+
+
 sub centroid {
 
     my $slat = 0;
@@ -1710,101 +1804,3 @@ sub centroid {
 #    return ($slat/$ssq , $slon/$ssq);
     return ($slon/$ssq , $slat/$ssq);
 }
-
-
-
-sub indexof {                   # \@array, $elem
-
-    my ($arr, $el) = @_;
-
-    return -1       unless defined $arr;
-    for ( my $i=0; $i < scalar @$arr; $i++ ) {
-        return $i     if $arr->[$i] eq $el;
-    }
-    return -1;
-}
-
-
-
-
-sub usage  {
-
-    my @onoff = ( "off", "on");
-
-    print "Usage:  osm2mp.pl [options] file.osm > file.mp
-
-Possible options [defaults]:
-
-    --mapid <id>              map id            [$mapid]
-    --mapname <name>          map name          [$mapname]
-
-    --cfgpoi <file>           poi config        [$cfgpoi]
-    --cfgpoly <file>          way config        [$cfgpoly]
-    --header <file>           header template   [$cfgheader]
-
-    --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
-    --osmbbox                 use bounds from .osm              [$onoff[$osmbbox]]
-    --bpoly <poly-file>       use bounding polygon from .poly-file
-
-    --background              create background object          [$onoff[$background]]
-
-    --codepage <num>          codepage number                   [$codepage]
-    --nocodepage              leave all labels in utf-8         [$onoff[$nocodepage]]
-    --upcase                  convert all labels to upper case  [$onoff[$upcase]]
-    --translit                tranliterate labels               [$onoff[$translit]]
-    --ttable <file>           character conversion table
-
-    --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
-    --defaultcountry <name>   default data for street indexing  [$defaultcountry]
-    --defaultregion <name>                                      [$defaultregion]
-    --defaultcity <name>                                        [$defaultcity]
-    --navitel                 write addresses for polygons              [$onoff[$navitel]]
-
-    --routing                 produce routable map                      [$onoff[$routing]]
-    --mergeroads              merge same ways                           [$onoff[$mergeroads]]
-    --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
-    --splitroads              split long and self-intersecting roads    [$onoff[$splitroads]]
-    --fixclosenodes           enlarge distance between too close nodes  [$onoff[$fixclosenodes]]
-    --fixclosedist <dist>     minimum allowed distance                  [$fixclosedist m]
-    --maxroadnodes <dist>     maximum number of nodes in road segment   [$maxroadnodes]
-    --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
-
-    --restrictions            process turn restrictions                 [$onoff[$restrictions]]
-    --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
-
-    --shorelines              process shorelines                        [$onoff[$shorelines]]
-    --makepoi                 create POIs for polygons                  [$onoff[$makepoi]]
-
-
-You can use no<option> disable features (i.e --nomergeroads)
-";
-    exit;
-}
-
-
-
-###     geometry functions
-
-sub segment_length {
-  my ($p1,$p2) = @_;
-  return sqrt( ($p2->[0] - $p1->[0])**2 + ($p2->[1] - $p1->[1])**2 );
-}
-
-sub segment_intersection {
-    my ($p11, $p12, $p21, $p22) = @_;
-
-    my $Z  = ($p12->[1]-$p11->[1]) * ($p21->[0]-$p22->[0]) - ($p21->[1]-$p22->[1]) * ($p12->[0]-$p11->[0]);
-    my $Ca = ($p12->[1]-$p11->[1]) * ($p21->[0]-$p11->[0]) - ($p21->[1]-$p11->[1]) * ($p12->[0]-$p11->[0]);
-    my $Cb = ($p21->[1]-$p11->[1]) * ($p21->[0]-$p22->[0]) - ($p21->[1]-$p22->[1]) * ($p21->[0]-$p11->[0]);
-
-    return undef    if  $Z == 0;
-
-    my $Ua = $Ca / $Z;
-    my $Ub = $Cb / $Z;
-
-    return undef    if  $Ua < 0  ||  $Ua > 1  ||  $Ub < 0  ||  $Ub > 1;
-
-    return [ $p11->[0] + ( $p12->[0] - $p11->[0] ) * $Ub,
-             $p11->[1] + ( $p12->[1] - $p11->[1] ) * $Ub ];
-}
-
