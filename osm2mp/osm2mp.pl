@@ -28,7 +28,8 @@ use Encode;
 use Text::Unidecode;
 
 use Math::Polygon;
-use Math::Geometry::Planar::GPC::Polygon;
+use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
+use PolygonTree;
 
 use List::Util qw{ first reduce };
 use List::MoreUtils qw{ any first_index };
@@ -42,7 +43,7 @@ use Data::Dump qw{ dd };
 
 ####    Settings
 
-my $version = '0.80.-1';
+my $version = '0.80a';
 
 my $cfgpoi          = 'poi.cfg';
 my $cfgpoly         = 'poly.cfg';
@@ -62,7 +63,7 @@ my $mergecos        = 0.2;
 my $splitroads      = 1;
 my $fixclosenodes   = 1;
 my $fixclosedist    = 3.0;       # set 5.5 for cgpsmapper 0097 and earlier
-my $maxroadnodes    = 30;
+my $maxroadnodes    = 60;
 my $restrictions    = 1;
 my $disableuturns   = 0;
 
@@ -234,21 +235,20 @@ print STDERR "Processing file $infile\n\n";
 ####    Bounds
 
 my $bounds;
-my $boundpoly;
-my ($minlon, $minlat, $maxlon, $maxlat);
+my @bound;
+my $boundtree;
 
 
 if ($bbox) {
     $bounds = 1 ;
-    ($minlon, $minlat, $maxlon, $maxlat) = split /,/, $bbox;
-    $boundpoly = Math::Polygon->new( [$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat],[$minlon,$minlat] );
+    my ($minlon, $minlat, $maxlon, $maxlat) = split q{,}, $bbox;
+    @bound = ( [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] );
+    $boundtree = PolygonTree->new( \@bound );
 }
 
 if ($bpolyfile) {
-    $bbox = 0;
     $bounds = 1;
-
-    my @bpoints;
+    print STDERR "Initialising bounds...    ";
 
     open (PF, $bpolyfile) 
         or die "Could not open file: $bpolyfile: $!";
@@ -256,16 +256,18 @@ if ($bpolyfile) {
     ## ??? need advanced polygon?
     while (<PF>) {
         if (/^\d/) {
-            @bpoints = ();
+            @bound = ();
         } 
         elsif (/^\s+([0-9.E+-]+)\s+([0-9.E+-]+)/) {
-            push @bpoints, [$1,$2];
+            push @bound, [$1,$2];
         }
         elsif (/^END/) {
-            $boundpoly = Math::Polygon->new( @bpoints );
+            @bound = reverse @bound     if  Math::Polygon->new( @bound )->isClockwise();
+            $boundtree = PolygonTree->new( \@bound );
         }
     }
     close (PF);
+    printf STDERR "%d segments\n", scalar @bound;
 }
 
 
@@ -285,17 +287,19 @@ while ( my $line = <IN> ) {
     }
 
     if ( $osmbbox  &&  $line =~ /<bounds?/ ) {
+        my ($minlat, $minlon, $maxlat, $maxlon);
         if ( $line =~ /<bounds/ ) {
-            ($minlat, $minlon, $maxlat, $maxlon) 
+            ($minlat, $minlon, $maxlat, $maxlon)
                 = ( $line =~ /minlat=["']([^"']+)["'] minlon=["']([^"']+)["'] maxlat=["']([^"']+)["'] maxlon=["']([^"']+)["']/ );
         } 
         else {
             ($minlat, $minlon, $maxlat, $maxlon) 
                 = ( $line =~ /box=["']([^"',]+),([^"',]+),([^"',]+),([^"']+)["']/ );
         }
-        $bbox = join ",", ($minlon, $minlat, $maxlon, $maxlat);
+        $bbox = join q{,}, ($minlon, $minlat, $maxlon, $maxlat);
         $bounds = 1     if $bbox;
-        $boundpoly = Math::Polygon->new( [$minlon,$minlat],[$maxlon,$minlat],[$maxlon,$maxlat],[$minlon,$maxlat],[$minlon,$minlat] );
+        @bound = ( [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] );
+        $boundtree = PolygonTree->new( \@bound );
     }
 
     last    if $line =~ /<way/;
@@ -306,8 +310,8 @@ continue { $waypos = tell IN }
 printf STDERR "%d loaded\n", scalar keys %node;
 
 
-my $boundgpc = Math::Geometry::Planar::GPC::Polygon->new();
-$boundgpc->add_polygon ( [$boundpoly->points()], 0 )    if $bounds;
+my $boundgpc = new_gpc();
+$boundgpc->add_polygon ( \@bound, 0 )    if $bounds;
 
 
 
@@ -478,7 +482,7 @@ while ( my $line = <IN> ) {
                     name        =>  $name,
                     region      =>  convert_string( first {defined} @waytag{@regionnamelist} ),
                     country     =>  convert_string( first {defined} @waytag{@countrynamelist} ),
-                    bound       =>  Math::Polygon->new( map { [ split q{,}, $node{$_} ] } @chain ),
+                    bound       =>  PolygonTree->new( [ map { [ split q{,}, $node{$_} ] } @chain ] ),
                };
            } else {
                print "; ERROR: City without name WayID=$wayid\n"            unless  $name;
@@ -544,15 +548,15 @@ while ( my $line = <IN> ) {
         printf "City=Y\n",                                  if  $iscity;
         print  "Label=$poiname\n"                           if  $poiname;
 
-        for my $city (values %city) {
-            if ( $city->{bound}->contains( [ split q{,}, $node{$nodeid} ] ) ) {
-                print "CityName="    . $city->{name}     . "\n";
-                print "RegionName="  . $city->{region}   . "\n"      if  $city->{region};
-                print "CountryName=" . $city->{country}  . "\n"      if  $city->{country};
-                last;
-            } elsif ( $defaultcity ) {
-                print "CityName=$defaultcity\n";
-            }
+        my $city = first { $_->{bound}->contains( [ split q{,}, $node{$nodeid} ] ) } values %city;
+
+        if ( $city ) {
+            print "CityName="    . $city->{name}     . "\n";
+            print "RegionName="  . $city->{region}   . "\n"      if  $city->{region};
+            print "CountryName=" . $city->{country}  . "\n"      if  $city->{country};
+        }
+        elsif ( $defaultcity ) {
+            print "CityName=$defaultcity\n";
         }
 
         my $housenumber = convert_string( first {defined} @nodetag{@housenamelist} );
@@ -693,97 +697,96 @@ while ( my $line = <IN> ) {
                 print "; ERROR: area WayID=$wayid is not closed at ($node{$chain[0]})\n";
             }
 
-            print  "; WayID = $wayid\n";
-            print  "; $poly\n";
-
             if ( !$bounds  ||  scalar @chainlist ) {
 
-                if ( $navitel  ||  ($makepoi && $rp && $name) ) {
-                    for my $i (keys %city) {
-                        if ( $city{$i}->{bound}->contains( [ split q{,}, $node{$chain[0]} ] ) ) {
-                            $city = $i;
-                            last;
-                        }
-                    }
-                }
+                $countpolygons ++;
 
-                my $gpc = Math::Geometry::Planar::GPC::Polygon->new();
-                $gpc->add_polygon( [ map { [reverse split q{,}, $node{$_}] } @chain ], 0 );
+                print  "; WayID = $wayid\n";
+                print  "; $poly\n";
+
+                my $polygon  = [ map { [reverse split q{,}, $node{$_}] } @chain ];
+                my @plist    = ($polygon);
 
                 if ( $mpoly{$wayid} ) {
-                    for my $hole ( @{$mpoly{$wayid}} ) {
-                        if ( $mphole{$hole} ne $hole  &&  ref $mphole{$hole} ) {
-                            $gpc->add_polygon( [ map { [reverse split q{,}, $node{$_}] } @{$mphole{$hole}} ], 1 );
-                        }
+                    for my $hole ( grep { ref $mphole{$_} } @{$mpoly{$wayid}} ) {
+                        push @plist, [ map { [reverse split q{,}, $node{$_}] } @{$mphole{$hole}} ];
                     }
                 }
 
-                if ($bounds) {
-                    $gpc = $gpc->clip_to( $boundgpc, 'INTERSECT' );
+                #   clip
+                if ( $bounds  &&  !defined $boundtree->contains_polygon_rough( $polygon ) ) {
+                    my $gpc = new_gpc();
+                    $gpc->add_polygon( shift @plist, 0 );
+                    
+                    for my $hole ( @plist ) {
+                        $gpc->add_polygon( $hole, 1 );
+                    }
+
+                    $gpc    =  $gpc->clip_to( $boundgpc, 'INTERSECT' );
+                    @plist  =  sort  { $#{$b} <=> $#{$a} }  $gpc->get_polygons();
                 }
-               
 
-                my @plist  =  sort  { $#{$b} <=> $#{$a} }  $gpc->get_polygons();
-                if ( @plist ) {
-                    $countpolygons ++;
-
-                    print  "[POLYGON]\n";
-                    printf "Type=%s\n",        $type;
-                    printf "EndLevel=%d\n",    $hlev    if  $hlev > $llev;
-                    print  "Label=$name\n"              if  $name;
+                print  "[POLYGON]\n";
+                printf "Type=%s\n",        $type;
+                printf "EndLevel=%d\n",    $hlev    if  $hlev > $llev;
+                print  "Label=$name\n"              if  $name;
 
 
-                    ## Navitel
-                    if ( $navitel ) {
-                        my $housenumber = convert_string( first {defined} @waytag{@housenamelist} );
-                        if ( $housenumber && $waytag{'addr:street'} ) {
-                            print  "HouseNumber=$housenumber\n";
-                            printf "StreetDesc=%s\n", convert_string( $waytag{'addr:street'} );
-                            if ( $city ) {
-                                print "CityName="    . $city{$city}->{name}      . "\n";
-                                print "RegionName="  . $city{$city}->{region}    . "\n"      if $city{$city}->{region};
-                                print "CountryName=" . $city{$city}->{country}   . "\n"      if $city{$city}->{country};
-                            } 
-                            elsif ( $defaultcity ) {
-                                print "CityName=$defaultcity\n";
-                            }
+                if ( $navitel  ||  ($makepoi && $rp && $name) ) {
+                    $city = first { $city{$_}->{bound}->contains( [ split q{,}, $node{$chain[0]} ] ) } keys %city;
+                }
+
+                ## Navitel
+                if ( $navitel ) {
+                    my $housenumber = convert_string( first {defined} @waytag{@housenamelist} );
+                    if ( $housenumber && $waytag{'addr:street'} ) {
+                        print  "HouseNumber=$housenumber\n";
+                        printf "StreetDesc=%s\n", convert_string( $waytag{'addr:street'} );
+                        if ( $city ) {
+                            print "CityName="    . $city{$city}->{name}      . "\n";
+                            print "RegionName="  . $city{$city}->{region}    . "\n"      if $city{$city}->{region};
+                            print "CountryName=" . $city{$city}->{country}   . "\n"      if $city{$city}->{country};
+                        } 
+                        elsif ( $defaultcity ) {
+                            print "CityName=$defaultcity\n";
+                        }
+                    }
+                }
+            
+                for my $polygon ( @plist ) {
+                    printf "Data%d=(%s)\n", $llev, join( q{), (}, map {join( q{,}, reverse @{$_} )} @{$polygon} );
+                }
+            
+                print "[END]\n\n\n";
+            
+
+                if ( $makepoi && $rp && $name ) {
+            
+                    my ($poi, $pll, $phl) = split q{,}, $rp;
+            
+                    print  "[POI]\n";
+                    print  "Type=$poi\n";
+                    print  "EndLevel=$phl\n";
+                    print  "Label=$name\n";
+                    printf "Data%d=(%f,%f)\n", $pll, centroid( @{$plist[0]} );
+            
+                    my $housenumber = convert_string ( first {defined} @waytag{@housenamelist} );
+                    if ( $housenumber && $waytag{'addr:street'} ) {
+                        print  "HouseNumber=$housenumber\n";
+                        printf "StreetDesc=%s\n", convert_string( $waytag{'addr:street'} );
+                        if ( $city ) {
+                            print "CityName="    . $city{$city}->{name}      . "\n";
+                            print "RegionName="  . $city{$city}->{region}    . "\n"      if $city{$city}->{region};
+                            print "CountryName=" . $city{$city}->{country}   . "\n"      if $city{$city}->{country};
+                        } 
+                        elsif ( $defaultcity ) {
+                            print "CityName=$defaultcity\n";
                         }
                     }
             
-                    for my $polygon ( @plist ) {
-                        printf "Data%d=(%s)\n", $llev, join( q{), (}, map {join( q{,}, reverse @{$_} )} @{$polygon} );
-                    }
-            
-                    print "[END]\n\n\n";
-            
-
-                    if ( $makepoi && $rp && $name ) {
-            
-                        my ($poi, $pll, $phl) = split q{,}, $rp;
-            
-                        print  "[POI]\n";
-                        print  "Type=$poi\n";
-                        print  "EndLevel=$phl\n";
-                        print  "Label=$name\n";
-                        printf "Data%d=(%f,%f)\n", $pll, centroid( @{$plist[0]} );
-            
-                        my $housenumber = convert_string ( first {defined} @waytag{@housenamelist} );
-                        if ( $housenumber && $waytag{'addr:street'} ) {
-                            print  "HouseNumber=$housenumber\n";
-                            printf "StreetDesc=%s\n", convert_string( $waytag{'addr:street'} );
-                            if ( $city ) {
-                                print "CityName="    . $city{$city}->{name}      . "\n";
-                                print "RegionName="  . $city{$city}->{region}    . "\n"      if $city{$city}->{region};
-                                print "CountryName=" . $city{$city}->{country}   . "\n"      if $city{$city}->{country};
-                            } 
-                            elsif ( $defaultcity ) {
-                                print "CityName=$defaultcity\n";
-                            }
-                        }
-            
-                        print  "[END]\n\n\n";
-                    }
+                    print  "[END]\n\n\n";
                 }
+                
             }
         }
 
@@ -830,13 +833,8 @@ while ( my $line = <IN> ) {
 
             # determine city
             if ( $name ) {
-                for my $i ( keys %city ) {
-                    if ( $city{$i}->{bound}->contains( [split q{,}, $node{$chain[0]}] ) 
-                      && $city{$i}->{bound}->contains( [split q{,} ,$node{$chain[-1]}] ) ) {
-                        $city = $i;
-                        last;
-                    }
-                }
+                $city = first { $city{$_}->{bound}->contains( [ split q{,}, $node{$chain[ 0]} ] )
+                            &&  $city{$_}->{bound}->contains( [ split q{,}, $node{$chain[-1]} ] ) } keys %city;
             }
 
             # load roads and external nodes
@@ -914,7 +912,7 @@ if ( $shorelines ) {
     my @keys = keys %coast;
     my $i = 0;
     while ($i < scalar @keys) {
-        while (    $coast{$keys[$i]}  
+        while (    $coast{$keys[$i]}
                 && $coast{$coast{$keys[$i]}->[-1]}  
                 && $coast{$keys[$i]}->[-1] ne $keys[$i] 
                 && ( !$bounds  ||  is_inside_bounds( $node{$coast{$keys[$i]}->[-1]} ) ) ) {
@@ -923,6 +921,16 @@ if ( $shorelines ) {
             push @{$coast{$keys[$i]}}, @{$coast{$mnode}};
             delete $coast{$mnode};
         }
+
+#        if ( $coast{$keys[$i]} ) {
+#            print  "; merged coastline $keys[$i]\n";
+#            print  "[POLYLINE]\n";
+#            print  "Type=0x15\n";
+#            print  "EndLevel=4\n";
+#            printf "Data0=(%s)\n",          join (q{), (}, @node{ @{ $coast{$keys[$i]} } });
+#            print  "[END]\n\n\n";
+#        }
+
         $i++;
     }
 
@@ -930,7 +938,6 @@ if ( $shorelines ) {
     ##  tracing bounds
     if ( $bounds ) {
 
-        my @bound = $boundpoly->points();
         my @tbound;
         my $pos = 0;
 
@@ -1024,25 +1031,27 @@ if ( $shorelines ) {
 
 
     ##  detecting lakes and islands
-    my %loop;
+    my %lake;
     my %island;
 
     for my $loop ( grep { $coast{$_}->[0] eq $coast{$_}->[-1] } keys %coast ) {
 
         # filter huge polygons to avoid cgpsmapper's crash
-        next if scalar @{$coast{$loop}} > 30000;
+        next if scalar @{$coast{$loop}} > 40000;
 
-        $loop{$loop} = Math::Polygon->new( map { [ split q{,}, $node{$_} ] } @{$coast{$loop}} );
-        if ( $loop{$loop}->isClockwise ) {
+        if ( Math::Polygon->new( map { [ split q{,}, $node{$_} ] } @{$coast{$loop}} )->isClockwise() ) {
             $island{$loop} = 1;
-            delete $loop{$loop};
         } 
+        else {
+            $lake{$loop} = PolygonTree->new( [ map { [ split q{,}, $node{$_} ] } @{$coast{$loop}} ] );
+        }
     }
 
     
     ##  writing
     my $countislands = 0;
-    for my $sea ( sort { $loop{$b}->nrPoints() <=> $loop{$a}->nrPoints() } keys %loop ) {
+
+    for my $sea ( sort { scalar @{$coast{$b}} <=> scalar @{$coast{$a}} } keys %lake ) {
         print  "; sea $sea\n";
         print  "[POLYGON]\n";
         print  "Type=0x3c\n";
@@ -1050,7 +1059,7 @@ if ( $shorelines ) {
         printf "Data0=(%s)\n",  join ( q{), (}, @node{@{$coast{$sea}}} );
         
         for my $island  ( keys %island ) {
-            if ( $loop{$sea}->contains( [ split q{,}, $node{$island} ] ) ) {
+            if ( $lake{$sea}->contains( [ split q{,}, $node{$island} ] ) ) {
                 $countislands ++;
                 printf "Data0=(%s)\n",  join ( q{), (}, @node{@{$coast{$island}}} );
                 delete $island{$island};
@@ -1061,7 +1070,10 @@ if ( $shorelines ) {
 
     }
 
-    printf STDERR "%d lakes, %d islands\n", scalar keys %loop, $countislands;
+    printf STDERR "%d lakes, %d islands\n", scalar keys %lake, $countislands;
+
+    undef %lake;
+    undef %island;
 }
 
 
@@ -1469,7 +1481,7 @@ if ( $bounds && $background ) {
     print  "[POLYGON]\n";
     print  "Type=0x4b\n";
     print  "EndLevel=4\n";
-    printf "Data0=(%s)\n",      join( q{), (},  map { join q{,}, reverse @{$_} } $boundpoly->points() );
+    printf "Data0=(%s)\n",      join( q{), (},  map { join q{,}, reverse @{$_} } @bound );
     print  "[END]\n\n\n";
 
 }
@@ -1653,16 +1665,8 @@ sub speed_code {                        # $speed
 
 
 
-sub is_inside_bbox {                    # $latlon
-    my ($lat, $lon) = split q{,}, $_[0];
-    return  ( $lat > $minlat  &&  $lon > $minlon  &&  $lat < $maxlat  &&  $lon < $maxlon );
-}
-
-
-
 sub is_inside_bounds {                  # $latlon
-    return is_inside_bbox( @_ )     if  $bbox;
-    return $boundpoly->contains( [ reverse split q{,}, $_[0] ] );
+    return $boundtree->contains( [ reverse split q{,}, $_[0] ] );
 }
 
 
