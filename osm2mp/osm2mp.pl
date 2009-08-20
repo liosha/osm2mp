@@ -142,7 +142,13 @@ GetOptions (
 undef $codepage   if $nocodepage;
 
 our %cmap;
-do $ttable        if $ttable;
+if ( $ttable ) {
+    open TT, '<', $ttable;
+    my $code = "%cmap = ( " . join( q{}, <TT> ) . " );";
+    close TT;
+
+    eval $code;
+}
 
 my @nametagarray = split q{,}, $nametaglist;
 
@@ -699,8 +705,6 @@ while ( my $line = <IN> ) {
 
             if ( !$bounds  ||  scalar @chainlist ) {
 
-                $countpolygons ++;
-
                 print  "; WayID = $wayid\n";
                 print  "; $poly\n";
 
@@ -725,6 +729,10 @@ while ( my $line = <IN> ) {
                     $gpc    =  $gpc->clip_to( $boundgpc, 'INTERSECT' );
                     @plist  =  sort  { $#{$b} <=> $#{$a} }  $gpc->get_polygons();
                 }
+
+                next    unless @plist;
+
+                $countpolygons ++;
 
                 print  "[POLYGON]\n";
                 printf "Type=%s\n",        $type;
