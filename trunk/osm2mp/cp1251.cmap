@@ -1,32 +1,37 @@
-%cmap = (
-    # Kazakh
-       "\x{04D8}" => "\x{0410}",       # SCHWA
-       "\x{04D9}" => "\x{0430}",
-       "\x{0492}" => "\x{0413}",       # GHE WITH STROKE
-       "\x{0493}" => "\x{0433}",
-       "\x{04A2}" => "\x{041D}",       # EN WITH DESCENDER
-       "\x{04A3}" => "\x{043D}",
-       "\x{04AE}" => "\x{0423}",       # STRAIGHT U
-       "\x{04AF}" => "\x{0443}",
-       "\x{04B0}" => "\x{0423}",       # STRAIGHT U WITH STROKE
-       "\x{04B1}" => "\x{0443}",
-       "\x{04BA}" => "\x{0425}",       # SHHA
-       "\x{04BB}" => "\x{0445}",
-       "\x{049A}" => "\x{041A}",       # KA WITH DESCENDER
-       "\x{049B}" => "\x{043A}",
-       "\x{04E8}" => "\x{041E}",       # BARRED O
-       "\x{04E9}" => "\x{043E}",
-    # Greek
-       "\x{039F}" => "\x{041E}",       # Omicron
-       "\x{03BF}" => "\x{043E}",
-    # Latin
-       "\x{00D6}" => "O",       # O with diaeresis
-       "\x{00F6}" => "o",
-       "\x{00DC}" => "U",       # U-umlaut
-       "\x{00FC}" => "u",
-       "\x{011E}" => "G",       # G with breve
-       "\x{011F}" => "g",
-       "\x{0131}" => "i",       # Small dotless i
-       "\x{015E}" => "S",       # S with cedilla
-       "\x{015F}" => "s",
-   );
+# Kazakh
+
+"\x{04D8}" => "\x{0410}",       # SCHWA
+"\x{04D9}" => "\x{0430}",
+"\x{0492}" => "\x{0413}",       # GHE WITH STROKE
+"\x{0493}" => "\x{0433}",
+"\x{04A2}" => "\x{041D}",       # EN WITH DESCENDER
+"\x{04A3}" => "\x{043D}",
+"\x{04AE}" => "\x{0423}",       # STRAIGHT U
+"\x{04AF}" => "\x{0443}",
+"\x{04B0}" => "\x{0423}",       # STRAIGHT U WITH STROKE
+"\x{04B1}" => "\x{0443}",
+"\x{04BA}" => "\x{0425}",       # SHHA
+"\x{04BB}" => "\x{0445}",
+"\x{049A}" => "\x{041A}",       # KA WITH DESCENDER
+"\x{049B}" => "\x{043A}",
+"\x{04E8}" => "\x{041E}",       # BARRED O
+"\x{04E9}" => "\x{043E}",
+
+
+# Greek
+
+"\x{039F}" => "\x{041E}",       # Omicron
+"\x{03BF}" => "\x{043E}",
+
+
+# Latin
+
+"\x{00D6}" => "O",              # O with diaeresis
+"\x{00F6}" => "o",
+"\x{00DC}" => "U",              # U-umlaut
+"\x{00FC}" => "u",
+"\x{011E}" => "G",              # G with breve
+"\x{011F}" => "g",
+"\x{0131}" => "i",              # Small dotless i
+"\x{015E}" => "S",              # S with cedilla
+"\x{015F}" => "s",
