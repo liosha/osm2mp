@@ -373,7 +373,7 @@ while ( my $line = <IN> ) {
         my ($mtype, $mid, $mrole)  = 
             $line =~ / type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']+)["']/;
 
-        $mp_outer   = $mid      if  $mtype eq 'way'  &&  $mrole eq 'outer';
+        $mp_outer   = $mid      if  $mtype eq 'way'  &&  ( $mrole eq 'outer' || $mrole eq '' );
         push @mp_inner, $mid    if  $mtype eq 'way'  &&  $mrole eq 'inner';
 
         $tr_from    = $mid      if  $mtype eq 'way'  &&  $mrole eq 'from';
@@ -510,6 +510,8 @@ printf STDERR "%d loaded\n", scalar keys %city;
 ####    3rd pass
 ###     writing POIs
 
+my %barrier;
+
 print STDERR "Writing POIs...           ";
 
 print "\n\n\n; ### Points\n\n";
@@ -536,6 +538,18 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<\/node/ ) {
 
+        ##  Barriers
+        if ( $routing  &&  $nodetag{'barrier'} ) {
+            my $access = 0;
+            $access = $yesno{$nodetag{'access'}}        if exists $nodetag{'access'};
+            $access = $yesno{$nodetag{'vehicle'}}       if exists $nodetag{'vehicle'};
+            $access = $yesno{$nodetag{'motor_vehicle'}} if exists $nodetag{'motor_vehicle'};
+            $access = $yesno{$nodetag{'motorcar'}}      if exists $nodetag{'motorcar'};
+
+            $barrier{$nodeid} = $nodetag{'barrier'}     if !$access;
+        }
+
+        ##  POI
         my $poitag = first { $poitype{"$_=$nodetag{$_}"} } keys %nodetag;
         next  unless  $poitag;
         next  unless  !$bounds || is_inside_bounds( $node{$nodeid} );
@@ -572,6 +586,7 @@ while ( my $line = <IN> ) {
         printf "Phone=%s\n",      convert_string( $nodetag{'phone'} )           if $nodetag{'phone'};
 
         print  "[END]\n\n";
+
     }
 
     last  if  $line =~ /<way/;
@@ -1194,7 +1209,7 @@ if ( $routing ) {
         for my $node (@{$road->{chain}}) {
             $rnode{$node} ++;
             push @{$nodeways{$node}}, $roadid
-                if ( $nodetr{$node}  ||  ( $disableuturns && $enode{$node}==2 ) );
+                if ( $nodetr{$node}  ||  $barrier{$node}  ||  ( $disableuturns && $enode{$node}==2 ) );
         }
     }
 
@@ -1202,12 +1217,13 @@ if ( $routing ) {
     my $utcount  = 0;
 
     for my $node ( keys %rnode ) {
-        if (  $rnode{$node} > 1  ||  $enode{$node}  ||  $xnode{$node} 
+        if (  $rnode{$node} > 1  ||  $enode{$node}  ||  $xnode{$node}  ||  $barrier{$node}
           ||  exists $nodetr{$node}  &&  scalar @{$nodetr{$node}} ) {
             $nodid{$node} = $nodcount++;
         }
         
-        if ( $disableuturns  &&  $rnode{$node} == 2  &&  $enode{$node} == 2 ) {
+        ##  Disable U-turns
+        if ( $disableuturns  &&  $rnode{$node} == 2  &&  $enode{$node} == 2  &&  !$barrier{$node} ) {
             if ( $road{ $nodeways{$node}->[0] }->{rp}  =~  /^.,.,0/ ) {
                 my $pos = first_index { $_ eq $node } @{$road{ $nodeways{$node}->[0] }->{chain}};
                 $trest{ 'ut'.$utcount++ } = { 
@@ -1554,6 +1570,42 @@ if ( $routing && $restrictions  ) {
                     $newtr{to_dir} = -1;
                     $counttrest ++;
                     write_turn_restriction (\%newtr);
+                }
+            }
+        }
+    }
+
+    ##  Barriers
+
+    print "\n; ### Barriers\n\n";
+    for my $node ( keys %barrier ) {
+        print "; $barrier{$node}   NodeID = $node \n\n";
+        my %newtr = (
+            node    => $node,
+            type    => 'no',
+        );
+        for my $way_from ( @{$nodeways{$node}} ) {
+            $newtr{fr_way} = $way_from;
+            $newtr{fr_pos} = first_index { $_ eq $node } @{$road{ $way_from }->{chain}};
+            
+            for my $dir_from ( -1, 1 ) {
+                
+                next    if  $dir_from == -1  &&  $newtr{fr_pos} == $#{$road{ $way_from }->{chain}};
+                next    if  $dir_from == 1   &&  $newtr{fr_pos} == 0;
+
+                $newtr{fr_dir} = $dir_from;
+                for my $way_to ( @{$nodeways{$node}} ) {
+                    $newtr{to_way} = $way_to;
+                    $newtr{to_pos} = first_index { $_ eq $node } @{$road{ $way_to }->{chain}};
+
+                    for my $dir_to ( -1, 1 ) {
+                        next    if  $dir_to == -1  &&  $newtr{to_pos} == 0;
+                        next    if  $dir_to == 1   &&  $newtr{to_pos} == $#{$road{ $way_to }->{chain}};
+                        next    if  $way_from == $way_to  &&  $dir_from == -$dir_to;
+
+                        $newtr{to_dir} = $dir_to;
+                        write_turn_restriction (\%newtr);
+                    }
                 }
             }
         }
