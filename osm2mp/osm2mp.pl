@@ -1754,7 +1754,6 @@ sub write_turn_restriction {            # \%trest
     printf "Nod=${nodid{$tr->{node}}}\n";
     print  "TraffPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
     print  "TraffRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
-    print  "Time=\n";
     print  "[END-Restrict]\n\n";
 }
 
