@@ -511,6 +511,8 @@ printf STDERR "%d loaded\n", scalar keys %city;
 ###     writing POIs
 
 my %barrier;
+my %xnode;
+
 
 print STDERR "Writing POIs...           ";
 
@@ -548,6 +550,12 @@ while ( my $line = <IN> ) {
 
             $barrier{$nodeid} = $nodetag{'barrier'}     if !$access;
         }
+
+        ##  Forced external nodes
+        if ( $routing  &&  $nodetag{'garmin:extnode'} ) {
+            $xnode{$nodeid} = 1;
+        }
+
 
         ##  POI
         my $poitag = first { $poitype{"$_=$nodetag{$_}"} } keys %nodetag;
@@ -602,8 +610,6 @@ printf STDERR "%d written\n", $countpoi;
 
 my %road;
 my %coast;
-
-my %xnode;
 
 print STDERR "Processing ways...        ";
 
