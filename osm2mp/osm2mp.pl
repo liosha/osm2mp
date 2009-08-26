@@ -552,10 +552,9 @@ while ( my $line = <IN> ) {
         }
 
         ##  Forced external nodes
-        if ( $routing  &&  $nodetag{'garmin:extnode'} ) {
+        if ( $routing  &&  $yesno{$nodetag{'garmin:extnode'}} ) {
             $xnode{$nodeid} = 1;
         }
-
 
         ##  POI
         my $poitag = first { $poitype{"$_=$nodetag{$_}"} } keys %nodetag;
