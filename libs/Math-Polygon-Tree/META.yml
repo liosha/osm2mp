@@ -1,0 +1,18 @@
+--- #YAML:1.0
+name:                Math-Polygon-Tree
+version:             0.02
+abstract:            Class for fast check if point is inside polygon
+license:             perl
+author:              
+    - liosha <liosha@cpan.org>
+generated_by:        ExtUtils::MakeMaker version 6.42_01
+distribution_type:   module
+requires:     
+    List::MoreUtils:               0
+    List::Util:                    0
+    Math::Geometry::Planar::GPC::Polygon: 0
+    Math::Polygon:                 0
+    Test::More:                    0
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3
