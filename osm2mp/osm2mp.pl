@@ -1149,9 +1149,7 @@ if ( $routing ) {
             my @list = ();
             for my $r2 ( keys %{$rstart{$p1->[-1]}} ) {
                 if ( $r1 ne $r2  
-                  && $road{$r1}->{name} eq $road{$r2}->{name}
-                  && $road{$r1}->{city} eq $road{$r2}->{city}
-                  && $road{$r1}->{rp}   eq $road{$r2}->{rp}
+                  && [ @{$road{$r1}}{qw{type name city rp}} ] ~~ [ @{$road{$r2}}{qw{type name city rp}} ]
                   && lcos( $p1->[-2], $p1->[-1], $road{$r2}->{chain}->[1] ) > $mergecos ) {
                     push @list, $r2;
                 }
