@@ -3,8 +3,10 @@
 
 # use strict;
 require LWP::UserAgent;
+use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 
 
+binmode STDOUT;
 
 my $bbox = $ARGV[0];
 
@@ -29,12 +31,16 @@ while (scalar @tiles) {
     print STDERR "Getting bbox=$tile...   ";
 
     my $ua = LWP::UserAgent->new;
+    $ua->default_header('Accept-Encoding' => 'gzip');
+    
     my $req = HTTP::Request->new(GET => "$api$tile");
     my $res = $ua->request($req);
 
     if ($res->is_success) {
         print STDERR "Ok\n";
-        print $res->content;
+        my $data;
+        gunzip \($res->content) => \$data;
+        print $data;
     } else {
 #        print STDERR $res->status_line . "  --| ";
         print STDERR $res->code . "  --| ";
