@@ -836,6 +836,10 @@ while ( my $line = <IN> ) {
                $waytag{'maxspeed'} *= 1.61      if  $waytag{'maxspeed'} =~ /mph$/i;
                $rp[0]  = speed_code( $waytag{'maxspeed'} / 1.3 ); # real speed ?
             }
+            if ( $waytag{'maxspeed:practical'} > 0 ) {
+               $waytag{'maxspeed:practical'} *= 1.61        if  $waytag{'maxspeed:practical'} =~ /mph$/i;
+               $rp[0]  = speed_code( $waytag{'maxspeed:practical'} );
+            }
 
             $rp[2] = $yesno{$waytag{'oneway'}}                                    if exists $yesno{$waytag{'oneway'}};
 
