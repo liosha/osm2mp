@@ -343,17 +343,18 @@ print STDERR "Writing output files...       ";
 ##  creating output files
 
 for my $area (@tiles) {
-     open my $fh, '>', "$mapid.osm";
-     $area->{file} = $fh;
-     print  $fh "<?xml version='1.0' encoding='UTF-8'?>\n";
-     print  $fh "<osm version='0.6' generator='Tile Splitter'>\n";
-     printf $fh "  <bound box='%f,%f,%f,%f' origin='http://www.openstreetmap.org/api/0.6'/>\n", 
-            $area->{minlat},
-            $area->{minlon} < -180  ?  -180  :  $area->{minlon},
-            $area->{maxlat},
-            $area->{maxlon} >  180  ?   180  :  $area->{maxlon};
+    open my $fh, '>', "$mapid.osm";
+    $area->{mapid} = $mapid;
+    $area->{file}  = $fh;
+    print  $fh "<?xml version='1.0' encoding='UTF-8'?>\n";
+    print  $fh "<osm version='0.6' generator='Tile Splitter'>\n";
+    printf $fh "  <bound box='%f,%f,%f,%f' origin='http://www.openstreetmap.org/api/0.6'/>\n", 
+           $area->{minlat},
+           $area->{minlon} < -180  ?  -180  :  $area->{minlon},
+           $area->{maxlat},
+           $area->{maxlon} >  180  ?   180  :  $area->{maxlon};
 
-     $mapid ++;
+    $mapid ++;
 }
 
 
@@ -401,6 +402,9 @@ print STDERR "All done\n";
 
 ##  log tiles data
 
-for my $tile (@tiles) {      printf "%d  %d  %d\n", $tile->{nodes}->Norm(), $tile->{ways}->Norm(), $tile->{rels}->Norm();       }
+for my $tile (@tiles) {
+    printf "\n%08d:   %f,%f,%f,%f\n", @$tile{ qw{ mapid minlon minlat maxlon maxlat } };
+    printf "# Nodes: %d,  Ways: %d,  Rels: %d\n", $tile->{nodes}->Norm(), $tile->{ways}->Norm(), $tile->{rels}->Norm();
+}
 
 
