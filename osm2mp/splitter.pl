@@ -6,19 +6,26 @@ use List::Util qw{first max sum};
 use Bit::Vector;
 use Getopt::Long;
 
+use Data::Dump qw{ dd };
+
+
+my $lat_cell = 0.1;        # in degrees
+my $lon_cell = 0.2;
+
 
 my $MAXNODES    = 500_000_000;      # see current OSM values
 my $MAXWAYS     =  50_000_000;
 my $MAXRELS     =   1_000_000;
 
 
-my $mapid           = "65430001";
+my $mapid           = 65430001;
 my $max_tile_nodes  = 800_000;
+my $init_file_name  = q{};
 
 
 
 
-print STDERR "\n    ---|  OSM tile splitter  v0.2    (c) liosha  2009\n\n";
+print STDERR "\n    ---|  OSM tile splitter  v0.3    (c) liosha  2009\n\n";
 
 
 ##  reading command-line options
@@ -26,38 +33,59 @@ print STDERR "\n    ---|  OSM tile splitter  v0.2    (c) liosha  2009\n\n";
 my $opts_result = GetOptions (
         "mapid=s"       => \$mapid,
         "maxnodes=i"    => \$max_tile_nodes,
+        "init=s"        => \$init_file_name,
     );
 
 my $filename = $ARGV[0];
 if (!$filename) {
-    print "Usage:\n    splitter.pl [--mapid <mapid>] [--maxnodes <maxnodes>] <osm-file>\n\n";
+    print "Usage:\n";
+    print "  splitter.pl [--mapid <mapid>] [--maxnodes <maxnodes>] [--init <file>] <osm-file>\n\n";
     exit;
 }
 
-open IN, '<', $filename     or die $!;
-binmode IN;
 
+##  initial tiles configuration
 
-
-
-##  nodes 1st pass - initialising grid
-
-my $lat_cell = 0.1;        # in degrees
-my $lon_cell = 0.2;
-
-my %grid;
-
-my $way_pos = 0;
-my $nodeid_min = $MAXNODES;
-my $nodeid_max = 0;
-
-my $area_init = {
+my @areas_init = ();
+my $area_init  = {
         count   => 0,
         minlon  => 180,
         minlat  => 90,
         maxlon  => -180,
         maxlat  => -90,
     };
+
+if ( $init_file_name ) {
+    print STDERR "Loading initial areas...      ";
+    open INIT, '<', $init_file_name     or die $!;
+    while ( <INIT> ) {
+        my ($mapid,$minlon,$minlat,$maxlon,$maxlat)
+            = /^(\d{8}):\s+([\d\.\-]+),([\d\.\-]+),([\d\.\-]+),([\d\.\-]+)/;
+        if ( $mapid ) {
+            push @areas_init, {
+                    count   => 0,
+                    minlon  => $minlon,
+                    minlat  => $minlat,
+                    maxlon  => $maxlon,
+                    maxlat  => $maxlat,
+                };
+        }
+    }
+    printf STDERR "%d loaded\n", scalar @areas_init;
+}
+
+
+open IN, '<', $filename     or die $!;
+binmode IN;
+
+
+##  nodes 1st pass - initialising grid
+
+my %grid;
+
+my $way_pos = 0;
+my $nodeid_min = $MAXNODES;
+my $nodeid_max = 0;
 
 print STDERR "Initialising grid...          ";
 
@@ -68,6 +96,12 @@ while (my $line = <IN>) {
     $way_pos = tell IN;
 
     next unless $id;
+
+    if ( @areas_init ) {
+        my $area = first { $lat<=$_->{maxlat} && $lat>=$_->{minlat} && $lon<=$_->{maxlon} && $lon>=$_->{minlon} } @areas_init;
+        $area->{count} ++   if $area;
+        next                unless $area;
+    }
 
     my $glat = floor( $lat / $lat_cell );
     my $glon = floor( $lon / $lon_cell );
@@ -99,7 +133,7 @@ $area_init->{maxlon} += $lon_cell;
 
 ##  splitting
 
-my @areas = ($area_init);
+my @areas = ( @areas_init  ?  @areas_init  :  ($area_init) );
 my @tiles = ();
 
 print STDERR "Calculating...                ";
