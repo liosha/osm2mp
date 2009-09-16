@@ -8,6 +8,7 @@
 ##    * Text::Unidecode
 ##    * List::MoreUtils
 ##    * Math::Polygon
+##    * Math::Polygon::Tree
 ##    * Math::Geometry::Planar::GPC::Polygon
 ##
 ##  See http://cpan.org/ or use PPM (Perl package manager) or CPAN module
@@ -29,10 +30,10 @@ use Text::Unidecode;
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
-use PolygonTree;
+use Math::Polygon::Tree;
 
 use List::Util qw{ first reduce };
-use List::MoreUtils qw{ any first_index };
+use List::MoreUtils qw{ all any first_index };
 
 # debug
 use Data::Dump qw{ dd };
@@ -69,12 +70,12 @@ my $disableuturns   = 0;
 
 my $upcase          = 0;
 my $translit        = 0;
-my $ttable          = '';
+my $ttable          = q{};
 
 my $bbox;
 my $bpolyfile;
 my $osmbbox         = 0;
-my $background      = 0;
+my $background      = 1;
 
 my $shorelines      = 0;
 my $navitel         = 0;
@@ -82,7 +83,7 @@ my $makepoi         = 1;
 
 my $defaultcountry  = "Earth";
 my $defaultregion   = "OSM";
-my $defaultcity     = '';
+my $defaultcity     = q{};
 
 
 my $nametaglist     = "name,ref,int_ref,addr:housenumber";
@@ -99,6 +100,7 @@ my %yesno = (
     'true'           => '1',
     '1'              => '1',
     'permissive'     => '1',
+    'designated'     => '1',
     'no'             => '0',
     'false'          => '0',
     '0'              => '0',
@@ -174,9 +176,9 @@ while (<CFG>) {
     chomp;
     my ($k, $v, $type, $llev, $hlev, $city) = split /\s+/;
     if ($type) {
-        $llev = 0   if $llev eq '';
-        $hlev = 1   if $hlev eq '';
-        $city = ($city ne '') ? 1 : 0;
+        $llev = 0   unless defined $llev;
+        $hlev = 1   unless defined $hlev;
+        $city = (defined $city) ? 1 : 0;
         $poitype{"$k=$v"} = [ $type, $llev, $hlev, $city ];
     }
 }
@@ -198,8 +200,8 @@ while (<CFG>) {
             $type = $1;
             $prio = $2;
         }
-        $llev = 0   if ($llev eq '');
-        $hlev = 1   if ($hlev eq '');
+        $llev = 0   unless defined $llev;
+        $hlev = 1   unless defined $hlev;
 
      $polytype{"$k=$v"} = [ $mode, $type, $prio, $llev, $hlev, $rp ];
    }
@@ -249,7 +251,7 @@ if ($bbox) {
     $bounds = 1 ;
     my ($minlon, $minlat, $maxlon, $maxlat) = split q{,}, $bbox;
     @bound = ( [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] );
-    $boundtree = PolygonTree->new( \@bound );
+    $boundtree = Math::Polygon::Tree->new( \@bound );
 }
 
 if ($bpolyfile) {
@@ -269,7 +271,7 @@ if ($bpolyfile) {
         }
         elsif (/^END/) {
             @bound = reverse @bound     if  Math::Polygon->new( @bound )->isClockwise();
-            $boundtree = PolygonTree->new( \@bound );
+            $boundtree = Math::Polygon::Tree->new( \@bound );
         }
     }
     close (PF);
@@ -305,7 +307,7 @@ while ( my $line = <IN> ) {
         $bbox = join q{,}, ($minlon, $minlat, $maxlon, $maxlat);
         $bounds = 1     if $bbox;
         @bound = ( [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] );
-        $boundtree = PolygonTree->new( \@bound );
+        $boundtree = Math::Polygon::Tree->new( \@bound );
     }
 
     last    if $line =~ /<way/;
@@ -373,6 +375,8 @@ while ( my $line = <IN> ) {
         my ($mtype, $mid, $mrole)  = 
             $line =~ / type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']+)["']/;
 
+        next    unless $mtype;
+
         $mp_outer   = $mid      if  $mtype eq 'way'  &&  ( $mrole eq 'outer' || $mrole eq '' );
         push @mp_inner, $mid    if  $mtype eq 'way'  &&  $mrole eq 'inner';
 
@@ -390,14 +394,14 @@ while ( my $line = <IN> ) {
         next;
     }
 
-    if ( $line =~ /<\/relation/ ) {
+    if ( $line =~ /<\/relation/  &&  defined $reltype ) {
         if ( $reltype eq 'multipolygon' ) {
             $mpoly{$mp_outer}   = [ @mp_inner ];
             for my $hole (@mp_inner) {
                 $mphole{$hole} = 1;
             }
         }
-        if ( $routing  &&  $restrictions  &&  $reltype eq 'restriction' ) {
+        if ( $routing  &&  $restrictions  &&  $reltype eq 'restriction'  && defined $tr_type ) {
             $tr_to = $tr_from       if  $tr_type eq 'no_u_turn'  &&  !$tr_to;
 
             if ( $tr_from && $tr_via && $tr_to ) {
@@ -455,7 +459,7 @@ while ( my $line = <IN> ) {
     if ( $line =~ /<nd/ ) {
         my ($ref)  =  $line =~ / ref=["']([^"']+)["']/;
         if ( $node{$ref} ) {
-            if ( $ref ne $chain[-1] ) {
+            unless ( scalar @chain  &&  $ref eq $chain[-1] ) {
                 push @chain, $ref;
             }
             else {
@@ -479,7 +483,7 @@ while ( my $line = <IN> ) {
        }
 
        ##       this way is city bound
-       if ( $waytag{'place'} eq 'city'  ||  $waytag{'place'} eq 'town' ) { 
+       if ( exists $waytag{'place'} && ( $waytag{'place'} eq 'city' || $waytag{'place'} eq 'town' ) ) { 
            my $name = convert_string ( first {defined} @waytag{@citynamelist} );
 
            if ( $name  &&  $chain[0] eq $chain[-1] ) {
@@ -488,7 +492,7 @@ while ( my $line = <IN> ) {
                     name        =>  $name,
                     region      =>  convert_string( first {defined} @waytag{@regionnamelist} ),
                     country     =>  convert_string( first {defined} @waytag{@countrynamelist} ),
-                    bound       =>  PolygonTree->new( [ map { [ split q{,}, $node{$_} ] } @chain ] ),
+                    bound       =>  Math::Polygon::Tree->new( [ map { [ split q{,}, $node{$_} ] } @chain ] ),
                };
            } else {
                print "; ERROR: City without name WayID=$wayid\n"            unless  $name;
@@ -542,17 +546,11 @@ while ( my $line = <IN> ) {
 
         ##  Barriers
         if ( $routing  &&  $nodetag{'barrier'} ) {
-            my $access = 0;
-            $access = $yesno{$nodetag{'access'}}        if exists $nodetag{'access'};
-            $access = $yesno{$nodetag{'vehicle'}}       if exists $nodetag{'vehicle'};
-            $access = $yesno{$nodetag{'motor_vehicle'}} if exists $nodetag{'motor_vehicle'};
-            $access = $yesno{$nodetag{'motorcar'}}      if exists $nodetag{'motorcar'};
-
-            $barrier{$nodeid} = $nodetag{'barrier'}     if !$access;
+            AddBarrier({ nodeid => $nodeid,  tags => \%nodetag });
         }
 
         ##  Forced external nodes
-        if ( $routing  &&  $yesno{$nodetag{'garmin:extnode'}} ) {
+        if ( $routing  &&  exists $nodetag{'garmin:extnode'}  &&  $yesno{$nodetag{'garmin:extnode'}} ) {
             $xnode{$nodeid} = 1;
         }
 
@@ -563,37 +561,26 @@ while ( my $line = <IN> ) {
 
         $countpoi ++;
         my $poi = "$poitag=$nodetag{$poitag}";
-        my $poiname = convert_string( first {defined} @nodetag{@nametagarray} );
         my ($type, $llev, $hlev, $iscity) = @{$poitype{$poi}};
 
-        print  "; NodeID = $nodeid\n";
-        print  "; $poi\n";
-        print  "[POI]\n";
-        print  "Type=$type\n";
-        printf "Data%d=($node{$nodeid})\n",    $llev;
-        printf "EndLevel=%d\n",                 $hlev       if  $hlev > $llev;
-        printf "City=Y\n",                                  if  $iscity;
-        print  "Label=$poiname\n"                           if  $poiname;
+        my %poiinfo = (
+                nodeid      => $nodeid,
+                comment     => $poi,
+                type        => $type,
+                level_l     => $llev,
+                level_h     => $hlev,
+                tags        => \%nodetag,
+            );
 
-        my $city = first { $_->{bound}->contains( [ split q{,}, $node{$nodeid} ] ) } values %city;
-
-        if ( $city ) {
-            print "CityName="    . $city->{name}     . "\n";
-            print "RegionName="  . $city->{region}   . "\n"      if  $city->{region};
-            print "CountryName=" . $city->{country}  . "\n"      if  $city->{country};
+        if ( $iscity ) {
+            $poiinfo{City}          = 'Y';
+            $poiinfo{add_region}    = 1;
         }
-        elsif ( $defaultcity ) {
-            print "CityName=$defaultcity\n";
+        else {
+            $poiinfo{add_address}   = 1;
         }
 
-        my $housenumber = convert_string( first {defined} @nodetag{@housenamelist} );
-        print  "HouseNumber=$housenumber\n"                                     if $housenumber;
-        printf "StreetDesc=%s\n", convert_string( $nodetag{'addr:street'} )     if $nodetag{'addr:street'};
-        printf "Zip=%s\n",        convert_string( $nodetag{'addr:postcode'} )   if $nodetag{'addr:postcode'};
-        printf "Phone=%s\n",      convert_string( $nodetag{'phone'} )           if $nodetag{'phone'};
-
-        print  "[END]\n\n";
-
+        AddPOI ( \%poiinfo );
     }
 
     last  if  $line =~ /<way/;
@@ -617,9 +604,7 @@ print "\n\n\n; ### Lines and polygons\n\n";
 my $countlines    = 0;
 my $countpolygons = 0;
 
-my $wayid;
 my $city;
-my @chain;
 my @chainlist;
 my $inbounds;
 
@@ -761,7 +746,7 @@ while ( my $line = <IN> ) {
 
 
                 if ( $navitel  ||  ($makepoi && $rp && $name) ) {
-                    $city = first { $city{$_}->{bound}->contains( [ split q{,}, $node{$chain[0]} ] ) } keys %city;
+                    $city = $city{ FindCity( $chain[0] ) };
                 }
 
                 ## Navitel
@@ -771,9 +756,9 @@ while ( my $line = <IN> ) {
                         print  "HouseNumber=$housenumber\n";
                         printf "StreetDesc=%s\n", convert_string( $waytag{'addr:street'} );
                         if ( $city ) {
-                            print "CityName="    . $city{$city}->{name}      . "\n";
-                            print "RegionName="  . $city{$city}->{region}    . "\n"      if $city{$city}->{region};
-                            print "CountryName=" . $city{$city}->{country}   . "\n"      if $city{$city}->{country};
+                            print "CityName="    . $city->{name}      . "\n";
+                            print "RegionName="  . $city->{region}    . "\n"      if $city->{region};
+                            print "CountryName=" . $city->{country}   . "\n"      if $city->{country};
                         } 
                         elsif ( $defaultcity ) {
                             print "CityName=$defaultcity\n";
@@ -792,27 +777,15 @@ while ( my $line = <IN> ) {
             
                     my ($poi, $pll, $phl) = split q{,}, $rp;
             
-                    print  "[POI]\n";
-                    print  "Type=$poi\n";
-                    print  "EndLevel=$phl\n";
-                    print  "Label=$name\n";
-                    printf "Data%d=(%f,%f)\n", $pll, centroid( @{$plist[0]} );
-            
-                    my $housenumber = convert_string ( first {defined} @waytag{@housenamelist} );
-                    if ( $housenumber && $waytag{'addr:street'} ) {
-                        print  "HouseNumber=$housenumber\n";
-                        printf "StreetDesc=%s\n", convert_string( $waytag{'addr:street'} );
-                        if ( $city ) {
-                            print "CityName="    . $city{$city}->{name}      . "\n";
-                            print "RegionName="  . $city{$city}->{region}    . "\n"      if $city{$city}->{region};
-                            print "CountryName=" . $city{$city}->{country}   . "\n"      if $city{$city}->{country};
-                        } 
-                        elsif ( $defaultcity ) {
-                            print "CityName=$defaultcity\n";
-                        }
-                    }
-            
-                    print  "[END]\n\n\n";
+                    AddPOI ({
+                            latlon      => ( join q{,}, centroid( @{$plist[0]} ) ),
+                            comment     => "for area $poly WayID=$wayid",
+                            type        => $poi,
+                            tags        => \%waytag,
+                            level_l     => $pll,
+                            level_h     => $phl,
+                            add_address => 1,
+                        });
                 }
                 
             }
@@ -859,14 +832,13 @@ while ( my $line = <IN> ) {
             @rp[      7,8,       ]  =  (1-$yesno{$waytag{'psv'}})           x 2   if exists $yesno{$waytag{'psv'}};
             @rp[        8,       ]  =  (1-$yesno{$waytag{'taxi'}})          x 1   if exists $yesno{$waytag{'taxi'}};
             @rp[      7,         ]  =  (1-$yesno{$waytag{'bus'}})           x 1   if exists $yesno{$waytag{'bus'}};
-            @rp[               11]  =  (1-$yesno{$waytag{'hgv'}})           x 1   if exists $yesno{$waytag{'hgv'}};
+            @rp[              11,]  =  (1-$yesno{$waytag{'hgv'}})           x 1   if exists $yesno{$waytag{'hgv'}};
             @rp[  5,             ]  =  (1-$yesno{$waytag{'goods'}})         x 1   if exists $yesno{$waytag{'goods'}};
 
 
             # determine city
             if ( $name ) {
-                $city = first { $city{$_}->{bound}->contains( [ split q{,}, $node{$chain[ 0]} ] )
-                            &&  $city{$_}->{bound}->contains( [ split q{,}, $node{$chain[-1]} ] ) } keys %city;
+                $city =  FindCity( $chain[0], $chain[-1] );
             }
 
             # load roads and external nodes
@@ -1003,9 +975,9 @@ if ( $shorelines ) {
                 }
 
                 # check end of coastline
-                my $p1      = [ reverse  split q{,}, $node{$coast{$sline}->[-1]} ];
-                my $p2      = [ reverse  split q{,}, $node{$coast{$sline}->[-2]} ];
-                my $ipoint  = segment_intersection( $bound[$i], $bound[$i+1], $p1, $p2 );
+                $p1      = [ reverse  split q{,}, $node{$coast{$sline}->[-1]} ];
+                $p2      = [ reverse  split q{,}, $node{$coast{$sline}->[-2]} ];
+                $ipoint  = segment_intersection( $bound[$i], $bound[$i+1], $p1, $p2 );
 
                 if ( $ipoint ) {
                     if ( any { $_->{type} eq 'start'  &&  $_->{point} ~~ $ipoint } @tbound ) {
@@ -1034,7 +1006,7 @@ if ( $shorelines ) {
         }
 
         # merge lines
-        my $tmp = 0;
+        $tmp = 0;
         for my $node ( sort { $a->{pos}<=>$b->{pos} } @tbound ) {
             my $latlon = join q{,}, reverse @{$node->{point}};
             $node{$latlon} = $latlon;
@@ -1069,13 +1041,16 @@ if ( $shorelines ) {
     for my $loop ( grep { $coast{$_}->[0] eq $coast{$_}->[-1] } keys %coast ) {
 
         # filter huge polygons to avoid cgpsmapper's crash
-        next if scalar @{$coast{$loop}} > 40000;
+        if ( scalar @{$coast{$loop}} > 100000 ) {
+            printf "; WARNING: skipped too big coastline $loop (%d nodes)\n", scalar @{$coast{$loop}};
+            next;
+        }
 
         if ( Math::Polygon->new( map { [ split q{,}, $node{$_} ] } @{$coast{$loop}} )->isClockwise() ) {
             $island{$loop} = 1;
         } 
         else {
-            $lake{$loop} = PolygonTree->new( [ map { [ split q{,}, $node{$_} ] } @{$coast{$loop}} ] );
+            $lake{$loop} = Math::Polygon::Tree->new( [ map { [ split q{,}, $node{$_} ] } @{$coast{$loop}} ] );
         }
     }
 
@@ -1639,6 +1614,7 @@ print STDERR "All done!!\n\n";
 sub convert_string {            # String
 
     my $str = decode('utf8', $_[0]);
+    return $str     unless $str;
    
     unless ( $translit ) {
         for my $repl ( keys %cmap ) {
@@ -1874,3 +1850,96 @@ sub centroid {
 #    return ($slat/$ssq , $slon/$ssq);
     return ($slon/$ssq , $slat/$ssq);
 }
+
+
+
+
+####    Exported functions
+
+sub FindCity {
+    my @nodes = @_;
+    return first { 
+            my $cbound = $city{$_}->{bound};
+            all { $cbound->contains( [ split q{,}, (exists $node{$_} ? $node{$_} : $_) ] ) } @nodes;
+        } keys %city;
+}
+
+
+sub AddPOI {
+    my %param = %{$_[0]};
+
+    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
+
+    return      unless  exists $param{nodeid}  ||  exists $param{latlon}; 
+    return      unless  exists $param{type};
+
+    my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
+    my $hlev  =  exists $param{level_h} ? $param{level_h} : 1;
+
+    print  "; NodeID = $param{nodeid}\n"    if  exists $param{nodeid};
+    print  "; $param{comment}\n"            if  exists $param{comment};
+
+    print  "[POI]\n";
+    
+    print  "Type=$param{type}\n";
+    printf "Label=%s\n", convert_string( first { defined } @{$param{tags}}{@nametagarray} )
+        unless  $param{Label};
+
+    printf "Data%d=($node{$param{nodeid}})\n", $llev    if  exists $param{nodeid};
+    printf "Data%d=($param{latlon})\n", $llev           if  exists $param{latlon};
+    print  "EndLevel=$hlev\n"       if  $hlev > $llev;
+
+    # region and country - for cities
+    if ( $param{add_region} ) {
+        my $region  = convert_string( first { defined } @{$param{tags}}{@regionnamelist} );
+        my $country = convert_string( first { defined } @{$param{tags}}{@countrynamelist} );
+        print "RegionName=$region\n"    if $region;
+        print "CountryName=$country\n", if $country;
+    }
+
+    # contact information: address, phone
+    if ( $param{add_address} ) {
+        my $city = $city{ FindCity( $param{nodeid} ) }  if  exists $param{nodeid};
+        my $city = $city{ FindCity( $param{latlon} ) }  if  exists $param{latlon};
+        if ( $city ) {
+            print "CityName=$city->{name}\n";
+            print "RegionName=$city->{region}\n"        if  $city->{region};
+            print "CountryName=$city->{country}\n"      if  $city->{country};
+        }
+        elsif ( $defaultcity ) {
+            print "CityName=$defaultcity\n";
+        }
+                                                            
+        printf "Zip=%s\n",          convert_string($tag{'addr:postcode'})   if  exists $tag{'addr:postcode'};
+        printf "StreetDesc=%s\n",   convert_string($tag{'addr:street'})     if  exists $tag{'addr:street'};
+        printf "Phone=%s\n",        convert_string($tag{'phone'})           if  exists $tag{'phone'};
+    }
+
+    # ADD: marine information
+
+    # other parameters - capital first letter!
+    for my $key ( grep { /^[A-Z]/ } keys %param ) {
+        next  if  $param{$key} eq q{};
+        printf "$key=%s\n", convert_string($param{$key});
+    }
+
+    print  "[END]\n\n";
+}
+
+
+sub AddBarrier {
+    my %param = %{$_[0]};
+
+    return  unless  exists $param{nodeid};
+    return  unless  exists $param{tags};
+
+    my %tag = %{$param{tags}};
+    my $access = 0;
+    $access = $yesno{$tag{'access'}}            if exists $tag{'access'};
+    $access = $yesno{$tag{'vehicle'}}           if exists $tag{'vehicle'};
+    $access = $yesno{$tag{'motor_vehicle'}}     if exists $tag{'motor_vehicle'};
+    $access = $yesno{$tag{'motorcar'}}          if exists $tag{'motorcar'};
+
+    $barrier{$param{nodeid}} = $tag{'barrier'}  if !$access;
+}
+
