@@ -401,7 +401,7 @@ while ( my $line = <IN> ) {
                 $mphole{$hole} = 1;
             }
         }
-        if ( $routing  &&  $restrictions  &&  $reltype eq 'restriction'  && defined $tr_type ) {
+        if ( $routing  &&  $restrictions  &&  $reltype eq 'restriction' ) {
             $tr_to = $tr_from       if  $tr_type eq 'no_u_turn'  &&  !$tr_to;
 
             if ( $tr_from && $tr_via && $tr_to ) {
