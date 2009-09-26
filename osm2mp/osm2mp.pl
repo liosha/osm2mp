@@ -401,7 +401,7 @@ while ( my $line = <IN> ) {
                 $mphole{$hole} = 1;
             }
         }
-        if ( $routing  &&  $restrictions  &&  $reltype eq 'restriction' ) {
+        if ( $routing  &&  $restrictions  &&  $reltype eq 'restriction'  && defined $tr_type ) {
             $tr_to = $tr_from       if  $tr_type eq 'no_u_turn'  &&  !$tr_to;
 
             if ( $tr_from && $tr_via && $tr_to ) {
@@ -768,6 +768,14 @@ while ( my $line = <IN> ) {
             
                 for my $polygon ( @plist ) {
                     printf "Data%d=(%s)\n", $llev, join( q{), (}, map {join( q{,}, reverse @{$_} )} @{$polygon} );
+                }
+
+                ## Rusa - floors
+                if ( $waytag{'building:levels'} ) {
+                    printf "Floors=%d\n",  0 + $waytag{'building:levels'};
+                }
+                if ( $waytag{'building:height'} ) {
+                    printf "Floors=%d\n",  3 * $waytag{'building:height'};
                 }
             
                 print "[END]\n\n\n";
@@ -1860,7 +1868,8 @@ sub FindCity {
     my @nodes = @_;
     return first { 
             my $cbound = $city{$_}->{bound};
-            all { $cbound->contains( [ split q{,}, (exists $node{$_} ? $node{$_} : $_) ] ) } @nodes;
+            # map { print ("; ", join (q{:}, (split q{,}, ( exists $node{$_} ? $node{$_} : $_ ))), "\n" ) } @nodes;
+            all { $cbound->contains( [ split q{,}, ( exists $node{$_} ? $node{$_} : $_ ) ] ) } @nodes;
         } keys %city;
 }
 
@@ -1882,8 +1891,8 @@ sub AddPOI {
     print  "[POI]\n";
     
     print  "Type=$param{type}\n";
-    printf "Label=%s\n", convert_string( first { defined } @{$param{tags}}{@nametagarray} )
-        unless  $param{Label};
+    my $label = convert_string( first { defined } @{$param{tags}}{@nametagarray} );
+    printf "Label=%s\n", $label     if $label && !exists( $param{Label} ); 
 
     printf "Data%d=($node{$param{nodeid}})\n", $llev    if  exists $param{nodeid};
     printf "Data%d=($param{latlon})\n", $llev           if  exists $param{latlon};
@@ -1892,15 +1901,16 @@ sub AddPOI {
     # region and country - for cities
     if ( $param{add_region} ) {
         my $region  = convert_string( first { defined } @{$param{tags}}{@regionnamelist} );
-        my $country = convert_string( first { defined } @{$param{tags}}{@countrynamelist} );
         print "RegionName=$region\n"    if $region;
-        print "CountryName=$country\n", if $country;
+#        my $country = convert_string( first { defined } @{$param{tags}}{@countrynamelist} );
+#        print "CountryName=$country\n", if $country;
     }
 
     # contact information: address, phone
-    if ( $param{add_address} ) {
+    if ( 0 && $param{add_address} ) {
+#    if ( $param{add_address} ) {
         my $city = $city{ FindCity( $param{nodeid} ) }  if  exists $param{nodeid};
-        my $city = $city{ FindCity( $param{latlon} ) }  if  exists $param{latlon};
+        $city = $city{ FindCity( $param{latlon} ) }  if  exists $param{latlon};
         if ( $city ) {
             print "CityName=$city->{name}\n";
             print "RegionName=$city->{region}\n"        if  $city->{region};
