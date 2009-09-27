@@ -85,8 +85,10 @@ my $defaultcountry  = "Earth";
 my $defaultregion   = "OSM";
 my $defaultcity     = q{};
 
+my $poiregion       = 0;        # sometimes causes mapsource crash?
+my $poicontacts     = 1;
 
-my $nametaglist     = "name,ref,int_ref,addr:housenumber";
+my $nametaglist     = "name,ref,int_ref,addr:housenumber,operator";
 
 # ??? make command-line parameters?
 my @housenamelist   = qw{ addr:housenumber addr:housename };
@@ -139,6 +141,8 @@ GetOptions (
     'shorelines!'       => \$shorelines,
     'navitel!'          => \$navitel,
     'makepoi!'          => \$makepoi,
+    'poiregion!'        => \$poiregion,
+    'poicontacts!'      => \$poicontacts,
 );
 
 undef $codepage   if $nocodepage;
@@ -1799,6 +1803,8 @@ Possible options [defaults]:
 
  --shorelines              process shorelines                        [$onoff[$shorelines]]
  --makepoi                 create POIs for polygons                  [$onoff[$makepoi]]
+ --poiregion               write region info for settlements         [$onoff[$poiregion]]
+ --poicontacts             write contact info for POIs               [$onoff[$poicontacts]]
 
 
 You can use no<option> disable features (i.e --nomergeroads)
@@ -1899,18 +1905,18 @@ sub AddPOI {
     print  "EndLevel=$hlev\n"       if  $hlev > $llev;
 
     # region and country - for cities
-    if ( $param{add_region} ) {
+    if ( $poiregion  &&  $label  &&  $param{add_region} ) {
+        print "CityName=$label\n";
         my $region  = convert_string( first { defined } @{$param{tags}}{@regionnamelist} );
-        print "RegionName=$region\n"    if $region;
-#        my $country = convert_string( first { defined } @{$param{tags}}{@countrynamelist} );
-#        print "CountryName=$country\n", if $country;
+        print "RegionName=$region\n"        if $region;
+        my $country = convert_string( first { defined } @{$param{tags}}{@countrynamelist} );
+        print "CountryName=$country\n"      if $country;
     }
 
     # contact information: address, phone
-    if ( 0 && $param{add_address} ) {
-#    if ( $param{add_address} ) {
-        my $city = $city{ FindCity( $param{nodeid} ) }  if  exists $param{nodeid};
-        $city = $city{ FindCity( $param{latlon} ) }  if  exists $param{latlon};
+    if ( $poicontacts  &&  $param{add_address} ) {
+        my $city = $city{ FindCity( $param{nodeid} ) }  if  $param{nodeid};
+        $city = $city{ FindCity( $param{latlon} ) }     if  $param{latlon};
         if ( $city ) {
             print "CityName=$city->{name}\n";
             print "RegionName=$city->{region}\n"        if  $city->{region};
@@ -1920,16 +1926,18 @@ sub AddPOI {
             print "CityName=$defaultcity\n";
         }
                                                             
-        printf "Zip=%s\n",          convert_string($tag{'addr:postcode'})   if  exists $tag{'addr:postcode'};
-        printf "StreetDesc=%s\n",   convert_string($tag{'addr:street'})     if  exists $tag{'addr:street'};
-        printf "Phone=%s\n",        convert_string($tag{'phone'})           if  exists $tag{'phone'};
+        my $housenumber = convert_string( first {defined} @waytag{@housenamelist} );
+        print  "HouseNumber=$housenumber\n"     if $housenumber;
+        printf "StreetDesc=%s\n",   convert_string($tag{'addr:street'})     if  $tag{'addr:street'};
+        printf "Zip=%s\n",          convert_string($tag{'addr:postcode'})   if  $tag{'addr:postcode'};
+        printf "Phone=%s\n",        convert_string($tag{'phone'})           if  $tag{'phone'};
     }
 
     # ADD: marine information
 
     # other parameters - capital first letter!
     for my $key ( grep { /^[A-Z]/ } keys %param ) {
-        next  if  $param{$key} eq q{};
+        next    if  $param{$key} eq q{};
         printf "$key=%s\n", convert_string($param{$key});
     }
 
