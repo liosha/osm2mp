@@ -78,6 +78,8 @@ my $osmbbox         = 0;
 my $background      = 1;
 
 my $shorelines      = 0;
+my $waterback       = 0;
+
 my $navitel         = 0;
 my $makepoi         = 1;
 
@@ -139,6 +141,7 @@ GetOptions (
     'background!'       => \$background,
     'disableuturns!'    => \$disableuturns,
     'shorelines!'       => \$shorelines,
+    'waterback!'        => \$waterback,
     'navitel!'          => \$navitel,
     'makepoi!'          => \$makepoi,
     'poiregion!'        => \$poiregion,
@@ -565,7 +568,7 @@ while ( my $line = <IN> ) {
 
         $countpoi ++;
         my $poi = "$poitag=$nodetag{$poitag}";
-        my ($type, $llev, $hlev, $iscity) = @{$poitype{$poi}};
+        my ($type, $llev, $hlev, $poimode) = @{$poitype{$poi}};
 
         my %poiinfo = (
                 nodeid      => $nodeid,
@@ -576,12 +579,12 @@ while ( my $line = <IN> ) {
                 tags        => \%nodetag,
             );
 
-        if ( $iscity ) {
+        if ( $poimode eq 'city' ) {
             $poiinfo{City}          = 'Y';
             $poiinfo{add_region}    = 1;
         }
-        else {
-            $poiinfo{add_address}   = 1;
+        elsif ( $poimode eq 'contacts' ) {
+            $poiinfo{add_contacts}  = 1;
         }
 
         AddPOI ( \%poiinfo );
@@ -790,13 +793,13 @@ while ( my $line = <IN> ) {
                     my ($poi, $pll, $phl) = split q{,}, $rp;
             
                     AddPOI ({
-                            latlon      => ( join q{,}, centroid( @{$plist[0]} ) ),
-                            comment     => "for area $poly WayID=$wayid",
-                            type        => $poi,
-                            tags        => \%waytag,
-                            level_l     => $pll,
-                            level_h     => $phl,
-                            add_address => 1,
+                            latlon       => ( join q{,}, centroid( @{$plist[0]} ) ),
+                            comment      => "for area $poly WayID=$wayid",
+                            type         => $poi,
+                            tags         => \%waytag,
+                            level_l      => $pll,
+                            level_h      => $phl,
+                            add_contacts => 1,
                         });
                 }
                 
@@ -920,6 +923,8 @@ printf STDERR "                          %d coastlines loaded\n", scalar keys %c
 
 if ( $shorelines ) {
 
+    my $boundcross = 0;
+
     print "\n\n\n";
     print STDERR "Processing shorelines...  ";
 
@@ -977,6 +982,7 @@ if ( $shorelines ) {
                         @tbound = grep { !( $_->{type} eq 'end'  &&  $_->{point} ~~ $ipoint ) } @tbound;
                     } 
                     else { 
+                        $boundcross ++;
                         push @tbound, {
                             type    =>  'start', 
                             point   =>  $ipoint, 
@@ -996,6 +1002,7 @@ if ( $shorelines ) {
                         @tbound = grep { !( $_->{type} eq 'start'  &&  $_->{point} ~~ $ipoint ) } @tbound;
                     } 
                     else { 
+                        $boundcross ++;
                         push @tbound, {
                             type    =>  'end', 
                             point   =>  $ipoint, 
@@ -1062,10 +1069,15 @@ if ( $shorelines ) {
             $island{$loop} = 1;
         } 
         else {
-            $lake{$loop} = Math::Polygon::Tree->new( [ map { [ split q{,}, $node{$_} ] } @{$coast{$loop}} ] );
+            $lake{$loop} = Math::Polygon::Tree->new( [ map { [ reverse split q{,}, $node{$_} ] } @{$coast{$loop}} ] );
         }
     }
 
+
+    ##  adding sea background
+    if ( $waterback && $bounds && !$boundcross ) {
+        $lake{'background'} = $boundtree;
+    }
     
     ##  writing
     my $countislands = 0;
@@ -1075,12 +1087,17 @@ if ( $shorelines ) {
         print  "[POLYGON]\n";
         print  "Type=0x3c\n";
         print  "EndLevel=4\n";
-        printf "Data0=(%s)\n",  join ( q{), (}, @node{@{$coast{$sea}}} );
+
+        printf "Data0=(%s)\n",  join( q{), (},  
+            $sea eq 'background'  
+                ?  map { join q{,}, reverse @{$_} } @bound
+                :  @node{@{$coast{$sea}}}
+            );
         
         for my $island  ( keys %island ) {
-            if ( $lake{$sea}->contains( [ split q{,}, $node{$island} ] ) ) {
+            if ( $lake{$sea}->contains( [ reverse split q{,}, $node{$island} ] ) ) {
                 $countislands ++;
-                printf "Data0=(%s)\n",  join ( q{), (}, @node{@{$coast{$island}}} );
+                printf "Data0=(%s)\n",  join( q{), (}, @node{@{$coast{$island}}} );
                 delete $island{$island};
             }
         }
@@ -1802,6 +1819,7 @@ Possible options [defaults]:
  --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
 
  --shorelines              process shorelines                        [$onoff[$shorelines]]
+ --waterback               water background (for island maps)        [$onoff[$waterback]]
  --makepoi                 create POIs for polygons                  [$onoff[$makepoi]]
  --poiregion               write region info for settlements         [$onoff[$poiregion]]
  --poicontacts             write contact info for POIs               [$onoff[$poicontacts]]
@@ -1906,7 +1924,6 @@ sub AddPOI {
 
     # region and country - for cities
     if ( $poiregion  &&  $label  &&  $param{add_region} ) {
-        print "CityName=$label\n";
         my $region  = convert_string( first { defined } @{$param{tags}}{@regionnamelist} );
         print "RegionName=$region\n"        if $region;
         my $country = convert_string( first { defined } @{$param{tags}}{@countrynamelist} );
@@ -1914,7 +1931,7 @@ sub AddPOI {
     }
 
     # contact information: address, phone
-    if ( $poicontacts  &&  $param{add_address} ) {
+    if ( $poicontacts  &&  $param{add_contacts} ) {
         my $city = $city{ FindCity( $param{nodeid} ) }  if  $param{nodeid};
         $city = $city{ FindCity( $param{latlon} ) }     if  $param{latlon};
         if ( $city ) {
