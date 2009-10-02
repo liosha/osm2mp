@@ -181,12 +181,11 @@ open CFG, $cfgpoi;
 while (<CFG>) {
     next   if (!$_) || /^\s*[\#\;]/;
     chomp;
-    my ($k, $v, $type, $llev, $hlev, $city) = split /\s+/;
+    my ($k, $v, $type, $llev, $hlev, $mode) = split /\s+/;
     if ($type) {
         $llev = 0   unless defined $llev;
         $hlev = 1   unless defined $hlev;
-        $city = (defined $city) ? 1 : 0;
-        $poitype{"$k=$v"} = [ $type, $llev, $hlev, $city ];
+        $poitype{"$k=$v"} = [ $type, $llev, $hlev, $mode ];
     }
 }
 close CFG;
