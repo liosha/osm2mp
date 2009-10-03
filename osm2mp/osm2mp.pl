@@ -1911,14 +1911,18 @@ sub AddPOI {
     print  "; NodeID = $param{nodeid}\n"    if  exists $param{nodeid};
     print  "; $param{comment}\n"            if  exists $param{comment};
 
+    my ($type, $type2) = split q{:}, $param{type};
+
+    my $data = "($node{$param{nodeid}})"    if  exists $param{nodeid};
+    $data    = "($param{latlon})"           if  exists $param{latlon};    
+
     print  "[POI]\n";
     
-    print  "Type=$param{type}\n";
+    print  "Type=$type\n";
     my $label = convert_string( first { defined } @{$param{tags}}{@nametagarray} );
     printf "Label=%s\n", $label     if $label && !exists( $param{Label} ); 
 
-    printf "Data%d=($node{$param{nodeid}})\n", $llev    if  exists $param{nodeid};
-    printf "Data%d=($param{latlon})\n", $llev           if  exists $param{latlon};
+    printf "Data%d=$data\n", $llev;
     print  "EndLevel=$hlev\n"       if  $hlev > $llev;
 
     # region and country - for cities
@@ -1958,6 +1962,15 @@ sub AddPOI {
     }
 
     print  "[END]\n\n";
+
+    if ( $type2 ) {
+        print  "[POI]\n";
+        print  "Type=$type2\n";
+        print  "Label=$label\n";
+        printf "Data%d=$data\n", $llev;
+        print  "EndLevel=$hlev\n"       if  $hlev > $llev;
+        print  "[END]\n\n";
+    }
 }
 
 
