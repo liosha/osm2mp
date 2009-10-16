@@ -13,7 +13,7 @@ my $lat_cell = 0.1;        # in degrees
 my $lon_cell = 0.2;
 
 
-my $MAXNODES    = 500_000_000;      # see current OSM values
+my $MAXNODES    = 600_000_000;      # see current OSM values
 my $MAXWAYS     =  50_000_000;
 my $MAXRELS     =   1_000_000;
 
@@ -25,7 +25,7 @@ my $init_file_name  = q{};
 
 
 
-print STDERR "\n    ---|  OSM tile splitter  v0.3    (c) liosha  2009\n\n";
+print STDERR "\n    ---|  OSM tile splitter  v0.31    (c) liosha  2009\n\n";
 
 
 ##  reading command-line options
@@ -249,7 +249,7 @@ print STDERR "Ok\n";
 
 
 
-##  reading ways - 1st pass
+##  reading ways
 
 
 seek IN, $way_pos, 0;
@@ -277,6 +277,9 @@ while ( my $line = <IN> ) {
         for my $area (@tiles) {
             if ( first { $area->{nodes}->contains($_) } @chain ) {
                 $area->{ways}->Bit_On($way_id);
+                for my $nd ( @chain ) {
+                    $area->{nodes}->Bit_On($nd);
+                }
             }
         }
         
@@ -295,39 +298,6 @@ continue { $rel_pos = tell IN; }
 
 print STDERR "$count_ways processed\n";
 
-
-
-
-##  reading ways - 2nd pass
-
-seek IN, $way_pos, 0;
-
-print STDERR "Redistributing nodes...       ";
-
-while ( my $line = <IN> ) {
-
-    if ( my ($id) = $line =~ /<way.* id=["']([^"']+)["']/ ) {
-        $way_id = $id;
-        $reading_way = 1;
-        next;
-    }
-
-    if ( $reading_way  &&  $line =~ /<\/way/ ) {
-        $reading_way = 0;
-        next;
-    }
-
-    if ( $reading_way  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
-        for my $area ( grep { $_->{ways}->contains($way_id) } @tiles ) {
-            $area->{nodes}->Bit_On($nd);
-        }
-        next;
-    }
-
-    last if $line =~ /<relation /;
-} 
-
-print STDERR "Ok\n";
 
 
 
