@@ -67,6 +67,7 @@ my $fixclosedist    = 3.0;       # set 5.5 for cgpsmapper 0097 and earlier
 my $maxroadnodes    = 60;
 my $restrictions    = 1;
 my $disableuturns   = 0;
+my $destsigns       = 1;
 
 my $upcase          = 0;
 my $translit        = 0;
@@ -128,6 +129,7 @@ GetOptions (
     'fixclosedist=f'    => \$fixclosedist,
     'maxroadnodes=f'    => \$maxroadnodes,
     'restrictions!'     => \$restrictions,
+    'destsigns!'        => \$destsigns,
     'defaultcountry=s'  => \$defaultcountry,
     'defaultregion=s'   => \$defaultregion,
     'defaultcity=s'     => \$defaultcity,
@@ -433,9 +435,48 @@ while ( my $line = <IN> ) {
 
             push @{$nodetr{ $relmember{'node:via'}->[0] }}, $relid;
         }
-        next;
-    }
 
+        # destination signs
+        if ( $routing  &&  $destsigns  &&  $reltag{'type'} eq 'destination_sign' ) {
+            unless ( $relmember{'way:from'} ) {
+                print "; ERROR: Destination sign RelID=$relid has no FROM ways\n";
+                next;
+            }
+            unless ( $relmember{'way:to'} ) {
+                print "; ERROR: Destination sign RelID=$relid doesn't have TO way\n";
+                next;
+            }
+
+            my $node = $relmember{'node:sign'}->[0]         if $relmember{'node:sign'};
+            $node = $relmember{'node:intersection'}->[0]    if $relmember{'node:intersection'};
+            unless ( $node ) {
+                print "; ERROR: Destination sign RelID=$relid doesn't have SIGN or INTERSECTION node\n";
+                next;
+            }
+
+            my $name = first { defined } @reltag{ qw{ destination label name } };
+            unless ( $name ) {
+                print "; ERROR: Destination sign RelID=$relid doesn't have label tag\n";
+                next;
+            }
+
+            for my $from ( @{ $relmember{'way:from'} } ) {
+                $trest{$relid} = { 
+                    name    => convert_string( $name ),
+                    node    => $node,
+                    type    => 'sign',
+                    fr_way  => $from,
+                    fr_dir  => 0,
+                    fr_pos  => -1,
+                    to_way  => $relmember{'way:to'}->[0],
+                    to_dir  => 0,
+                    to_pos  => -1,
+                };
+            }
+
+            push @{$nodetr{ $node }}, $relid;
+        }
+    }
 }
 
 printf STDERR "%d multipolygons, %d turn restrictions\n", scalar keys %mpoly, scalar keys %trest;
@@ -884,7 +925,7 @@ while ( my $line = <IN> ) {
             }
 
             # process associated turn restrictions
-            if ( $restrictions ) {
+            if ( $restrictions  ||  $destsigns ) {
                 if ( $chainlist[0] == 0 ) {
                     for my $relid ( grep { $trest{$_}->{fr_way} eq $wayid } @{$nodetr{$chain[0]}} ) {
                         $trest{$relid}->{fr_way} = "$wayid:0";
@@ -1179,7 +1220,7 @@ if ( $routing ) {
                 my $r2 = $list[0];
     
                 # process associated restrictions
-                if ( $restrictions ) {
+                if ( $restrictions  ||  $destsigns ) {
                     while ( my ($relid, $tr) = each %trest )  {
                         if ( $tr->{fr_way} eq $r2 )  {
                             print "; FIX: RelID=$relid FROM moved from WayID=$r2($tr->{fr_pos})";
@@ -1394,7 +1435,7 @@ if ( $routing ) {
                     }
 
                     #   move restrictions
-                    if ( $restrictions ) {
+                    if ( $restrictions  ||  $destsigns ) {
                         while ( my ($relid, $tr) = each %trest )  {
                             if (  $tr->{to_way} eq $roadid 
                               &&  $tr->{to_pos} >  $breaks[$i]   - (1 + $tr->{to_dir}) / 2 
@@ -1532,13 +1573,14 @@ if ( $bounds && $background ) {
 ####    Writing turn restrictions
 
 
-if ( $routing && $restrictions  ) {
+if ( $routing && ( $restrictions || $destsigns ) ) {
 
     print "\n\n\n; ### Turn restrictions\n\n";
 
     print STDERR "Writing restrictions...   ";
 
     my $counttrest = 0;
+    my $countsigns = 0;
 
     while ( my ($relid, $tr) = each %trest ) {
 
@@ -1552,6 +1594,12 @@ if ( $routing && $restrictions  ) {
         }
 
         print "\n; RelID = $relid (from $tr->{fr_way} $tr->{type} $tr->{to_way})\n\n";
+
+        if ( $tr->{type} eq 'sign' ) {
+            $countsigns ++;
+            write_turn_restriction ($tr);
+        }
+
 
         if ( $tr->{type} eq 'no' ) {
             $counttrest ++;
@@ -1763,15 +1811,23 @@ sub write_turn_restriction {            # \%trest
     }
 
     unless ( ${nodid{$tr->{node}}} ) {
-        print "; Restriction is outside boundaries\n";
+        print "; Outside boundaries\n";
         return;
     }
-    
-    print  "[Restrict]\n";
-    printf "Nod=${nodid{$tr->{node}}}\n";
-    print  "TraffPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
-    print  "TraffRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
-    print  "[END-Restrict]\n\n";
+
+    if ( $tr->{type} eq 'sign' ) {
+        print  "[Sign]\n";
+        print  "SignPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
+        print  "SignRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
+        print  "SignParam=T,$tr->{name}\n";
+        print  "[END-Sign]\n\n";
+    } 
+    else {
+        print  "[Restrict]\n";
+        print  "TraffPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
+        print  "TraffRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
+        print  "[END-Restrict]\n\n";
+    }
 }
 
 
@@ -1822,6 +1878,7 @@ Possible options [defaults]:
 
  --restrictions            process turn restrictions                 [$onoff[$restrictions]]
  --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
+ --destsigns               process destination signs                 [$onoff[$destsigns]]
 
  --shorelines              process shorelines                        [$onoff[$shorelines]]
  --waterback               water background (for island maps)        [$onoff[$waterback]]
