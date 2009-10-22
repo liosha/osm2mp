@@ -345,12 +345,8 @@ my %nodetr;
 print STDERR "Loading relations...      ";
 
 my $relid;
-my $reltype;
-
-my $mp_outer;
-my @mp_inner;
-
-my ($tr_from, $tr_via, $tr_to, $tr_type);
+my %reltag;
+my %relmember;
 
 
 while ( <IN> ) {
@@ -363,69 +359,79 @@ seek IN, $relpos, 0;
 while ( my $line = <IN> ) {
 
     if ( $line =~ /<relation/ ) {
-        ($relid)  =  $line =~ / id=["']([^"']+)["']/;
-
-        undef $reltype;
-        undef $mp_outer;
-        undef @mp_inner;
-        
-        undef $tr_type;
-        undef $tr_from;
-        undef $tr_to;
-        undef $tr_via;
-
+        ($relid)    =  $line =~ / id=["']([^"']+)["']/;
+        %reltag     = ();
+        %relmember  = ();
         next;
     }
 
     if ( $line =~ /<member/ ) {
         my ($mtype, $mid, $mrole)  = 
-            $line =~ / type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']+)["']/;
-
-        next    unless $mtype;
-
-        $mp_outer   = $mid      if  $mtype eq 'way'  &&  ( $mrole eq 'outer' || $mrole eq '' );
-        push @mp_inner, $mid    if  $mtype eq 'way'  &&  $mrole eq 'inner';
-
-        $tr_from    = $mid      if  $mtype eq 'way'  &&  $mrole eq 'from';
-        $tr_to      = $mid      if  $mtype eq 'way'  &&  $mrole eq 'to';
-        $tr_via     = $mid      if  $mtype eq 'node' &&  $mrole eq 'via';
-
+            $line =~ / type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']*)["']/;
+        push @{ $relmember{"$mtype:$mrole"} }, $mid;
         next;
     }
 
     if ( $line =~ /<tag/ ) {
         my ($key, $val)  =  $line =~ / k=["']([^"']+)["'].* v=["']([^"']+)["']/;
-        $reltype = $val         if  $key eq 'type';
-        $tr_type = $val         if  $key eq 'restriction';
+        $reltag{$key} = $val;
         next;
     }
 
-    if ( $line =~ /<\/relation/  &&  defined $reltype ) {
-        if ( $reltype eq 'multipolygon' ) {
-            $mpoly{$mp_outer}   = [ @mp_inner ];
-            for my $hole (@mp_inner) {
-                $mphole{$hole} = 1;
-            }
-        }
-        if ( $routing  &&  $restrictions  &&  $reltype eq 'restriction'  && defined $tr_type ) {
-            $tr_to = $tr_from       if  $tr_type eq 'no_u_turn'  &&  !$tr_to;
+    if ( $line =~ /<\/relation/ ) {
 
-            if ( $tr_from && $tr_via && $tr_to ) {
-                $trest{$relid} = { 
-                    node    => $tr_via,
-                    type    => ($tr_type =~ /^only_/) ? 'only' : 'no',
-                    fr_way  => $tr_from,
-                    fr_dir  => 0,
-                    fr_pos  => -1,
-                    to_way  => $tr_to,
-                    to_dir  => 0,
-                    to_pos  => -1,
-                };
-                push @{$nodetr{$tr_via}}, $relid;
-            } 
-            else {
-                print "; ERROR: Incomplete restriction RelID=$relid\n";
+        # simple multipolygons (one outer, many inners, all closed)
+        if ( $reltag{'type'} eq 'multipolygon' ) {
+            if ( $relmember{'way:'} ) {
+                push @{ $relmember{'way:outer'} }, @{ $relmember{'way:'} };
             }
+            unless ( $relmember{'way:outer'} ) {
+                print "; ERROR: Multipolygon RelID=$relid doesn't have OUTER way\n";
+                next;
+            }
+            unless ( $relmember{'way:inner'} ) {
+                print "; ERROR: Multipolygon RelID=$relid has no INNER ways\n";
+                next;
+            }
+
+            my $outer = $relmember{'way:outer'}->[0];
+            my @inner = @{ $relmember{'way:inner'} };
+
+            $mpoly{$outer} = [ @inner ];
+            @mphole{@inner} = (1) x scalar @inner;
+        }
+
+        # turn restrictions
+        if ( $routing  &&  $restrictions  &&  $reltag{'type'} eq 'restriction' ) {
+            unless ( $relmember{'way:from'} ) {
+                print "; ERROR: Turn restriction RelID=$relid doesn't have FROM way\n";
+                next;
+            }
+            unless ( $relmember{'node:via'} ) {
+                # VIA ways is not supported now
+                print "; ERROR: Turn restriction RelID=$relid doesn't have VIA node\n";
+                next;
+            }
+            if ( $reltag{'restriction'} eq 'no_u_turn'  &&  !$relmember{'way:to'} ) {
+                $relmember{'way:to'} = $relmember{'way:from'};
+            }
+            unless ( $relmember{'way:to'} ) {
+                print "; ERROR: Turn restriction RelID=$relid doesn't have TO way\n";
+                next;
+            }
+
+            $trest{$relid} = { 
+                node    => $relmember{'node:via'}->[0],
+                type    => ($reltag{'restriction'} =~ /^only_/) ? 'only' : 'no',
+                fr_way  => $relmember{'way:from'}->[0],
+                fr_dir  => 0,
+                fr_pos  => -1,
+                to_way  => $relmember{'way:to'}->[0],
+                to_dir  => 0,
+                to_pos  => -1,
+            };
+
+            push @{$nodetr{ $relmember{'node:via'}->[0] }}, $relid;
         }
         next;
     }
