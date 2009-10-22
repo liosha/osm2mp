@@ -1583,7 +1583,7 @@ if ( $routing && ( $restrictions || $destsigns ) ) {
 
     print "\n\n\n; ### Turn restrictions and signs\n\n";
 
-    print STDERR "Writing crosses...        ";
+    print STDERR "Writing crossroads...     ";
 
     my $counttrest = 0;
     my $countsigns = 0;
