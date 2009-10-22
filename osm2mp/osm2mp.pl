@@ -340,6 +340,8 @@ my %mpoly;
 my %mphole;
 
 # turn restrictions
+my $counttrest = 0;
+my $countsigns = 0;
 my %trest;
 my %nodetr;
 
@@ -422,6 +424,7 @@ while ( my $line = <IN> ) {
                 next;
             }
 
+            $counttrest ++;
             $trest{$relid} = { 
                 node    => $relmember{'node:via'}->[0],
                 type    => ($reltag{'restriction'} =~ /^only_/) ? 'only' : 'no',
@@ -460,6 +463,7 @@ while ( my $line = <IN> ) {
                 next;
             }
 
+            $countsigns ++;
             for my $from ( @{ $relmember{'way:from'} } ) {
                 $trest{$relid} = { 
                     name    => convert_string( $name ),
@@ -479,7 +483,9 @@ while ( my $line = <IN> ) {
     }
 }
 
-printf STDERR "%d multipolygons, %d turn restrictions\n", scalar keys %mpoly, scalar keys %trest;
+printf STDERR "%d multipolygons\n", scalar keys %mpoly;
+print  STDERR "                          $counttrest turn restrictions\n"     if $counttrest;
+print  STDERR "                          $countsigns destination signs\n"     if $countsigns;
 
 
 
@@ -1575,9 +1581,9 @@ if ( $bounds && $background ) {
 
 if ( $routing && ( $restrictions || $destsigns ) ) {
 
-    print "\n\n\n; ### Turn restrictions\n\n";
+    print "\n\n\n; ### Turn restrictions and signs\n\n";
 
-    print STDERR "Writing restrictions...   ";
+    print STDERR "Writing crosses...        ";
 
     my $counttrest = 0;
     my $countsigns = 0;
@@ -1668,6 +1674,7 @@ if ( $routing && ( $restrictions || $destsigns ) ) {
                         next    if  $way_from == $way_to  &&  $dir_from == -$dir_to;
 
                         $newtr{to_dir} = $dir_to;
+                        $counttrest ++;
                         write_turn_restriction (\%newtr);
                     }
                 }
@@ -1675,7 +1682,7 @@ if ( $routing && ( $restrictions || $destsigns ) ) {
         }
     }
 
-    print STDERR "$counttrest written\n";
+    print STDERR "$counttrest restrictions, $countsigns signs\n";
 }
 
 
