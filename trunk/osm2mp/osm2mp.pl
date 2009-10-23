@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 
 
+
+
 ##
 ##  Required packages: 
 ##    * Template-toolkit
@@ -33,7 +35,7 @@ use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
 use Math::Polygon::Tree;
 
 use List::Util qw{ first reduce };
-use List::MoreUtils qw{ all any none first_index };
+use List::MoreUtils qw{ all none any first_index };
 
 # debug
 use Data::Dump qw{ dd };
@@ -44,7 +46,7 @@ use Data::Dump qw{ dd };
 
 ####    Settings
 
-my $version = '0.80a';
+my $version = '0.80b';
 
 my $cfgpoi          = 'poi.cfg';
 my $cfgpoly         = 'poly.cfg';
@@ -111,6 +113,7 @@ my %yesno = (
     '0'              => '0',
     'private'        => '0',
 );
+
 
 GetOptions (
     'cfgpoi=s'          => \$cfgpoi,
@@ -436,12 +439,11 @@ while ( my $line = <IN> ) {
                 to_pos  => -1,
             };
 
-            if ( exists $reltag{'except'} ) {
-                $trest{$relid}->{param} = join q{,}, CalcAccessRules(
-                    { map { $_ => 'yes' } split( /\s*[,;]\s*/, $reltag{'except'} ) },
-                    [ 1,1,1,1,1,0,1,1 ]
-                );
-            }
+            my @acc = ( 0,0,0,0,0,1,0,0 );      # foot
+            @acc = CalcAccessRules( { map { $_ => 'no' } split( /\s*[,;]\s*/, $reltag{'except'} ) }, \@acc )
+                if  exists $reltag{'except'};
+            $trest{$relid}->{param} = join q{,}, @acc
+                if  any { $_ } @acc;
 
             push @{$nodetr{ $relmember{'node:via'}->[0] }}, $relid;
         }
@@ -1823,7 +1825,7 @@ sub write_turn_restriction {            # \%trest
         print  "[Restrict]\n";
         print  "TraffPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
         print  "TraffRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
-        print  "RestrParam=$tr->{param}\n"     if exists $tr->{param};
+        print  "RestrParam=$tr->{param}\n"     if $tr->{param};
         print  "[END-Restrict]\n\n";
     }
 }
@@ -2048,13 +2050,12 @@ sub AddBarrier {
     $acc = [ 1,1,1,0,1,0,0,1 ]      if  $param{tags}->{'barrier'} eq 'bus_trap';
     $acc = [ 0,0,0,0,0,0,0,0 ]      if  $param{tags}->{'barrier'} eq 'cattle_grid';
 
-    my @acc = CalcAccessRules( $param{tags}, $acc );
-    return  if  none { $_ } @acc;
+    my @acc = map { 1-$_ } CalcAccessRules( $param{tags}, $acc );
+    return  if  all { $_ } @acc;
 
-    $barrier{$param{nodeid}} = {
-        type    =>  $param{tags}->{'barrier'},
-        param   =>  join q{,}, @acc,
-    };
+    $barrier{$param{nodeid}}->{type}  = $param{tags}->{'barrier'};
+    $barrier{$param{nodeid}}->{param} = join q{,}, @acc
+        if  any { $_ } @acc;
 }
 
 
