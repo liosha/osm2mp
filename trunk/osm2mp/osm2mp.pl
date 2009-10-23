@@ -436,6 +436,13 @@ while ( my $line = <IN> ) {
                 to_pos  => -1,
             };
 
+            if ( exists $reltag{'except'} ) {
+                $trest{$relid}->{restrparam} = join q{,}, CalcAccessRules(
+                    { map { $_ => 'yes' } split( /\s*[,;]\s*/, $reltag{'except'} ) },
+                    [ 1,1,1,1,1,0,1,1 ]
+                );
+            }
+
             push @{$nodetr{ $relmember{'node:via'}->[0] }}, $relid;
         }
 
@@ -1815,6 +1822,7 @@ sub write_turn_restriction {            # \%trest
         print  "[Restrict]\n";
         print  "TraffPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
         print  "TraffRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
+        print  "RestrParam=$tr->{restrparam}\n"     if exists $tr->{restrparam};
         print  "[END-Restrict]\n\n";
     }
 }
@@ -2047,8 +2055,6 @@ sub CalcAccessRules {
     my %tag = %{ $_[0] };
     my @acc = @{ $_[1] };
 
-    print "; --- @acc\n";
-
     # emergency, delivery, car, bus, taxi, foot, bike, truck
     @acc[0,1,2,3,4,5,6,7]  =  (1-$yesno{$tag{'access'}})        x 8   if exists $yesno{$tag{'access'}};
     @acc[          5,6, ]  =  (  $yesno{$tag{'motorroad'}})     x 8   if exists $yesno{$tag{'motorroad'}};
@@ -2065,7 +2071,6 @@ sub CalcAccessRules {
     @acc[             7,]  =  (1-$yesno{$tag{'hgv'}})           x 1   if exists $yesno{$tag{'hgv'}};
     @acc[  1,         7,]  =  (1-$yesno{$tag{'goods'}})         x 2   if exists $yesno{$tag{'goods'}};
 
-    print "; --- @acc\n";
-
     return @acc;
 }     
+
