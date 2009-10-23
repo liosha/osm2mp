@@ -2041,7 +2041,14 @@ sub AddBarrier {
     return  unless  exists $param{nodeid};
     return  unless  exists $param{tags};
 
-    my @acc = CalcAccessRules( $param{tags}, [ 1,1,1,1,1,1,1,1 ] );
+    my $acc = [ 1,1,1,1,1,1,1,1 ];
+
+    $acc = [ 1,1,1,1,1,0,1,1 ]      if  $param{tags}->{'barrier'} ~~ [ qw{ block stile chain } ];
+    $acc = [ 1,1,1,1,1,0,0,1 ]      if  $param{tags}->{'barrier'} eq 'bollard';
+    $acc = [ 1,1,1,0,1,0,0,1 ]      if  $param{tags}->{'barrier'} eq 'bus_trap';
+    $acc = [ 0,0,0,0,0,0,0,0 ]      if  $param{tags}->{'barrier'} eq 'cattle_grid';
+
+    my @acc = CalcAccessRules( $param{tags}, $acc );
     return  if  none { $_ } @acc;
 
     $barrier{$param{nodeid}} = {
