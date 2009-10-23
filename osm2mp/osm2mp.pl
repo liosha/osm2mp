@@ -881,27 +881,9 @@ while ( my $line = <IN> ) {
                $rp[0]  = speed_code( $waytag{'maxspeed:practical'} );
             }
 
-            $rp[2] = $yesno{$waytag{'oneway'}}                                    if exists $yesno{$waytag{'oneway'}};
-
-            $rp[3] = $yesno{$waytag{'toll'}}                                      if exists $yesno{$waytag{'toll'}};
-
-            # emergency, delivery, car, bus, taxi, foot, bike, truck
-            @rp[4,5,6,7,8,9,10,11]  =  (1-$yesno{$waytag{'access'}})        x 8   if exists $yesno{$waytag{'access'}};
-            @rp[          9,10,  ]  =  (  $yesno{$waytag{'motorroad'}})     x 8   if exists $yesno{$waytag{'motorroad'}};
-
-            @rp[4,5,6,7,8,  10,11]  =  (1-$yesno{$waytag{'vehicle'}})       x 8   if exists $yesno{$waytag{'vehicle'}};
-            @rp[4,5,6,7,8,     11]  =  (1-$yesno{$waytag{'motor_vehicle'}}) x 8   if exists $yesno{$waytag{'motor_vehicle'}};
-            @rp[4,5,6,7,8,     11]  =  (1-$yesno{$waytag{'motorcar'}})      x 8   if exists $yesno{$waytag{'motorcar'}};
-            @rp[4,5,6,7,8,     11]  =  (1-$yesno{$waytag{'auto'}})          x 8   if exists $yesno{$waytag{'auto'}};
-
-            @rp[          9,     ]  =  (1-$yesno{$waytag{'foot'}})          x 1   if exists $yesno{$waytag{'foot'}};
-            @rp[            10,  ]  =  (1-$yesno{$waytag{'bicycle'}})       x 1   if exists $yesno{$waytag{'bicycle'}};
-            @rp[      7,8,       ]  =  (1-$yesno{$waytag{'psv'}})           x 2   if exists $yesno{$waytag{'psv'}};
-            @rp[        8,       ]  =  (1-$yesno{$waytag{'taxi'}})          x 1   if exists $yesno{$waytag{'taxi'}};
-            @rp[      7,         ]  =  (1-$yesno{$waytag{'bus'}})           x 1   if exists $yesno{$waytag{'bus'}};
-            @rp[              11,]  =  (1-$yesno{$waytag{'hgv'}})           x 1   if exists $yesno{$waytag{'hgv'}};
-            @rp[  5,             ]  =  (1-$yesno{$waytag{'goods'}})         x 1   if exists $yesno{$waytag{'goods'}};
-
+            $rp[2] = $yesno{$waytag{'oneway'}}      if exists $yesno{$waytag{'oneway'}};
+            $rp[3] = $yesno{$waytag{'toll'}}        if exists $yesno{$waytag{'toll'}};
+            @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
 
             # determine city
             if ( $name ) {
@@ -2060,3 +2042,30 @@ sub AddBarrier {
     $barrier{$param{nodeid}} = $tag{'barrier'}  if !$access;
 }
 
+
+sub CalcAccessRules {
+    my %tag = %{ $_[0] };
+    my @acc = @{ $_[1] };
+
+    print "; --- @acc\n";
+
+    # emergency, delivery, car, bus, taxi, foot, bike, truck
+    @acc[0,1,2,3,4,5,6,7]  =  (1-$yesno{$tag{'access'}})        x 8   if exists $yesno{$tag{'access'}};
+    @acc[          5,6, ]  =  (  $yesno{$tag{'motorroad'}})     x 8   if exists $yesno{$tag{'motorroad'}};
+
+    @acc[0,1,2,3,4,  6,7]  =  (1-$yesno{$tag{'vehicle'}})       x 8   if exists $yesno{$tag{'vehicle'}};
+    @acc[0,1,2,3,4,    7]  =  (1-$yesno{$tag{'motor_vehicle'}}) x 8   if exists $yesno{$tag{'motor_vehicle'}};
+    @acc[0,1,2,3,4,    7]  =  (1-$yesno{$tag{'motorcar'}})      x 8   if exists $yesno{$tag{'motorcar'}};
+
+    @acc[          5,   ]  =  (1-$yesno{$tag{'foot'}})          x 1   if exists $yesno{$tag{'foot'}};
+    @acc[            6, ]  =  (1-$yesno{$tag{'bicycle'}})       x 1   if exists $yesno{$tag{'bicycle'}};
+    @acc[      3,4,     ]  =  (1-$yesno{$tag{'psv'}})           x 2   if exists $yesno{$tag{'psv'}};
+    @acc[        4,     ]  =  (1-$yesno{$tag{'taxi'}})          x 1   if exists $yesno{$tag{'taxi'}};
+    @acc[      3,       ]  =  (1-$yesno{$tag{'bus'}})           x 1   if exists $yesno{$tag{'bus'}};
+    @acc[             7,]  =  (1-$yesno{$tag{'hgv'}})           x 1   if exists $yesno{$tag{'hgv'}};
+    @acc[  1,         7,]  =  (1-$yesno{$tag{'goods'}})         x 2   if exists $yesno{$tag{'goods'}};
+
+    print "; --- @acc\n";
+
+    return @acc;
+}     
