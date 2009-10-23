@@ -33,7 +33,7 @@ use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
 use Math::Polygon::Tree;
 
 use List::Util qw{ first reduce };
-use List::MoreUtils qw{ all any first_index };
+use List::MoreUtils qw{ all any none first_index };
 
 # debug
 use Data::Dump qw{ dd };
@@ -437,7 +437,7 @@ while ( my $line = <IN> ) {
             };
 
             if ( exists $reltag{'except'} ) {
-                $trest{$relid}->{restrparam} = join q{,}, CalcAccessRules(
+                $trest{$relid}->{param} = join q{,}, CalcAccessRules(
                     { map { $_ => 'yes' } split( /\s*[,;]\s*/, $reltag{'except'} ) },
                     [ 1,1,1,1,1,0,1,1 ]
                 );
@@ -1638,10 +1638,11 @@ if ( $routing && ( $restrictions || $destsigns ) ) {
 
     print "\n; ### Barriers\n\n";
     for my $node ( keys %barrier ) {
-        print "; $barrier{$node}   NodeID = $node \n\n";
+        print "; $barrier{$node}->{type}   NodeID = $node \n\n";
         my %newtr = (
             node    => $node,
             type    => 'no',
+            param   => $barrier{$node}->{param},
         );
         for my $way_from ( @{$nodeways{$node}} ) {
             $newtr{fr_way} = $way_from;
@@ -1822,7 +1823,7 @@ sub write_turn_restriction {            # \%trest
         print  "[Restrict]\n";
         print  "TraffPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
         print  "TraffRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
-        print  "RestrParam=$tr->{restrparam}\n"     if exists $tr->{restrparam};
+        print  "RestrParam=$tr->{param}\n"     if exists $tr->{param};
         print  "[END-Restrict]\n\n";
     }
 }
@@ -2040,14 +2041,13 @@ sub AddBarrier {
     return  unless  exists $param{nodeid};
     return  unless  exists $param{tags};
 
-    my %tag = %{$param{tags}};
-    my $access = 0;
-    $access = $yesno{$tag{'access'}}            if exists $tag{'access'};
-    $access = $yesno{$tag{'vehicle'}}           if exists $tag{'vehicle'};
-    $access = $yesno{$tag{'motor_vehicle'}}     if exists $tag{'motor_vehicle'};
-    $access = $yesno{$tag{'motorcar'}}          if exists $tag{'motorcar'};
+    my @acc = CalcAccessRules( $param{tags}, [ 1,1,1,1,1,1,1,1 ] );
+    return  if  none { $_ } @acc;
 
-    $barrier{$param{nodeid}} = $tag{'barrier'}  if !$access;
+    $barrier{$param{nodeid}} = {
+        type    =>  $param{tags}->{'barrier'},
+        param   =>  join q{,}, @acc,
+    };
 }
 
 
