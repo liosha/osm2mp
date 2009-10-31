@@ -153,7 +153,7 @@ GetOptions (
     'poicontacts!'      => \$poicontacts,
 );
 
-undef $codepage   if $nocodepage;
+undef $codepage     if $nocodepage;
 
 our %cmap;
 if ( $ttable ) {
@@ -774,6 +774,7 @@ while ( my $line = <IN> ) {
 
             if ( $chain[0] ne $chain[-1] ) {
                 print "; ERROR: area WayID=$wayid is not closed at ($node{$chain[0]})\n";
+                next;
             }
 
             if ( !$bounds  ||  scalar @chainlist ) {
