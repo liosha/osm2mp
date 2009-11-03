@@ -4,7 +4,6 @@ use ShapeExport;
 
 my $gmpath = "C:\\Program Files\\GlobalMapper11\\global_mapper11.exe";
 
-
 my $step0 = 20;
 my $step1 = 100;
 my $step2 = 500;
