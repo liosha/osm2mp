@@ -1888,7 +1888,7 @@ Possible options [defaults]:
  --poicontacts             write contact info for POIs               [$onoff[$poicontacts]]
 
 
-You can use no<option> disable features (i.e --nomergeroads)
+You can use no<option> to disable features (i.e --nomergeroads)
 END_USAGE
 
     print $usage;
