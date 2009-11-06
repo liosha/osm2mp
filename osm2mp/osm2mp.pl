@@ -189,11 +189,16 @@ open CFG, $cfgpoi;
 while (<CFG>) {
     next   if (!$_) || /^\s*[\#\;]/;
     chomp;
+    my $prio = 0;
     my ($k, $v, $type, $llev, $hlev, $mode) = split /\s+/;
     if ($type) {
+        if ($type =~ /(.+),(\d+)/) {
+            $type = $1;
+            $prio = $2;
+        }
         $llev = 0   unless defined $llev;
         $hlev = 1   unless defined $hlev;
-        $poitype{"$k=$v"} = [ $type, $llev, $hlev, $mode ];
+        $poitype{"$k=$v"} = [ $type, $llev, $hlev, $mode, $prio ];
     }
 }
 close CFG;
@@ -210,7 +215,7 @@ while (<CFG>) {
     my ($k, $v, $mode, $type, $llev, $hlev, $rp, @p) = split /\s+/;
 
     if ($type) {
-        if ($type =~ /(.+),(\d)/) {
+        if ($type =~ /(.+),(\d+)/) {
             $type = $1;
             $prio = $2;
         }
@@ -626,12 +631,13 @@ while ( my $line = <IN> ) {
         }
 
         ##  POI
-        my $poitag = first { $poitype{"$_=$nodetag{$_}"} } keys %nodetag;
-        next  unless  $poitag;
+        my $poi = reduce { $poitype{$a}->[4] > $poitype{$b}->[4]  ?  $a : $b }
+                        grep { exists $poitype{$_} }
+                        map {"$_=$nodetag{$_}"}  keys %nodetag;
+        next  unless  $poi;
         next  unless  !$bounds || is_inside_bounds( $node{$nodeid} );
 
         $countpoi ++;
-        my $poi = "$poitag=$nodetag{$poitag}";
         my ($type, $llev, $hlev, $poimode) = @{$poitype{$poi}};
 
         my %poiinfo = (
@@ -2032,6 +2038,7 @@ sub AddPOI {
         ## Buoys
         if ( my $buoy_type = ( $tag{'buoy'} or $tag{'beacon'} ) ) {
             my %buoy_color = (
+                # Region A
                 lateral_port                            =>  '0x01',
                 lateral_starboard                       =>  '0x02',
                 lateral_preferred_channel_port          =>  '0x12',
@@ -2043,6 +2050,8 @@ sub AddPOI {
                 cardinal_west                           =>  '0x0F',
                 isolated_danger                         =>  '0x08',
                 special_purpose                         =>  '0x03',
+                lateral_port_preferred                  =>  '0x12',
+                lateral_starboad_preferred              =>  '0x11',
             );
             print "FoundationColor=$buoy_color{$buoy_type}\n";
 
