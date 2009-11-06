@@ -81,6 +81,7 @@ my $background      = 1;
 
 my $shorelines      = 0;
 my $waterback       = 0;
+my $marine          = 1;
 
 my $navitel         = 0;
 my $makepoi         = 1;
@@ -89,7 +90,7 @@ my $defaultcountry  = "Earth";
 my $defaultregion   = "OSM";
 my $defaultcity     = q{};
 
-my $poiregion       = 0;        # sometimes causes mapsource crash?
+my $poiregion       = 0;        # sometimes causes mapsource crash
 my $poicontacts     = 1;
 
 my $nametaglist     = "name,ref,int_ref,addr:housenumber,operator";
@@ -148,6 +149,7 @@ GetOptions (
     'disableuturns!'    => \$disableuturns,
     'shorelines!'       => \$shorelines,
     'waterback!'        => \$waterback,
+    'marine!'           => \$marine,
     'navitel!'          => \$navitel,
     'makepoi!'          => \$makepoi,
     'poiregion!'        => \$poiregion,
@@ -647,6 +649,9 @@ while ( my $line = <IN> ) {
         }
         elsif ( $poimode eq 'contacts' ) {
             $poiinfo{add_contacts}  = 1;
+        }
+        elsif ( $poimode eq 'marine' ) {
+            $poiinfo{add_marine}    = 1;
         }
 
         AddPOI ( \%poiinfo );
@@ -1886,6 +1891,7 @@ Possible options [defaults]:
 
  --shorelines              process shorelines                        [$onoff[$shorelines]]
  --waterback               water background (for island maps)        [$onoff[$waterback]]
+ --marine                  process marine data (buoys etc)           [$onoff[$marine]]
  --makepoi                 create POIs for polygons                  [$onoff[$makepoi]]
  --poiregion               write region info for settlements         [$onoff[$poiregion]]
  --poicontacts             write contact info for POIs               [$onoff[$poicontacts]]
@@ -2020,7 +2026,58 @@ sub AddPOI {
         printf "Phone=%s\n",        convert_string($tag{'phone'})           if  $tag{'phone'};
     }
 
-    # ADD: marine information
+    # marine data
+    if ( $marine  &&  $param{add_marine} ) {
+
+        ## Buoys
+        if ( my $buoy_type = ( $tag{'buoy'} or $tag{'beacon'} ) ) {
+            my %buoy_color = (
+                lateral_port                            =>  '0x01',
+                lateral_starboard                       =>  '0x02',
+                lateral_preferred_channel_port          =>  '0x12',
+                lateral_preferred_channel_starboard     =>  '0x11',
+                safe_water                              =>  '0x10',
+                cardinal_north                          =>  '0x06',
+                cardinal_south                          =>  '0x0D',
+                cardinal_east                           =>  '0x0E',
+                cardinal_west                           =>  '0x0F',
+                isolated_danger                         =>  '0x08',
+                special_purpose                         =>  '0x03',
+            );
+            print "FoundationColor=$buoy_color{$buoy_type}\n";
+
+            if ( my $buoy_light = ( $tag{'light:colour'} or $tag{'seamark:light:colour'} ) ) {
+                my %light_color = (
+                    red     =>  '0x01',
+                    green   =>  '0x02',
+                    white   =>  '0x03',
+                    blue    =>  '0x04',
+                    yellow  =>  '0x05',
+                    violet  =>  '0x06',
+                    amber   =>  '0x07',
+                );
+                print "Light=$light_color{$buoy_light}\n";
+            }
+        
+            if ( my $light_type = ( $tag{'light:character'} or $tag{'seamark:light:character'} ) ) {
+                ( $light_type ) = split /[\(\. ]/, $light_type;
+                my %light_type = (
+                    fixed       =>  '0x01',
+                    F           =>  '0x01',
+                    flashing    =>  '0x03',
+                    Fl          =>  '0x03',
+                    occulting   =>  '0x03',
+                    Occ         =>  '0x03',
+                    Oc          =>  '0x03',
+                    quick       =>  '0x0C',
+                    Q           =>  '0x0C',
+                    # fill
+                );
+                print "LightType=$light_type{$light_type}\n";
+            }
+        }
+    }
+
 
     # other parameters - capital first letter!
     for my $key ( grep { /^[A-Z]/ } keys %param ) {
