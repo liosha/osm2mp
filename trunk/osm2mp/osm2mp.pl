@@ -1,8 +1,5 @@
 #!/usr/bin/perl
 
-
-
-
 ##
 ##  Required packages: 
 ##    * Template-toolkit
@@ -60,6 +57,7 @@ my $nocodepage      = 0;
 
 my $detectdupes     = 1;
 
+my $oneway          = 1;
 my $routing         = 1;
 my $mergeroads      = 1;
 my $mergecos        = 0.2;
@@ -68,6 +66,7 @@ my $fixclosenodes   = 1;
 my $fixclosedist    = 3.0;       # set 5.5 for cgpsmapper 0097 and earlier
 my $maxroadnodes    = 60;
 my $restrictions    = 1;
+my $barriers        = 1;
 my $disableuturns   = 0;
 my $destsigns       = 1;
 
@@ -123,6 +122,7 @@ GetOptions (
     'mapname=s'         => \$mapname,
     'codepage=s'        => \$codepage,
     'nocodepage'        => \$nocodepage,
+    'oneway!'           => \$oneway,
     'routing!'          => \$routing,
     'mergeroads!'       => \$mergeroads,
     'mergecos=f'        => \$mergecos,
@@ -132,6 +132,7 @@ GetOptions (
     'fixclosedist=f'    => \$fixclosedist,
     'maxroadnodes=f'    => \$maxroadnodes,
     'restrictions!'     => \$restrictions,
+    'barriers!'         => \$barriers,
     'destsigns!'        => \$destsigns,
     'defaultcountry=s'  => \$defaultcountry,
     'defaultregion=s'   => \$defaultregion,
@@ -493,8 +494,8 @@ while ( my $line = <IN> ) {
 }
 
 printf STDERR "%d multipolygons\n", scalar keys %mpoly;
-print  STDERR "                          $counttrest turn restrictions\n"     if $counttrest;
-print  STDERR "                          $countsigns destination signs\n"     if $countsigns;
+print  STDERR "                          $counttrest turn restrictions\n"     if $restrictions;
+print  STDERR "                          $countsigns destination signs\n"     if $destsigns;
 
 
 
@@ -613,7 +614,7 @@ while ( my $line = <IN> ) {
     if ( $line =~ /<\/node/ ) {
 
         ##  Barriers
-        if ( $routing  &&  $nodetag{'barrier'} ) {
+        if ( $routing  &&  $barriers  &&  $nodetag{'barrier'} ) {
             AddBarrier({ nodeid => $nodeid,  tags => \%nodetag });
         }
 
@@ -891,8 +892,8 @@ while ( my $line = <IN> ) {
                $rp[0]  = speed_code( $waytag{'maxspeed:practical'} );
             }
 
-            $rp[2] = $yesno{$waytag{'oneway'}}      if exists $yesno{$waytag{'oneway'}};
-            $rp[3] = $yesno{$waytag{'toll'}}        if exists $yesno{$waytag{'toll'}};
+            $rp[2] = $yesno{$waytag{'oneway'}}      if  $oneway && exists $yesno{$waytag{'oneway'}};
+            $rp[3] = $yesno{$waytag{'toll'}}        if  exists $yesno{$waytag{'toll'}};
             @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
 
             # determine city
@@ -1571,7 +1572,7 @@ if ( $bounds && $background ) {
 ####    Writing turn restrictions
 
 
-if ( $routing && ( $restrictions || $destsigns ) ) {
+if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
 
     print "\n\n\n; ### Turn restrictions and signs\n\n";
 
@@ -1868,6 +1869,7 @@ Possible options [defaults]:
  --defaultcity <name>                                        [$defaultcity]
  --navitel                 write addresses for polygons              [$onoff[$navitel]]
 
+ --oneway                  set oneway attribute for roads            [$onoff[$oneway]]
  --routing                 produce routable map                      [$onoff[$routing]]
  --mergeroads              merge same ways                           [$onoff[$mergeroads]]
  --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
@@ -1878,6 +1880,7 @@ Possible options [defaults]:
  --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
 
  --restrictions            process turn restrictions                 [$onoff[$restrictions]]
+ --barriers                process barriers                          [$onoff[$barriers]]
  --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
  --destsigns               process destination signs                 [$onoff[$destsigns]]
 
@@ -2079,6 +2082,7 @@ sub CalcAccessRules {
     @acc[      3,       ]  =  (1-$yesno{$tag{'bus'}})           x 1   if exists $yesno{$tag{'bus'}};
     @acc[             7,]  =  (1-$yesno{$tag{'hgv'}})           x 1   if exists $yesno{$tag{'hgv'}};
     @acc[  1,         7,]  =  (1-$yesno{$tag{'goods'}})         x 2   if exists $yesno{$tag{'goods'}};
+    @acc[0,             ]  =  (1-$yesno{$tag{'emergency'}})     x 1   if exists $yesno{$tag{'emergency'}};
 
     return @acc;
 }     
