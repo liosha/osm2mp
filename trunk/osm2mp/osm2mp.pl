@@ -594,7 +594,7 @@ my %barrier;
 my %xnode;
 
 
-print STDERR "Writing POIs...           ";
+print STDERR "Processing nodes...       ";
 
 print "\n\n\n; ### Points\n\n";
 
@@ -666,8 +666,8 @@ while ( my $line = <IN> ) {
     last  if  $line =~ /<way/;
 }
 
-printf STDERR "%d written\n", $countpoi;
-
+printf STDERR "%d POIs written\n", $countpoi;
+printf STDERR "                          %d barriers loaded\n", scalar keys %barrier    if $barriers;
 
 
 
