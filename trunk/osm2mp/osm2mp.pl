@@ -656,8 +656,11 @@ while ( my $line = <IN> ) {
         elsif ( $poimode eq 'contacts' ) {
             $poiinfo{add_contacts}  = 1;
         }
-        elsif ( $poimode eq 'marine' ) {
-            $poiinfo{add_marine}    = 1;
+        elsif ( $poimode eq 'marine_buoy' ) {
+            $poiinfo{add_buoy}    = 1;
+        }
+        elsif ( $poimode eq 'marine_light' ) {
+            $poiinfo{add_light}    = 1;
         }
 
         AddPOI ( \%poiinfo );
@@ -2033,57 +2036,86 @@ sub AddPOI {
     }
 
     # marine data
-    if ( $marine  &&  $param{add_marine} ) {
+    my %buoy_color = (
+        # Region A
+        lateral_port                            =>  '0x01',
+        lateral_starboard                       =>  '0x02',
+        lateral_preferred_channel_port          =>  '0x12',
+        lateral_preferred_channel_starboard     =>  '0x11',
+        safe_water                              =>  '0x10',
+        cardinal_north                          =>  '0x06',
+        cardinal_south                          =>  '0x0D',
+        cardinal_east                           =>  '0x0E',
+        cardinal_west                           =>  '0x0F',
+        isolated_danger                         =>  '0x08',
+        special_purpose                         =>  '0x03',
+        lateral_port_preferred                  =>  '0x12',
+        lateral_starboad_preferred              =>  '0x11',
+    );
+    my %light_color = (
+        unlit   =>  0,
+        red     =>  1,
+        green   =>  2,
+        white   =>  3,
+        blue    =>  4,
+        yellow  =>  5,
+        violet  =>  6,
+        amber   =>  7,
+    );
+    my %light_type = (
+        fixed       =>  '0x01',
+        F           =>  '0x01',
+        isophase    =>  '0x02',
+        flashing    =>  '0x03',
+        Fl          =>  '0x03',
+        occulting   =>  '0x03',
+        Occ         =>  '0x03',
+        Oc          =>  '0x03',
+        quick       =>  '0x0C',
+        Q           =>  '0x0C',
+        # fill
+    );
 
-        ## Buoys
+    ## Buoys
+    if ( $marine  &&  $param{add_buoy} ) {
         if ( my $buoy_type = ( $tag{'buoy'} or $tag{'beacon'} ) ) {
-            my %buoy_color = (
-                # Region A
-                lateral_port                            =>  '0x01',
-                lateral_starboard                       =>  '0x02',
-                lateral_preferred_channel_port          =>  '0x12',
-                lateral_preferred_channel_starboard     =>  '0x11',
-                safe_water                              =>  '0x10',
-                cardinal_north                          =>  '0x06',
-                cardinal_south                          =>  '0x0D',
-                cardinal_east                           =>  '0x0E',
-                cardinal_west                           =>  '0x0F',
-                isolated_danger                         =>  '0x08',
-                special_purpose                         =>  '0x03',
-                lateral_port_preferred                  =>  '0x12',
-                lateral_starboad_preferred              =>  '0x11',
-            );
             print "FoundationColor=$buoy_color{$buoy_type}\n";
+        }
+        if ( my $buoy_light = ( $tag{'light:colour'} or $tag{'seamark:light:colour'} ) ) {
+            print "Light=$light_color{$buoy_light}\n";
+        }
+        if ( my $light_type = ( $tag{'light:character'} or $tag{'seamark:light:character'} ) ) {
+            ( $light_type ) = split /[\(\. ]/, $light_type;
+            print "LightType=$light_type{$light_type}\n";
+        }
+    }
 
-            if ( my $buoy_light = ( $tag{'light:colour'} or $tag{'seamark:light:colour'} ) ) {
-                my %light_color = (
-                    red     =>  '0x01',
-                    green   =>  '0x02',
-                    white   =>  '0x03',
-                    blue    =>  '0x04',
-                    yellow  =>  '0x05',
-                    violet  =>  '0x06',
-                    amber   =>  '0x07',
-                );
-                print "Light=$light_color{$buoy_light}\n";
+    ## Lights
+    if ( $marine  &&  $param{add_light} ) {
+        my @sectors = 
+            sort { $a->[1] <=> $b->[1] }
+                grep { $_->[3] } 
+                    map { [ split q{:}, $tag{$_} ] } 
+                        grep { /seamark:light:\d/ } keys %tag;
+        my $scount = scalar @sectors;
+        for my $i ( 0 .. $scount-1 ) {
+            if ( $sectors[$i]->[2] != $sectors[($i+1) % $scount]->[1] ) {
+                push @sectors, [ 'unlit', $sectors[$i]->[2], $sectors[($i+1) % $scount]->[1], 0 ];
             }
+        }
         
-            if ( my $light_type = ( $tag{'light:character'} or $tag{'seamark:light:character'} ) ) {
-                ( $light_type ) = split /[\(\. ]/, $light_type;
-                my %light_type = (
-                    fixed       =>  '0x01',
-                    F           =>  '0x01',
-                    flashing    =>  '0x03',
-                    Fl          =>  '0x03',
-                    occulting   =>  '0x03',
-                    Occ         =>  '0x03',
-                    Oc          =>  '0x03',
-                    quick       =>  '0x0C',
-                    Q           =>  '0x0C',
-                    # fill
-                );
-                print "LightType=$light_type{$light_type}\n";
-            }
+        printf "Light=%s\n", join( q{,}, 
+            map { sprintf "(%s,%d,$_->[1])", ($light_color{$_->[0]} or '0'), $_->[3]/10 } 
+                sort { $a->[1] <=> $b->[1] } @sectors
+            );
+
+        my $light_type = ( $tag{'light:character'} or $tag{'seamark:light:character'} or 'isophase' );
+        ( $light_type ) = split /[\(\. ]/, $light_type;
+        print "LightType=$light_type{$light_type}\n";
+
+#        dd \@sectors;
+        for my $sector ( grep { /seamark:light:\d/ } keys %tag ) {
+            print ";;; $sector -> $tag{$sector}\n";
         }
     }
 
