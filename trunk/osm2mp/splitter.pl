@@ -2,7 +2,7 @@
 use strict;
 
 use POSIX;
-use List::Util qw{first max sum};
+use List::Util qw{first max min sum};
 use Bit::Vector;
 use Getopt::Long;
 
@@ -21,11 +21,11 @@ my $MAXRELS     =   1_000_000;
 my $mapid           = 65430001;
 my $max_tile_nodes  = 800_000;
 my $init_file_name  = q{};
+my $optimize        = 1;
 
 
 
-
-print STDERR "\n    ---|  OSM tile splitter  v0.31    (c) liosha  2009\n\n";
+print STDERR "\n    ---|  OSM tile splitter  v0.4    (c) liosha  2009\n\n";
 
 
 ##  reading command-line options
@@ -34,6 +34,7 @@ my $opts_result = GetOptions (
         "mapid=s"       => \$mapid,
         "maxnodes=i"    => \$max_tile_nodes,
         "init=s"        => \$init_file_name,
+        "optimize"      => \$optimize,
     );
 
 my $filename = $ARGV[0];
@@ -201,8 +202,25 @@ while ( my $area = shift @areas ) {
         }
     }
 
-    push @areas, $new_area0;
-    push @areas, $new_area1;
+    if ( $optimize ) {
+        for my $na ( $new_area0, $new_area1 ) {
+            my ($minlat,$minlon,$maxlat,$maxlon) = (90,180,-90,-80);
+            for my $glat ( grep { $_*$lat_cell >= $na->{minlat}  &&  $_*$lat_cell <= $na->{maxlat} } keys %grid ) {
+                for my $glon ( grep { $_*$lon_cell >= $na->{minlon}  &&  $_*$lon_cell <= $na->{maxlon} } keys %{$grid{$glat}} ) {
+                     $minlat = $glat*$lat_cell      if  $glat*$lat_cell < $minlat;
+                     $maxlat = $glat*$lat_cell      if  $glat*$lat_cell > $maxlat;
+                     $minlon = $glon*$lon_cell      if  $glon*$lon_cell < $minlon;
+                     $maxlon = $glon*$lon_cell      if  $glon*$lon_cell > $maxlon;
+                }
+            }
+            $na->{minlat} = max ( $na->{minlat}, $minlat-$lat_cell );
+            $na->{maxlat} = min ( $na->{maxlat}, $maxlat+$lat_cell );
+            $na->{minlon} = max ( $na->{minlon}, $minlon-$lon_cell );
+            $na->{maxlon} = min ( $na->{maxlon}, $maxlon+$lon_cell );
+        }
+    }
+
+    push @areas, $new_area0, $new_area1;
 }
 
 @tiles = sort { $a->{minlon} <=> $b->{minlon}  or  $b->{minlat} <=> $a->{minlat} } @tiles;
