@@ -15,7 +15,7 @@ binmode STDOUT;
 
 for my $bbox ( @ARGV ) {;
 
-    print "\nProcessing $bbox\n";
+    print STDERR "\nProcessing $bbox\n";
 
     my ($minlon, $minlat, $maxlon, $maxlat) = split q{,}, $bbox;
 
