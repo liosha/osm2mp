@@ -1,15 +1,16 @@
+
 package Math::Polygon::Tree;
 
 use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 use List::Util qw{ sum min max };
 use List::MoreUtils qw{ uniq };
 
-use Math::Polygon;
+# FIXME: remove and use simple bbox clip?
 use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
 
 
@@ -27,27 +28,29 @@ sub new {
 
         my @epoint = ();
         push @epoint, $chain_ref->[0]
-            unless  $chain_ref->[0] ~~ $chain_ref->[-1];
+            unless  $chain_ref->[0]->[0] == $chain_ref->[-1]->[0]
+                &&  $chain_ref->[0]->[1] == $chain_ref->[-1]->[1];
 
-        my $poly = Math::Polygon->new( @$chain_ref, @epoint );
+        my $poly = [ @$chain_ref, @epoint ];
         push @{$self->{poly}}, $poly;
 
-        my ($xmin, $ymin, $xmax, $ymax) = $poly->bbox();
+        my ($xmin, $ymin, $xmax, $ymax) = polygon_bbox( @$poly );
+
         $self->{xmin} = $xmin       if  !(exists $self->{xmin})  ||  $xmin < $self->{xmin};
         $self->{xmax} = $xmax       if  !(exists $self->{xmax})  ||  $xmax > $self->{xmax};
         $self->{ymin} = $ymin       if  !(exists $self->{ymin})  ||  $ymin < $self->{ymin};
         $self->{ymax} = $ymax       if  !(exists $self->{ymax})  ||  $ymax > $self->{ymax};
     }
 
-    my $nrpoints = sum map { $_->nrPoints() } @{$self->{poly}};
+    my $nrpoints = sum map { scalar @$_ } @{$self->{poly}};
 
     ##  full square?
     if ( $nrpoints == 5 ) {
         my $poly = $self->{poly}->[0];
-        my @xs = uniq map { $_->[0] } $poly->points();
-        my @ys = uniq map { $_->[1] } $poly->points();
+        my @xs = uniq map { $_->[0] } @$poly;
+        my @ys = uniq map { $_->[1] } @$poly;
 
-        if ( @xs == 2  &&  @ys == 2 ) {     # simple check
+        if ( @xs == 2  &&  @ys == 2 ) {
             $self->{full} = 1;
         }
     }
@@ -58,10 +61,9 @@ sub new {
         $self->{hv}  =  my $hv  =  ($self->{xmax}-$self->{xmin}) < ($self->{ymax}-$self->{ymin});
         $self->{avg} =  my $avg =  $hv  ?  ($self->{ymax}+$self->{ymin})/2  :  ($self->{xmax}+$self->{xmin})/2;
 
-        # other clipper?
         my $gpc = new_gpc();
         for my $poly ( @{$self->{poly}} ) {
-            $gpc->add_polygon( [ $poly->points() ], 0 );
+            $gpc->add_polygon( $poly, 0 );
         }
 
         my $part1_gpc = new_gpc();
@@ -103,8 +105,9 @@ sub contains {
 
     my ($px, $py) = @$point;
 
-    return 0    if  $px < $self->{xmin}  ||  $px > $self->{xmax}
-                 || $py < $self->{ymin}  ||  $py > $self->{ymax};
+    return 0
+        if      $px < $self->{xmin}  ||  $px > $self->{xmax}
+            ||  $py < $self->{ymin}  ||  $py > $self->{ymax};
 
     return $self->{full}    if  exists $self->{full};
 
@@ -119,7 +122,8 @@ sub contains {
 
     if ( exists $self->{poly} ) {
         for my $poly ( @{$self->{poly}} ) {
-            return 1    if $poly->contains( $point );
+            return 1
+                if polygon_contains_point( $point, @$poly );
         }
     }
 
@@ -170,13 +174,7 @@ sub contains_polygon_rough {
     croak "Polygon should be a reference to array of points" 
         unless ref $poly;
 
-    my @bbox = (
-        ( min map { $_->[0] } @$poly ),
-        ( min map { $_->[1] } @$poly ),
-        ( max map { $_->[0] } @$poly ),
-        ( max map { $_->[1] } @$poly ),
-    );
-
+    my @bbox = polygon_bbox( @$poly );
     return $self->contains_bbox_rough( @bbox );
 }
 
@@ -185,6 +183,62 @@ sub contains_polygon_rough {
 sub bbox {
     my $self  = shift;
     return ( $self->{xmin}, $self->{ymin}, $self->{xmax}, $self->{ymax} );
+}
+
+
+
+
+
+####    Service functions
+
+sub polygon_bbox (@) {
+
+    return (
+        ( min map { $_->[0] } @_ ),
+        ( min map { $_->[1] } @_ ),
+        ( max map { $_->[0] } @_ ),
+        ( max map { $_->[1] } @_ ),
+    );
+}
+
+
+# modified function from Math::Polygon::Calc
+# returns -1 if point lays on polygon's boundary
+
+sub polygon_contains_point ($@) {
+
+    my $point = shift;
+
+    my ( $x,  $y)  =  @$point;
+    my ($px, $py)  =  @{ (shift) };
+    my ($nx, $ny);
+
+    my $inside = 0;
+
+    while( @_ ) {
+        ($nx, $ny) =  @{ (shift) };
+        
+        return -1
+            if  $y == $py  &&  $py == $ny
+                && ( $x >= $px  ||  $x >= $nx )
+                && ( $x <= $px  ||  $x <= $nx );
+
+        next    if  $py == $ny;
+        next    if  $y < $py  &&  $y < $ny;
+        next    if  $y > $py  &&  $y > $ny;
+        next    if  $x > $px  &&  $x > $nx;
+
+        my $xx = ($y-$py)*($nx-$px)/($ny-$py)+$px;
+        return -1   if  $x == $xx;
+
+        next    if  $y <= $py  &&  $y <= $ny;
+
+        $inside = 1 - $inside
+            if  $px == $nx  ||  $x < $xx;
+    }
+    continue { ($px, $py) = ($nx, $ny); }
+
+    return $inside;
 }
 
 
@@ -212,7 +266,7 @@ This method is effective if polygon has hundreds or more segments.
 
 =head1 METHODS
 
-=head2 Constructor
+=head2 new
 
 Takes polygons (at least one) and creates a tree structure. All polygons are outer, inners in not implemented.
 
@@ -241,6 +295,12 @@ Checks if polygon is inside bound polygon.
 Returns 1 if inside, 0 if outside or B<undef> if 'doubts'. 
 
     if ( $bound->contains_polygon_rough( [ [1,1], [1,2], [2,2], ... ] ) )  { ... }
+
+=head2 bbox
+
+Returns polygon's bounding box. 
+
+    my ( $xmin, $ymin, $xmax, $ymax ) = $bound->bbox();
 
 =head1 AUTHOR
 

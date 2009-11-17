@@ -1,5 +1,11 @@
 Revision history for Math-Polygon-Tree
 
+0.03    2009-11-17
+        * boundaries are now reported as included
+        * removed Perl 5.8 incompatibility
+        * removed Math::Polygon dependency
+        * fixed POD to pass tests
+
 0.02    2009-08-27
         First public release
 

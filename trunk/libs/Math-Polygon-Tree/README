@@ -7,7 +7,6 @@ and more segments.
 Required packages:
  * List::Util
  * List::MoreUtils
- * Math::Polygon
  * Math::Geometry::Planar::GPC::Polygon
 
 

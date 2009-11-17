@@ -15,7 +15,6 @@ WriteMakefile(
         'Test::More' => 0,
         'List::Util' => 0,
         'List::MoreUtils' => 0,
-        'Math::Polygon' => 0,
         'Math::Geometry::Planar::GPC::Polygon' => 0,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
