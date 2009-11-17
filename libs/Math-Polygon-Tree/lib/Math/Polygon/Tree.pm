@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.03';
+our $VERSION = '0.031';
 
 use List::Util qw{ sum min max };
 use List::MoreUtils qw{ uniq };
@@ -289,6 +289,7 @@ Returns 1 if box is inside polygon, 0 if box is outside polygon or B<undef> if i
     my ($xmin, $ymin, $xmax, $ymax) = ( 1, 1, 2, 2 );
     if ( $bound->contains_bbox_rough( $xmin, $ymin, $xmax, $ymax ) )  { ... }
 
+
 =head2 contains_polygon_rough
 
 Checks if polygon is inside bound polygon.
@@ -301,6 +302,17 @@ Returns 1 if inside, 0 if outside or B<undef> if 'doubts'.
 Returns polygon's bounding box. 
 
     my ( $xmin, $ymin, $xmax, $ymax ) = $bound->bbox();
+
+
+=head1 FUNCTIONS
+
+=head2 polygon_bbox
+
+Function that returns polygon's bbox.
+
+=head2 polygon_contains_point
+
+Function that tests if polygon contains point.
 
 =head1 AUTHOR
 
