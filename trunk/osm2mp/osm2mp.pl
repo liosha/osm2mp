@@ -892,6 +892,10 @@ while ( my $line = <IN> ) {
                 next;
             }
 
+            if ( $waytag{'oneway'} == -1 ) {
+                $waytag{'oneway'} = 'yes';
+                @chain = reverse @chain;
+            }
 
             # set routing parameters and access rules
             # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
