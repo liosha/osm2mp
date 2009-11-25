@@ -2,7 +2,8 @@
 use strict;
 
 use POSIX;
-use List::Util qw{first max min sum};
+use List::Util qw{ first max min sum };
+use List::MoreUtils qw{ any };
 use Bit::Vector;
 use Getopt::Long;
 
@@ -19,13 +20,13 @@ my $MAXRELS     =   1_000_000;
 
 
 my $mapid           = 65430001;
-my $max_tile_nodes  = 800_000;
+my $max_tile_nodes  = 1_000_000;
 my $init_file_name  = q{};
 my $optimize        = 1;
 
 
 
-print STDERR "\n    ---|  OSM tile splitter  v0.4    (c) liosha  2009\n\n";
+print STDERR "\n    ---|  OSM tile splitter  v0.5b    (c) liosha  2009\n\n";
 
 
 ##  reading command-line options
@@ -80,6 +81,8 @@ open IN, '<', $filename     or die $!;
 binmode IN;
 
 
+
+
 ##  nodes 1st pass - initialising grid
 
 my %grid;
@@ -132,7 +135,7 @@ $area_init->{maxlon} += $lon_cell;
 
 
 
-##  splitting
+##  calculating tiles
 
 my @areas = ( @areas_init  ?  @areas_init  :  ($area_init) );
 my @tiles = ();
@@ -267,7 +270,7 @@ print STDERR "Ok\n";
 
 
 
-##  reading ways
+##  ways 1st pass - loading
 
 
 seek IN, $way_pos, 0;
@@ -293,11 +296,8 @@ while ( my $line = <IN> ) {
     if ( $reading_way  &&  $line =~ /<\/way/ ) {
         $count_ways ++;
         for my $area (@tiles) {
-            if ( first { $area->{nodes}->contains($_) } @chain ) {
+            if ( any { $area->{nodes}->contains($_) } @chain ) {
                 $area->{ways}->Bit_On($way_id);
-                for my $nd ( @chain ) {
-                    $area->{nodes}->Bit_On($nd);
-                }
             }
         }
         
@@ -320,11 +320,14 @@ print STDERR "$count_ways processed\n";
 
 
 
-##  reading relations
+##  relations 1st pass - loading
 
 seek IN, $rel_pos, 0;
 my $reading_rel = 0;
 my $rel_id;
+
+my %members;
+my %objects_to_add = ();
 
 my $count_rels = 0;
 
@@ -335,27 +338,94 @@ while ( my $line = <IN> ) {
     if ( my ($id) = $line =~ /<relation.* id=["']([^"']+)["']/ ) {
         $rel_id = $id;
         $reading_rel = 1;
+        %members = ();
+        next;
+    }
+
+    if ( $reading_rel  &&  ( my ($type, $ref) = $line =~ /<member type=["']([^"']+)["'].* ref=["']([^"']+)["']/ ) ) {
+        push @{ $members{$type} }, $ref;
         next;
     }
 
     if ( $reading_rel  &&  $line =~ /<\/relation/ ) {
+        
+        for my $area (@tiles) {
+            if ( ( $members{'node'} && any { $area->{nodes}->contains($_) } @{ $members{'node'} } )
+              || ( $members{'way'}  && any { $area->{ways}->contains($_) }  @{ $members{'way'} }  ) ) {
+                
+                $area->{rels}->Bit_On($rel_id);
+                for my $obj ( qw{ node way relation } ) {
+                    next unless $members{$obj};
+                    push @{ $objects_to_add{$area}->{$obj} }, @{ $members{$obj} };
+                }
+            }
+        }
         $count_rels ++;
         $reading_way = 0;
         next;
     }
 
-    if ( $reading_rel  &&  ( my ($type, $ref) = $line =~ /<member type=["']([^"']+)["'].* ref=["']([^"']+)["']/ ) ) {
-        for my $area (@tiles) {
-            if ( $type eq "node"  &&  $area->{nodes}->contains($ref) 
-              || $type eq "way"   &&  $area->{ways}->contains($ref)  ) {
-                $area->{rels}->Bit_On($rel_id);
-                next;
-            }
-        }
-    }
 } 
 
 print STDERR "$count_rels processed\n";
+
+
+for my $area (@tiles) {
+    for my $id ( @{ $objects_to_add{$area}->{'node'} } ) {
+        $area->{nodes}->Bit_On($id);
+    }
+    for my $id ( @{ $objects_to_add{$area}->{'way'} } ) {
+        $area->{ways}->Bit_On($id);
+    }
+    for my $id ( @{ $objects_to_add{$area}->{'relation'} } ) {
+        $area->{rels}->Bit_On($id);
+    }
+}
+
+
+
+
+##  ways 2nd pass - redistributing nodes
+
+seek IN, $way_pos, 0;
+
+my @chain = ();
+my $reading_way = 0;
+my $way_id;
+
+print STDERR "Redistributing nodes...       ";
+
+while ( my $line = <IN> ) {
+
+    if ( my ($id) = $line =~ /<way.* id=["']([^"']+)["']/ ) {
+        $way_id = $id;
+        $reading_way = 1;
+        @chain = ();
+        next;
+    }
+
+    if ( $reading_way  &&  $line =~ /<\/way/ ) {
+        for my $area (@tiles) {
+            if ( $area->{ways}->contains( $way_id ) ) {
+                for my $nd ( @chain ) {
+                    $area->{nodes}->Bit_On( $nd );
+                }
+            }
+        }
+        
+        $reading_way = 0;
+        next;
+    }
+
+    if ( $reading_way  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
+        push @chain, $nd;
+        next;
+    }
+
+    last if $line =~ /<relation /;
+} 
+
+print STDERR "Ok\n";
 
 
 
