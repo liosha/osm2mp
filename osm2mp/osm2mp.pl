@@ -637,6 +637,8 @@ while ( my $line = <IN> ) {
         next  unless  $poi;
         next  unless  !$bounds || is_inside_bounds( $node{$nodeid} );
 
+        next  if  $nodetag{'layer'} < -1;   # temporary!
+
         $countpoi ++;
         my ($type, $llev, $hlev, $poimode) = @{$poitype{$poi}};
 
