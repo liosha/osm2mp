@@ -19,6 +19,7 @@ my $MAXWAYS     =  50_000_000;
 my $MAXRELS     =   1_000_000;
 
 
+my $relations       = 1;
 my $mapid           = 65430001;
 my $max_tile_nodes  = 1_000_000;
 my $init_file_name  = q{};
@@ -26,7 +27,7 @@ my $optimize        = 1;
 
 
 
-print STDERR "\n    ---|  OSM tile splitter  v0.5b    (c) liosha  2009\n\n";
+print STDERR "\n    ---|  OSM tile splitter  v0.5    (c) liosha  2009\n\n";
 
 
 ##  reading command-line options
@@ -34,6 +35,7 @@ print STDERR "\n    ---|  OSM tile splitter  v0.5b    (c) liosha  2009\n\n";
 my $opts_result = GetOptions (
         "mapid=s"       => \$mapid,
         "maxnodes=i"    => \$max_tile_nodes,
+        "relations=i"   => \$relations,
         "init=s"        => \$init_file_name,
         "optimize"      => \$optimize,
     );
@@ -41,7 +43,13 @@ my $opts_result = GetOptions (
 my $filename = $ARGV[0];
 if (!$filename) {
     print "Usage:\n";
-    print "  splitter.pl [--mapid <mapid>] [--maxnodes <maxnodes>] [--init <file>] <osm-file>\n\n";
+    print "  splitter.pl [<options>] <osm-file>\n\n";
+    print "Options:\n";
+    print "  --maxnodes <number>    - tile size                 [ $max_tile_nodes ]\n";
+    print "  --relations <level>    - relation integrity level  [ $relations ]\n";
+    print "  --init <file>          - initial tile config\n";
+    print "  --mapid <id>           - base tile number          [ $mapid ]\n";
+    print "\n";
     exit;
 }
 
@@ -320,65 +328,77 @@ print STDERR "$count_ways processed\n";
 
 
 
-##  relations 1st pass - loading
+##  loading relations
 
-seek IN, $rel_pos, 0;
-my $reading_rel = 0;
-my $rel_id;
-
-my %members;
 my %objects_to_add = ();
 
 my $count_rels = 0;
 
 print STDERR "Reading relations...          ";
 
-while ( my $line = <IN> ) {
+for my $pass ( 0 .. ( $relations ? $relations-1 : 0 ) ) {
+    
+    seek IN, $rel_pos, 0;
 
-    if ( my ($id) = $line =~ /<relation.* id=["']([^"']+)["']/ ) {
-        $rel_id = $id;
-        $reading_rel = 1;
-        %members = ();
-        next;
-    }
+    my $rel_id;
+    my $reading_rel = 0;
+    my %members;
 
-    if ( $reading_rel  &&  ( my ($type, $ref) = $line =~ /<member type=["']([^"']+)["'].* ref=["']([^"']+)["']/ ) ) {
-        push @{ $members{$type} }, $ref;
-        next;
-    }
+    print STDERR q{.};
+    
+    while ( my $line = <IN> ) {
 
-    if ( $reading_rel  &&  $line =~ /<\/relation/ ) {
-        
-        for my $area (@tiles) {
-            if ( ( $members{'node'} && any { $area->{nodes}->contains($_) } @{ $members{'node'} } )
-              || ( $members{'way'}  && any { $area->{ways}->contains($_) }  @{ $members{'way'} }  ) ) {
-                
-                $area->{rels}->Bit_On($rel_id);
-                for my $obj ( qw{ node way relation } ) {
-                    next unless $members{$obj};
-                    push @{ $objects_to_add{$area}->{$obj} }, @{ $members{$obj} };
+        if ( my ($id) = $line =~ /<relation.* id=["']([^"']+)["']/ ) {
+            $rel_id = $id;
+            $reading_rel = 1;
+            %members = ();
+            next;
+        }
+
+        if ( $reading_rel  &&  ( my ($type, $ref) = $line =~ /<member type=["']([^"']+)["'].* ref=["']([^"']+)["']/ ) ) {
+            push @{ $members{$type} }, $ref;
+            next;
+        }
+
+        if ( $reading_rel  &&  $line =~ /<\/relation/ ) {
+
+            for my $area (@tiles) {
+                if ( ( $members{'node'}     && any { $area->{nodes}->contains($_) } @{ $members{'node'} }     )
+                  || ( $members{'way'}      && any { $area->{ways}->contains($_) }  @{ $members{'way'} }      ) 
+                  || ( $members{'relation'} && any { $area->{rels}->contains($_) }  @{ $members{'relation'} } ) 
+                  || $area->{rels}->contains($rel_id) ) {
+                    
+                    for my $obj ( qw{ node way relation } ) {
+                        next unless $members{$obj};
+                        push @{ $objects_to_add{$area}->{$obj} }, @{ $members{$obj} };
+                    }
                 }
             }
+            $count_rels ++  unless $pass;
+            $reading_way = 0;
+            next;
         }
-        $count_rels ++;
-        $reading_way = 0;
-        next;
     }
 
+    for my $area (@tiles) {
+        for my $id ( @{ $objects_to_add{$area}->{'relation'} } ) {
+            $area->{rels}->Bit_On($id);
+        }
+        $objects_to_add{$area}->{'relation'} = [];
+    }
 } 
 
-print STDERR "$count_rels processed\n";
+print STDERR "   $count_rels processed\n";
 
 
-for my $area (@tiles) {
-    for my $id ( @{ $objects_to_add{$area}->{'node'} } ) {
-        $area->{nodes}->Bit_On($id);
-    }
-    for my $id ( @{ $objects_to_add{$area}->{'way'} } ) {
-        $area->{ways}->Bit_On($id);
-    }
-    for my $id ( @{ $objects_to_add{$area}->{'relation'} } ) {
-        $area->{rels}->Bit_On($id);
+if ( $relations ) {
+    for my $area (@tiles) {
+        for my $id ( @{ $objects_to_add{$area}->{'node'} } ) {
+            $area->{nodes}->Bit_On($id);
+        }
+        for my $id ( @{ $objects_to_add{$area}->{'way'} } ) {
+            $area->{ways}->Bit_On($id);
+        }
     }
 }
 
