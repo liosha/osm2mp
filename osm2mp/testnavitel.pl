@@ -1,8 +1,9 @@
 #!/usr/bin/perl
 
 sub nround {
-    $acc = 24; 
-    return int (0.5 + ($_[0]+180) / 360 * 2**$acc);
+    my $acc = 24; 
+    my ($n, $d) = @_;
+    return int( $d + ($n+180) / 360 * 2**$acc );
 #    return sprintf "%.4f", $_[0];
 }
 
@@ -33,7 +34,12 @@ while (<IN>) {
 printf STDERR "%d roads found\n", scalar keys %roads;
 
 
+
+
 print STDERR "Processing routing...     ";
+
+my %ncount;
+my %ecount;
 
 for $road (values %roads) {
     map { $ncount{$_}++ } @{$road};
@@ -41,17 +47,28 @@ for $road (values %roads) {
     $ecount{$road->[-1]}++;
 }
 
-
 printf STDERR "%d cross-nodes, %d end-nodes\n", scalar (grep {$ncount{$_}>1} keys %ncount), scalar keys %ecount;
 
-map {$nod{$_}++} grep {$ncount{$_}>1} keys %ncount;
-map {$nod{$_}++} keys %ecount;
+
+
+my %nod;
+
+for ( grep { $ncount{$_}>1 } keys %ncount ) {
+    $nod{$_} ++;
+}
+for ( keys %ecount ) {
+    $nod{$_} ++;
+}
 
 print STDERR "                          ";
 printf STDERR "%d nodes total\n", scalar keys %nod;
 
 
+
+
 print STDERR "Loading necessary nodes...\n";
+
+my %nodes;
 
 seek IN,0,0;
 while (<IN>) {
@@ -59,6 +76,7 @@ while (<IN>) {
         $nodes{$id} = [$lat,$lon]       if $nod{$id};
     }
 }
+
 
 print STDERR "Looking for errors...     ";
 
