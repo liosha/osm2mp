@@ -748,7 +748,7 @@ while ( my $line = <IN> ) {
 
         if ( $mode eq 'l'  ||  $mode eq 's'  || ( !$routing && $mode eq 'r' ) ) {
             if ( scalar @chain < 2 ) {
-                print "; ERROR: WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
+                print "; ERROR: Line WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
                 next;
             }
 
@@ -771,7 +771,7 @@ while ( my $line = <IN> ) {
 
         if ( $mode eq 's'  &&  $shorelines ) {
             if ( scalar @chain < 2 ) {
-                print "; ERROR: WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
+                print "; ERROR: Line WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
             } 
             else {
                 for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
@@ -785,12 +785,12 @@ while ( my $line = <IN> ) {
 
         if ( $mode eq 'p' ) {
             if ( scalar @chain <= 3 ) {
-                print "; ERROR: area WayID=$wayid has too few nodes near ($node{$chain[0]})\n";
+                print "; ERROR: Area WayID=$wayid has too few nodes near ($node{$chain[0]})\n";
                 next;
             }
 
             if ( $chain[0] ne $chain[-1] ) {
-                print "; ERROR: area WayID=$wayid is not closed at ($node{$chain[0]})\n";
+                print "; ERROR: Area WayID=$wayid is not closed at ($node{$chain[0]})\n";
                 next;
             }
 
@@ -1505,7 +1505,7 @@ if ( $routing ) {
             for my $node ( grep { $_ ne $cnode && $nodid{$_} } @{$road->{chain}}[1..$#{$road->{chain}}] ) {
                 if ( fix_close_nodes( $cnode, $node ) ) {
                     $countclose ++;
-                    print "; ERROR: too close nodes $cnode and $node, WayID=$roadid near (${node{$node}})\n";
+                    print "; ERROR: Too close nodes $cnode and $node, WayID=$roadid near (${node{$node}})\n";
                 }
                 $cnode = $node;
             }
