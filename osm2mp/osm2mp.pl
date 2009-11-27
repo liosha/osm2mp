@@ -1372,7 +1372,7 @@ if ( $routing ) {
         }
     
         for my $road ( keys %roadseg ) {
-            printf "; ERROR: Roads $road has $roadseg{$road} duplicate segments near ($roadpos{$road})\n";
+            printf "; ERROR: Roads $road have $roadseg{$road} duplicate segments near ($roadpos{$road})\n";
         }
     
         printf STDERR "$countdupsegs segments, %d roads\n", scalar keys %roadseg;
