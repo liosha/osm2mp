@@ -367,9 +367,10 @@ for my $pass ( 0 .. ( $relations ? $relations-1 : 0 ) ) {
                   || ( $members{'way'}      && any { $area->{ways}->contains($_) }  @{ $members{'way'} }      ) 
                   || ( $members{'relation'} && any { $area->{rels}->contains($_) }  @{ $members{'relation'} } ) 
                   || $area->{rels}->contains($rel_id) ) {
-                    
+
                     for my $obj ( qw{ node way relation } ) {
                         next unless $members{$obj};
+                        push @{ $objects_to_add{$area}->{relation} }, $rel_id;
                         push @{ $objects_to_add{$area}->{$obj} }, @{ $members{$obj} };
                     }
                 }
@@ -379,6 +380,7 @@ for my $pass ( 0 .. ( $relations ? $relations-1 : 0 ) ) {
             next;
         }
     }
+
 
     for my $area (@tiles) {
         for my $id ( @{ $objects_to_add{$area}->{'relation'} } ) {
