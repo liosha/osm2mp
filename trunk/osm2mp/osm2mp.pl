@@ -348,7 +348,7 @@ $boundgpc->add_polygon ( \@bound, 0 )    if $bounds;
 
 # multipolygons
 my %mpoly;
-my %mphole;
+my %ampoly; #advanced
 
 # turn restrictions
 my $counttrest = 0;
@@ -395,7 +395,6 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<\/relation/ ) {
 
-        # simple multipolygons (one outer, many inners, all closed)
         if ( $reltag{'type'} eq 'multipolygon' ) {
             if ( $relmember{'way:'} ) {
                 push @{ $relmember{'way:outer'} }, @{ $relmember{'way:'} };
@@ -404,16 +403,20 @@ while ( my $line = <IN> ) {
                 print "; ERROR: Multipolygon RelID=$relid doesn't have OUTER way\n";
                 next;
             }
-            unless ( $relmember{'way:inner'} ) {
-                print "; ERROR: Multipolygon RelID=$relid has no INNER ways\n";
-                next;
-            }
 
+            $ampoly{$relid} = {
+                outer   =>  $relmember{'way:outer'},
+                inner   =>  $relmember{'way:inner'},
+                tags    =>  { %reltag },
+            };
+
+            next    unless $relmember{'way:inner'} && @{$relmember{'way:outer'}}==1;
+
+            # old simple multipolygon
             my $outer = $relmember{'way:outer'}->[0];
             my @inner = @{ $relmember{'way:inner'} };
 
             $mpoly{$outer} = [ @inner ];
-            @mphole{@inner} = (1) x scalar @inner;
         }
 
         # turn restrictions
@@ -507,13 +510,28 @@ print  STDERR "                          $countsigns destination signs\n"     if
 
 
 
-
 ####    2nd pass
-###     loading cities, multipolygon holes and checking node dupes
+###     loading cities, multipolygon parts and checking node dupes
 
 my %city;
+my %waychain;
 
-print STDERR "Loading cities...         ";
+my %ways_to_load;
+for my $mp ( values %ampoly ) {
+    if ( $mp->{outer} ) {
+        for my $id ( @{ $mp->{outer} } ) {
+            $ways_to_load{$id} ++;
+        }
+    }
+    if ( $mp->{inner} ) {
+        for my $id ( @{ $mp->{inner} } ) {
+            $ways_to_load{$id} ++;
+        }
+    }
+}
+
+
+print STDERR "Loading necessary ways... ";
 
 my $wayid;
 my %waytag;
@@ -546,42 +564,97 @@ while ( my $line = <IN> ) {
         next;
     }
 
-   if ( $line =~ /<tag.* k=["']([^"']+)["'].* v=["']([^"']+)["']/ ) {
-       $waytag{$1} = $2;
-       next;
-   }
+    if ( $line =~ /<tag.* k=["']([^"']+)["'].* v=["']([^"']+)["']/ ) {
+        $waytag{$1} = $2;
+        next;
+    }
 
-   if ( $line =~ /<\/way/ ) {
+    if ( $line =~ /<\/way/ ) {
 
-       ##       this way is multipolygon inner
-       if ( $mphole{$wayid} ) {
-           $mphole{$wayid} = [ @chain ];
-       }
+        ##      part of multipolygon
+        $waychain{$wayid} = [ @chain ]      if  $ways_to_load{$wayid};
 
-       ##       this way is city bound
-       if ( exists $waytag{'place'} && ( $waytag{'place'} eq 'city' || $waytag{'place'} eq 'town' ) ) { 
-           my $name = convert_string ( first {defined} @waytag{@citynamelist} );
+        ##      this way is city bound
+        if ( exists $waytag{'place'} && ( $waytag{'place'} eq 'city' || $waytag{'place'} eq 'town' ) ) { 
+            my $name = convert_string ( first {defined} @waytag{@citynamelist} );
 
-           if ( $name  &&  $chain[0] eq $chain[-1] ) {
-               print "; Found city: WayID=$wayid - $name\n";
-               $city{$wayid} = {
-                    name        =>  $name,
-                    region      =>  convert_string( first {defined} @waytag{@regionnamelist} ),
-                    country     =>  convert_string( first {defined} @waytag{@countrynamelist} ),
-                    bound       =>  Math::Polygon::Tree->new( [ map { [ split q{,}, $node{$_} ] } @chain ] ),
-               };
-           } else {
-               print "; ERROR: City without name WayID=$wayid\n"            unless  $name;
-               print "; ERROR: City polygon WayID=$wayid is not closed\n"   if  $chain[0] ne $chain[-1];
-           }
-       }
-       next;
-   }
+            if ( $name  &&  $chain[0] eq $chain[-1] ) {
+                print "; Found city: WayID=$wayid - $name\n";
+                $city{$wayid} = {
+                     name        =>  $name,
+                     region      =>  convert_string( first {defined} @waytag{@regionnamelist} ),
+                     country     =>  convert_string( first {defined} @waytag{@countrynamelist} ),
+                     bound       =>  Math::Polygon::Tree->new( [ map { [ split q{,}, $node{$_} ] } @chain ] ),
+                };
+            } else {
+                print "; ERROR: City without name WayID=$wayid\n"            unless  $name;
+                print "; ERROR: City polygon WayID=$wayid is not closed\n"   if  $chain[0] ne $chain[-1];
+            }
+        }
+        next;
+    }
 
-   last  if $line =~ /<relation/;
+    last  if $line =~ /<relation/;
 }
 
-printf STDERR "%d loaded\n", scalar keys %city;
+printf STDERR "%d cities\n", scalar keys %city;
+
+
+
+
+
+print STDERR "Processing multipolygons  ";
+
+while ( my ( $mpid, $mp ) = each %ampoly ) {
+    for my $list_ref (( $mp->{outer}, $mp->{inner} )) {
+        next unless $list_ref;
+
+        my @list = @$list_ref;
+        my @newlist;
+
+        while ( @list ) {
+            my $id = shift @list;
+
+            # closed way
+            if ( $waychain{$id}->[0] eq $waychain{$id}->[-1] ) {
+                push @newlist, $id;
+                next;
+            }
+
+            my $add = first_index { $waychain{$id}->[-1] eq $waychain{$_}->[0] } @list;
+            if ( $add > -1 ) {
+                my $newid = "$id:$list[$add]";
+                my @add = @{$waychain{$list[$add]}};
+                shift @add;
+                $waychain{$newid} = [ @{$waychain{$id}}, @add ];
+
+                splice  @list, $add, 1;
+                unshift @list, $newid;
+
+                next;
+            }
+
+            $add = first_index { $waychain{$id}->[-1] eq $waychain{$_}->[-1] } @list;
+            if ( $add > -1 ) {
+                my $newid = "$id:r$list[$add]";
+                my @add = reverse @{$waychain{$list[$add]}};
+                shift @add;
+                $waychain{$newid} = [ @{$waychain{$id}}, @add ];
+
+                splice  @list, $add, 1;
+                unshift @list, $newid;
+
+                next;
+            }
+
+            print "; ERROR: Multipolygon's RelID=$mpid part WayID=$id is not closed\n";
+        }
+
+        $list_ref = [ @newlist ];
+    }
+}
+
+printf STDERR "Ok\n";
 
 
 
@@ -803,8 +876,9 @@ while ( my $line = <IN> ) {
                 my @plist    = ($polygon);
 
                 if ( $mpoly{$wayid} ) {
-                    for my $hole ( grep { ref $mphole{$_} } @{$mpoly{$wayid}} ) {
-                        push @plist, [ map { [reverse split q{,}, $node{$_}] } @{$mphole{$hole}} ];
+                    printf "; multipolygon with %d holes\n", scalar @{$mpoly{$wayid}};
+                    for my $hole ( grep { exists $waychain{$_} } @{$mpoly{$wayid}} ) {
+                        push @plist, [ map { [reverse split q{,}, $node{$_}] } @{$waychain{$hole}} ];
                     }
                 }
 
