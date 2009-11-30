@@ -932,7 +932,8 @@ while ( my $line = <IN> ) {
                 }
             
                 for my $polygon ( @plist ) {
-                    printf "Data%d=(%s)\n", $llev, join( q{), (}, map {join( q{,}, reverse @{$_} )} @{$polygon} );
+                    printf "Data%d=(%s)\n", $llev, join( q{), (}, map {join( q{,}, reverse @{$_} )} @{$polygon} )
+                        if scalar @{$polygon} > 2;
                 }
 
                 ## Rusa - floors
