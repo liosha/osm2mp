@@ -395,10 +395,15 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<\/relation/ ) {
 
-        if ( $reltag{'type'} eq 'multipolygon' ) {
-            if ( $relmember{'way:'} ) {
-                push @{ $relmember{'way:outer'} }, @{ $relmember{'way:'} };
-            }
+        if ( $reltag{'type'} eq 'multipolygon'  ||  $reltag{'type'} eq 'boundary' ) {
+
+            push @{$relmember{'way:outer'}}, @{$relmember{'way:'}}
+                if $relmember{'way:'};
+            push @{$relmember{'way:outer'}}, @{$relmember{'way:exclave'}}
+                if $relmember{'way:exclave'};
+            push @{$relmember{'way:inner'}}, @{$relmember{'way:enclave'}}
+                if $relmember{'way:enclave'};
+
             unless ( $relmember{'way:outer'} ) {
                 print "; ERROR: Multipolygon RelID=$relid doesn't have OUTER way\n";
                 next;
