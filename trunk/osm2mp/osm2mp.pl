@@ -602,7 +602,7 @@ while ( my $line = <IN> ) {
     last  if $line =~ /<relation/;
 }
 
-printf STDERR "%d cities\n", scalar keys %city;
+printf STDERR "%d loaded\n", scalar keys %waychain;
 
 
 
@@ -614,7 +614,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     for my $list_ref (( $mp->{outer}, $mp->{inner} )) {
         next unless $list_ref;
 
-        my @list = @$list_ref;
+        my @list = grep { exists $waychain{$_} } @$list_ref;
         my @newlist;
 
         while ( @list ) {
@@ -652,7 +652,10 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
                 next;
             }
 
-            print "; ERROR: Multipolygon's RelID=$mpid part WayID=$id is not closed\n";
+            printf "; %s Multipolygon's RelID=$mpid part WayID=$id is not closed\n",
+                ( ( all { exists $waychain{$_} } @$list_ref )
+                    ? "ERROR:"
+                    : "WARNING: Incomplete RelID=$mpid. " ); 
         }
 
         $list_ref = [ @newlist ];
