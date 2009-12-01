@@ -660,10 +660,39 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
 
         $list_ref = [ @newlist ];
     }
+
+    my $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
+                grep { exists $polytype{$_} && $polytype{$_}->[0] eq 'p' }
+                map { "$_=" . $mp->{tags}->{$_} }  keys %{$mp->{tags}};
+
+    next  unless $poly;
+
+    my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
+
+    my @alist;
+    for my $area ( @{ $mp->{outer} } ) {
+        push @alist, [ map { [reverse split q{,}, $node{$_}] } @{ $waychain{$area} } ];
+    }
+    my @hlist;
+    for my $area ( @{ $mp->{inner} } ) {
+        push @hlist, [ map { [reverse split q{,}, $node{$_}] } @{ $waychain{$area} } ];
+    }
+
+    AddPolygon({
+        areas   => \@alist,
+        holes   => \@hlist,
+        tags    => $mp->{tags},
+        relid   => $mpid,
+        comment => $poly,
+        type    => $type,
+        name    => convert_string( first {defined} @waytag{@nametagarray} ),
+        level_h => $hlev,
+        level_l => $llev,
+        poi     => $rp,    
+    });
 }
 
 printf STDERR "Ok\n";
-
 
 
 
