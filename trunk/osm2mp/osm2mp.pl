@@ -2248,7 +2248,7 @@ sub AddPolygon {
     return      if all { defined && $_==0 } @inside;
 
     $param{holes} = []      unless $param{holes};
-    my @plist = ( @{$param{areas}}, @{$param{holes}} );
+    my @plist = grep { scalar @$_ > 3 } ( @{$param{areas}}, @{$param{holes}} );
 
 
     #   clip
@@ -2266,7 +2266,7 @@ sub AddPolygon {
         @plist  =  sort  { $#{$b} <=> $#{$a} }  $gpc->get_polygons();
     }
 
-    next    unless @plist;
+    return    unless @plist;
 
     my $llev  =  $param{level_l};
     my $hlev  =  $param{level_h};
