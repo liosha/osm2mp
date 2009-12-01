@@ -877,12 +877,7 @@ while ( my $line = <IN> ) {
 
             if ( !$bounds  ||  scalar @chainlist ) {
 
-                print  "; WayID = $wayid\n";
-                print  "; $poly\n";
-
-                my $polygon  = [ map { [reverse split q{,}, $node{$_}] } @chain ];
-                my @plist    = ($polygon);
-
+                my @plist = ();
                 if ( $mpoly{$wayid} ) {
                     printf "; multipolygon with %d holes\n", scalar @{$mpoly{$wayid}};
                     for my $hole ( grep { exists $waychain{$_} } @{$mpoly{$wayid}} ) {
@@ -890,81 +885,18 @@ while ( my $line = <IN> ) {
                     }
                 }
 
-                #   clip
-                if ( $bounds  &&  !defined $boundtree->contains_polygon_rough( $polygon ) ) {
-                    my $gpc = new_gpc();
-                    $gpc->add_polygon( shift @plist, 0 );
-                    
-                    for my $hole ( @plist ) {
-                        $gpc->add_polygon( $hole, 1 );
-                    }
-
-                    $gpc    =  $gpc->clip_to( $boundgpc, 'INTERSECT' );
-                    @plist  =  sort  { $#{$b} <=> $#{$a} }  $gpc->get_polygons();
-                }
-
-                next    unless @plist;
-
-                $countpolygons ++;
-
-                print  "[POLYGON]\n";
-                printf "Type=%s\n",        $type;
-                printf "EndLevel=%d\n",    $hlev    if  $hlev > $llev;
-                print  "Label=$name\n"              if  $name;
-
-
-                if ( $navitel  ||  ($makepoi && $rp && $name) ) {
-                    $city = $city{ FindCity( $chain[0] ) };
-                }
-
-                ## Navitel
-                if ( $navitel ) {
-                    my $housenumber = convert_string( first {defined} @waytag{@housenamelist} );
-                    if ( $housenumber && $waytag{'addr:street'} ) {
-                        print  "HouseNumber=$housenumber\n";
-                        printf "StreetDesc=%s\n", convert_string( $waytag{'addr:street'} );
-                        if ( $city ) {
-                            print "CityName="    . $city->{name}      . "\n";
-                            print "RegionName="  . $city->{region}    . "\n"      if $city->{region};
-                            print "CountryName=" . $city->{country}   . "\n"      if $city->{country};
-                        } 
-                        elsif ( $defaultcity ) {
-                            print "CityName=$defaultcity\n";
-                        }
-                    }
-                }
-            
-                for my $polygon ( @plist ) {
-                    printf "Data%d=(%s)\n", $llev, join( q{), (}, map {join( q{,}, reverse @{$_} )} @{$polygon} )
-                        if scalar @{$polygon} > 2;
-                }
-
-                ## Rusa - floors
-                if ( $waytag{'building:levels'} ) {
-                    printf "Floors=%d\n",  0 + $waytag{'building:levels'};
-                }
-                if ( $waytag{'building:height'} ) {
-                    printf "Floors=%d\n",  3 * $waytag{'building:height'};
-                }
-            
-                print "[END]\n\n\n";
-            
-
-                if ( $makepoi && $rp && $name ) {
-            
-                    my ($poi, $pll, $phl) = split q{,}, $rp;
-            
-                    AddPOI ({
-                            latlon       => ( join q{,}, centroid( @{$plist[0]} ) ),
-                            comment      => "for area $poly WayID=$wayid",
-                            type         => $poi,
-                            tags         => \%waytag,
-                            level_l      => $pll,
-                            level_h      => $phl,
-                            add_contacts => 1,
-                        });
-                }
-                
+                AddPolygon({
+                    areas   => [ [ map { [reverse split q{,}, $node{$_}] } @chain ] ],
+                    holes   => \@plist,
+                    tags    => \%waytag,
+                    wayid   => $wayid,
+                    comment => $poly,
+                    type    => $type,
+                    name    => $name,
+                    level_h => $hlev,
+                    level_l => $llev,
+                    poi     => $rp,    
+                });
             }
         }
 
@@ -2059,11 +1991,10 @@ sub centroid {
 ####    Exported functions
 
 sub FindCity {
-    my @nodes = @_;
+    my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $node{$_} ? $node{$_} : $_ ) ] } @_;
     return first { 
             my $cbound = $city{$_}->{bound};
-            # map { print ("; ", join (q{:}, (split q{,}, ( exists $node{$_} ? $node{$_} : $_ ))), "\n" ) } @nodes;
-            all { $cbound->contains( [ split q{,}, ( exists $node{$_} ? $node{$_} : $_ ) ] ) } @nodes;
+            all { $cbound->contains( $_ ) } @nodes;
         } keys %city;
 }
 
@@ -2274,3 +2205,101 @@ sub CalcAccessRules {
     return @acc;
 }     
 
+
+sub AddPolygon {
+
+    my %param = %{$_[0]};
+
+    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
+
+    return      unless  exists $param{areas}; 
+    return      unless  exists $param{type};
+
+    my @inside = map { $bounds ? $boundtree->contains_polygon_rough( $_ ) : 1 } @{$param{areas}};
+    return      if all { defined && $_==0 } @inside;
+
+    $param{holes} = []      unless $param{holes};
+    my @plist = ( @{$param{areas}}, @{$param{holes}} );
+
+
+    #   clip
+    if ( $bounds  &&  any { !defined } @inside ) {
+        my $gpc = new_gpc();
+
+        for my $area ( @{$param{areas}} ) {
+            $gpc->add_polygon( $area, 0 );
+        }
+        for my $hole ( @{$param{holes}} ) {
+            $gpc->add_polygon( $hole, 1 );
+        }
+
+        $gpc    =  $gpc->clip_to( $boundgpc, 'INTERSECT' );
+        @plist  =  sort  { $#{$b} <=> $#{$a} }  $gpc->get_polygons();
+    }
+
+    next    unless @plist;
+
+    my $llev  =  $param{level_l};
+    my $hlev  =  $param{level_h};
+
+    print  "; WayID = $param{wayid}\n"      if  exists $param{wayid};
+    print  "; RelID = $param{relid}\n"      if  exists $param{relid};
+    print  "; $param{comment}\n"            if  exists $param{comment};
+
+    $countpolygons ++;
+
+    print  "[POLYGON]\n";
+    printf "Type=%s\n",        $param{type};
+    printf "EndLevel=%d\n",    $hlev    if  $hlev > $llev;
+    print  "Label=$param{name}\n"       if  $param{name};
+
+
+    ## Navitel
+    if ( $navitel ) {
+        my $housenumber = convert_string( first { defined } @tag{@housenamelist} );
+        if ( $housenumber && $tag{'addr:street'} ) {
+            my $city = $city{ FindCity( $plist[0]->[0] ) };
+            print  "HouseNumber=$housenumber\n";
+            printf "StreetDesc=%s\n", convert_string( $tag{'addr:street'} );
+            if ( $city ) {
+                print "CityName="    . $city->{name}      . "\n";
+                print "RegionName="  . $city->{region}    . "\n"      if $city->{region};
+                print "CountryName=" . $city->{country}   . "\n"      if $city->{country};
+            } 
+            elsif ( $defaultcity ) {
+                print "CityName=$defaultcity\n";
+            }
+        }
+    }
+
+    for my $polygon ( @plist ) {
+        printf "Data%d=(%s)\n", $llev, join( q{), (}, map {join( q{,}, reverse @{$_} )} @{$polygon} )
+            if scalar @{$polygon} > 2;
+    }
+
+    ## Rusa - floors
+    if ( $tag{'building:levels'} ) {
+        printf "Floors=%d\n",  0 + $tag{'building:levels'};
+    }
+    if ( $tag{'building:height'} ) {
+        printf "Floors=%d\n",  3 * $tag{'building:height'};
+    }
+
+    print "[END]\n\n\n";
+
+
+    if ( $makepoi && $param{poi} && $param{name} ) {
+
+        my ($poi, $pll, $phl) = split q{,}, $param{poi};
+
+        AddPOI ({
+                latlon       => ( join q{,}, centroid( @{$plist[0]} ) ),
+                comment      => "for area $param{comment} WayID=$param{wayid}",
+                type         => $poi,
+                tags         => \%tag,
+                level_l      => $pll,
+                level_h      => $phl,
+                add_contacts => 1,
+            });
+    }
+}
