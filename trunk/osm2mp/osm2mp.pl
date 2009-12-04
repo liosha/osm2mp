@@ -430,8 +430,11 @@ while ( my $line = <IN> ) {
                 print "; ERROR: Turn restriction RelID=$relid doesn't have FROM way\n";
                 next;
             }
+            if ( $relmember{'way:via'} ) {
+                print "; WARNING: VIA ways is still not supported (RelID=$relid)\n";
+                next;
+            }
             unless ( $relmember{'node:via'} ) {
-                # VIA ways is not supported now
                 print "; ERROR: Turn restriction RelID=$relid doesn't have VIA node\n";
                 next;
             }
