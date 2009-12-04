@@ -176,7 +176,7 @@ if ( $country_list ) {
         chomp $line;
         next if $line =~ /^#/;
         next if $line =~ /^\s+$/;
-        my ($code, $name) = split /\s+/, $line;
+        my ($code, $name) = split /\s\s\s+/, $line;
         $country_code{$code} = $name;
     }
     close CL;
