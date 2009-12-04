@@ -86,6 +86,7 @@ my $marine          = 1;
 my $navitel         = 0;
 my $makepoi         = 1;
 
+my $country_list;
 my $defaultcountry  = "Earth";
 my $defaultregion   = "OSM";
 my $defaultcity     = q{};
@@ -135,6 +136,7 @@ GetOptions (
     'restrictions!'     => \$restrictions,
     'barriers!'         => \$barriers,
     'destsigns!'        => \$destsigns,
+    'countrylist=s'     => \$country_list,
     'defaultcountry=s'  => \$defaultcountry,
     'defaultregion=s'   => \$defaultregion,
     'defaultcity=s'     => \$defaultcity,
@@ -165,6 +167,19 @@ if ( $ttable ) {
     close TT;
 
     eval $code;
+}
+
+my %country_code;
+if ( $country_list ) {
+    open CL, '<', $country_list;
+    while ( my $line = <CL> ) {
+        chomp $line;
+        next if $line =~ /^#/;
+        next if $line =~ /^\s+$/;
+        my ($code, $name) = split /\s+/, $line;
+        $country_code{$code} = $name;
+    }
+    close CL;
 }
 
 my @nametagarray = split q{,}, $nametaglist;
@@ -591,7 +606,7 @@ while ( my $line = <IN> ) {
                 $city{$wayid} = {
                      name        =>  $name,
                      region      =>  convert_string( first {defined} @waytag{@regionnamelist} ),
-                     country     =>  convert_string( first {defined} @waytag{@countrynamelist} ),
+                     country     =>  convert_string( country_name( first {defined} @waytag{@countrynamelist} ) ),
                      bound       =>  Math::Polygon::Tree->new( [ map { [ split q{,}, $node{$_} ] } @chain ] ),
                 };
             } else {
@@ -1931,6 +1946,7 @@ Possible options [defaults]:
  --ttable <file>           character conversion table
 
  --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
+ --countrylist <file>      replace country code by name
  --defaultcountry <name>   default data for street indexing  [$defaultcountry]
  --defaultregion <name>                                      [$defaultregion]
  --defaultcity <name>                                        [$defaultcity]
@@ -2063,7 +2079,7 @@ sub AddPOI {
     if ( $poiregion  &&  $label  &&  $param{add_region} ) {
         my $region  = convert_string( first { defined } @{$param{tags}}{@regionnamelist} );
         print "RegionName=$region\n"        if $region;
-        my $country = convert_string( first { defined } @{$param{tags}}{@countrynamelist} );
+        my $country = convert_string( country_name( first { defined } @{$param{tags}}{@countrynamelist} ) );
         print "CountryName=$country\n"      if $country;
     }
 
@@ -2334,4 +2350,11 @@ sub AddPolygon {
                 add_contacts => 1,
             });
     }
+}
+
+
+sub country_name {
+    my ($code) = @_;
+    return $country_code{$code}.' (OSM)'    if $country_code{$code};
+    return $code;
 }
