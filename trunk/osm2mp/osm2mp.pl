@@ -410,6 +410,7 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<\/relation/ ) {
 
+        # multipolygon
         if ( $reltag{'type'} eq 'multipolygon'  ||  $reltag{'type'} eq 'boundary' ) {
 
             push @{$relmember{'way:outer'}}, @{$relmember{'way:'}}
@@ -599,18 +600,15 @@ while ( my $line = <IN> ) {
 
         ##      this way is city bound
         if ( exists $waytag{'place'} && ( $waytag{'place'} eq 'city' || $waytag{'place'} eq 'town' ) ) { 
-            my $name = convert_string ( first {defined} @waytag{@citynamelist} );
 
-            if ( $name  &&  $chain[0] eq $chain[-1] ) {
-                print "; Found city: WayID=$wayid - $name\n";
-                $city{$wayid} = {
-                     name        =>  $name,
-                     region      =>  convert_string( first {defined} @waytag{@regionnamelist} ),
-                     country     =>  convert_string( country_name( first {defined} @waytag{@countrynamelist} ) ),
-                     bound       =>  Math::Polygon::Tree->new( [ map { [ split q{,}, $node{$_} ] } @chain ] ),
+            if ( $chain[0] eq $chain[-1] ) {
+                $waychain{$wayid} = [ @chain ];
+                $ampoly{"w$wayid"} = {
+                    outer   =>  [ $wayid ],
+                    tags    =>  { %waytag },
                 };
-            } else {
-                print "; ERROR: City without name WayID=$wayid\n"            unless  $name;
+            }
+            else {
                 print "; ERROR: City polygon WayID=$wayid is not closed\n"   if  $chain[0] ne $chain[-1];
             }
         }
@@ -628,7 +626,10 @@ printf STDERR "%d loaded\n", scalar keys %waychain;
 
 print STDERR "Processing multipolygons  ";
 
+my $countpolygons = 0;
 while ( my ( $mpid, $mp ) = each %ampoly ) {
+
+    # merge parts
     for my $list_ref (( $mp->{outer}, $mp->{inner} )) {
         next unless $list_ref;
 
@@ -679,6 +680,29 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
         $list_ref = [ @newlist ];
     }
 
+    my %tags = %{ $mp->{tags} };
+
+    # load if city
+    if ( exists $tags{'place'} && ( $tags{'place'} eq 'city' || $tags{'place'} eq 'town' ) ) {
+        my $name = convert_string ( first {defined} @tags{@citynamelist} );
+                
+        if ( $name ) {
+            printf "; Found city: %sID=%s - $name\n", ( $mpid =~ /^w(.+)/ ? ('Way', $1) : ('Rel', $mpid) );
+            $city{$mpid} = {
+                name        =>  $name,
+                region      =>  convert_string( first {defined} @tags{@regionnamelist} ),
+                country     =>  convert_string( country_name( first {defined} @tags{@countrynamelist} ) ),
+                bound       =>  Math::Polygon::Tree->new( 
+                        map { [ map { [ split q{,}, $node{$_} ] } @{ $waychain{$_} } ] } @{ $mp->{outer} } 
+                    ),
+            };
+        }
+        else {
+            print "; ERROR: City without name WayID=$wayid\n"            unless  $name;
+        }
+    }
+
+    # draw if presents in config
     my $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
                 grep { exists $polytype{$_} && $polytype{$_}->[0] eq 'p' }
                 map { "$_=" . $mp->{tags}->{$_} }  keys %{$mp->{tags}};
@@ -696,6 +720,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
         push @hlist, [ map { [reverse split q{,}, $node{$_}] } @{ $waychain{$area} } ];
     }
 
+    $countpolygons ++;
     AddPolygon({
         areas   => \@alist,
         holes   => \@hlist,
@@ -710,7 +735,9 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     });
 }
 
-printf STDERR "Ok\n";
+printf STDERR "%d polygons written\n", $countpolygons;
+printf STDERR "                          %d cities loaded\n", scalar keys %city;
+
 
 
 
@@ -2358,3 +2385,4 @@ sub country_name {
     return $country_code{$code}.' (OSM)'    if $country_code{$code};
     return $code;
 }
+
