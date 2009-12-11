@@ -403,7 +403,7 @@ while ( my $line = <IN> ) {
     }
 
     if ( $line =~ /<tag/ ) {
-        my ($key, $val)  =  $line =~ / k=["']([^"']+)["'].* v=["']([^"']+)["']/;
+        my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
         $reltag{$key} = $val;
         next;
     }
@@ -768,7 +768,7 @@ while ( my $line = <IN> ) {
     }
 
     if ( $line =~ /<tag/ ) {
-        my ($key, $val)  =  $line =~ / k=["']([^"']+)["'].* v=["']([^"']+)["']/;
+        my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
         $nodetag{$key}   =  $val;
         next;
     }
@@ -879,8 +879,8 @@ while ( my $line = <IN> ) {
     }
 
     if ( $line =~ /<tag/ ) {
-        $line =~ / k=["']([^"']*)["'].* v=["']([^"']*)["']/;
-        $waytag{$1} = $2;
+        my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
+        $waytag{$key} = $val;
         next;
     }
 
@@ -1807,7 +1807,8 @@ sub convert_string {            # String
 
     my $str = decode('utf8', $_[0]);
     return $str     unless $str;
-   
+
+    
     unless ( $translit ) {
         for my $repl ( keys %cmap ) {
             $str =~ s/$repl/$cmap{$repl}/g;
