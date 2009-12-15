@@ -574,7 +574,7 @@ while ( my $line = <IN> ) {
         next;
     }
 
-    if ( $line =~ /<nd/ ) {
+    if ( $line =~ /<nd / ) {
         my ($ref)  =  $line =~ / ref=["']([^"']+)["']/;
         if ( $node{$ref} ) {
             unless ( scalar @chain  &&  $ref eq $chain[-1] ) {
@@ -886,51 +886,27 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<\/way/ ) {
 
-        my $poly  =  reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
-                        grep { exists $polytype{$_} }
-                        map {"$_=$waytag{$_}"}  keys %waytag;
-        next  unless $poly;
-
-        my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
+        my $poly;
 
         my $name = convert_string( first {defined} @waytag{@nametagarray} );
 
         @chainlist = (0)            unless $bounds;
         push @chainlist, $#chain    unless ($#chainlist % 2);
 
-
-        ##  this way is map line - dump it
-
-        if ( $mode eq 'l'  ||  $mode eq 's'  || ( !$routing && $mode eq 'r' ) ) {
-            if ( scalar @chain < 2 ) {
-                print "; ERROR: Line WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
-                next;
-            }
-
-            for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
-                $countlines ++;
-
-                print  "; WayID = $wayid\n";
-                print  "; $poly\n";
-                print  "[POLYLINE]\n";
-                printf "Type=%s\n",         $type;
-                printf "EndLevel=%d\n",     $hlev       if  $hlev > $llev;
-                print  "Label=$name\n"                  if  $name;
-                printf "Data%d=(%s)\n",     $llev, join( q{), (}, @node{@chain[$chainlist[$i]..$chainlist[$i+1]]} );
-                print  "[END]\n\n\n";
-            }
-        }
-
-
         ##  this way is coastline - load it
+        if (  $shorelines  ) {
+            $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
+                        grep { exists $polytype{$_} && $polytype{$_}->[0] eq 's' }
+                        map {"$_=$waytag{$_}"}  keys %waytag;
 
-        if ( $mode eq 's'  &&  $shorelines ) {
-            if ( scalar @chain < 2 ) {
-                print "; ERROR: Line WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
-            } 
-            else {
-                for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
-                    $coast{$chain[$chainlist[$i]]} = [ @chain[$chainlist[$i]..$chainlist[$i+1]] ];
+            if ( $poly ) {
+                if ( scalar @chain < 2 ) {
+                    print "; ERROR: Line WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
+                } 
+                else {
+                    for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
+                        $coast{$chain[$chainlist[$i]]} = [ @chain[$chainlist[$i]..$chainlist[$i+1]] ];
+                    }
                 }
             }
         }
@@ -938,18 +914,21 @@ while ( my $line = <IN> ) {
 
         ##  this way is map polygon - clip it and dump
 
-        if ( $mode eq 'p' ) {
+        $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
+                    grep { exists $polytype{$_} && $polytype{$_}->[0] eq 'p' }
+                    map {"$_=$waytag{$_}"}  keys %waytag;
+
+        if ( $poly ) {
+            
             if ( scalar @chain <= 3 ) {
                 print "; ERROR: Area WayID=$wayid has too few nodes near ($node{$chain[0]})\n";
-                next;
             }
-
-            if ( $chain[0] ne $chain[-1] ) {
+            elsif ( $chain[0] ne $chain[-1] ) {
                 print "; ERROR: Area WayID=$wayid is not closed at ($node{$chain[0]})\n";
-                next;
             }
+            elsif ( !$bounds  ||  scalar @chainlist ) {
 
-            if ( !$bounds  ||  scalar @chainlist ) {
+                my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
 
                 my @plist = ();
                 if ( $mpoly{$wayid} ) {
@@ -975,91 +954,118 @@ while ( my $line = <IN> ) {
         }
 
 
-        ##  this way is road - load
+        ##  this way is some line
 
-        if ( $mode eq 'r'  &&  $routing ) {
-            if ( scalar @chain <= 1 ) {
-                print "; ERROR: Road WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
-                next;
+        $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
+                    grep { exists $polytype{$_}  &&  $polytype{$_}->[0] ~~ [ qw{ l r s } ] }
+                    map {"$_=$waytag{$_}"}  keys %waytag;
+
+        if ( $poly ) {
+            if ( scalar @chain < 2 ) {
+                print "; ERROR: Line WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
+                next;   #!!
             }
 
-            if ( $waytag{'oneway'} == -1 ) {
-                $waytag{'oneway'} = 'yes';
-                @chain = reverse @chain;
-            }
+            my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
 
-            # set routing parameters and access rules
-            # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
-            my @rp = split q{,}, $rp;
+            ##  simple line - dump it
+            if ( $mode eq 'l'  ||  $mode eq 's'  || ( !$routing && $mode eq 'r' ) ) {
 
-            if ( $waytag{'maxspeed'} > 0 ) {
-               $waytag{'maxspeed'} *= 1.61      if  $waytag{'maxspeed'} =~ /mph$/i;
-               $rp[0]  = speed_code( $waytag{'maxspeed'} / 1.3 ); # real speed ?
-            }
-            if ( $waytag{'maxspeed:practical'} > 0 ) {
-               $waytag{'maxspeed:practical'} *= 1.61        if  $waytag{'maxspeed:practical'} =~ /mph$/i;
-               $rp[0]  = speed_code( $waytag{'maxspeed:practical'} );
-            }
+                for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
+                    $countlines ++;
 
-            $rp[2] = $yesno{$waytag{'oneway'}}      if  $oneway && exists $yesno{$waytag{'oneway'}};
-            $rp[3] = $yesno{$waytag{'toll'}}        if  exists $yesno{$waytag{'toll'}};
-            @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
-
-            # determine city
-            if ( $name ) {
-                $city =  FindCity( $chain[0], $chain[-1] );
-            }
-
-            # load roads and external nodes
-            for ( my $i = 0;  $i < $#chainlist;  $i += 2 ) {
-                $road{"$wayid:$i"} = {
-                    type    =>  $poly,
-                    name    =>  $name,
-                    chain   =>  [ @chain[$chainlist[$i]..$chainlist[$i+1]] ],
-                    city    =>  $city,
-                    rp      =>  join( q{,}, @rp ),
-                };
-
-                if ( $bounds ) {
-                    if ( !is_inside_bounds( $node{$chain[$chainlist[$i]]} ) ) {
-                        $xnode{ $chain[$chainlist[$i]]   }    = 1;
-                        $xnode{ $chain[$chainlist[$i]+1] }    = 1;
-                    }
-                    if ( !is_inside_bounds( $node{$chain[$chainlist[$i+1]]} ) ) {
-                        $xnode{ $chain[$chainlist[$i+1]]   }  = 1;
-                        $xnode{ $chain[$chainlist[$i+1]-1] }  = 1;
-                    }
+                    print  "; WayID = $wayid\n";
+                    print  "; $poly\n";
+                    print  "[POLYLINE]\n";
+                    printf "Type=%s\n",         $type;
+                    printf "EndLevel=%d\n",     $hlev       if  $hlev > $llev;
+                    print  "Label=$name\n"                  if  $name;
+                    printf "Data%d=(%s)\n",     $llev, join( q{), (}, @node{@chain[$chainlist[$i]..$chainlist[$i+1]]} );
+                    print  "[END]\n\n\n";
                 }
             }
 
-            # process associated turn restrictions
-            if ( $restrictions  ||  $destsigns ) {
-                if ( $chainlist[0] == 0 ) {
-                    for my $relid ( grep { $trest{$_}->{fr_way} eq $wayid } @{$nodetr{$chain[0]}} ) {
-                        $trest{$relid}->{fr_way} = "$wayid:0";
-                        $trest{$relid}->{fr_dir} = -1;
-                        $trest{$relid}->{fr_pos} = 0;
-                    }
-                    for my $relid ( grep { $trest{$_}->{to_way} eq $wayid } @{$nodetr{$chain[0]}} ) {
-                        $trest{$relid}->{to_way} = "$wayid:0";
-                        $trest{$relid}->{to_dir} = 1;
-                        $trest{$relid}->{to_pos} = 0;
+            ##   road - load
+            if ( $mode eq 'r'  &&  $routing ) {
+
+                if ( $waytag{'oneway'} == -1 ) {
+                    $waytag{'oneway'} = 'yes';
+                    @chain = reverse @chain;
+                }
+
+                # set routing parameters and access rules
+                # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
+                my @rp = split q{,}, $rp;
+
+                if ( $waytag{'maxspeed'} > 0 ) {
+                   $waytag{'maxspeed'} *= 1.61      if  $waytag{'maxspeed'} =~ /mph$/i;
+                   $rp[0]  = speed_code( $waytag{'maxspeed'} / 1.3 ); # real speed ?
+                }
+                if ( $waytag{'maxspeed:practical'} > 0 ) {
+                   $waytag{'maxspeed:practical'} *= 1.61        if  $waytag{'maxspeed:practical'} =~ /mph$/i;
+                   $rp[0]  = speed_code( $waytag{'maxspeed:practical'} );
+                }
+
+                $rp[2] = $yesno{$waytag{'oneway'}}      if  $oneway && exists $yesno{$waytag{'oneway'}};
+                $rp[3] = $yesno{$waytag{'toll'}}        if  exists $yesno{$waytag{'toll'}};
+                @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
+
+                # determine city
+                if ( $name ) {
+                    $city =  FindCity( $chain[0], $chain[-1] );
+                }
+        
+                # load roads and external nodes
+                for ( my $i = 0;  $i < $#chainlist;  $i += 2 ) {
+                    $road{"$wayid:$i"} = {
+                        type    =>  $poly,
+                        name    =>  $name,
+                        chain   =>  [ @chain[$chainlist[$i]..$chainlist[$i+1]] ],
+                        city    =>  $city,
+                        rp      =>  join( q{,}, @rp ),
+                    };
+
+                    if ( $bounds ) {
+                        if ( !is_inside_bounds( $node{$chain[$chainlist[$i]]} ) ) {
+                            $xnode{ $chain[$chainlist[$i]]   }    = 1;
+                            $xnode{ $chain[$chainlist[$i]+1] }    = 1;
+                        }
+                        if ( !is_inside_bounds( $node{$chain[$chainlist[$i+1]]} ) ) {
+                            $xnode{ $chain[$chainlist[$i+1]]   }  = 1;
+                            $xnode{ $chain[$chainlist[$i+1]-1] }  = 1;
+                        }
                     }
                 }
-                if ( $chainlist[-1] == $#chain ) {
-                    for my $relid ( grep { $trest{$_}->{fr_way} eq $wayid } @{$nodetr{$chain[-1]}} ) {
-                        $trest{$relid}->{fr_way} = "$wayid:" . ($#chainlist-1);
-                        $trest{$relid}->{fr_dir} = 1;
-                        $trest{$relid}->{fr_pos} = $chainlist[-1] - $chainlist[-2];
+
+                # process associated turn restrictions
+                if ( $restrictions  ||  $destsigns ) {
+                    if ( $chainlist[0] == 0 ) {
+                        for my $relid ( grep { $trest{$_}->{fr_way} eq $wayid } @{$nodetr{$chain[0]}} ) {
+                            $trest{$relid}->{fr_way} = "$wayid:0";
+                            $trest{$relid}->{fr_dir} = -1;
+                            $trest{$relid}->{fr_pos} = 0;
+                        }
+                        for my $relid ( grep { $trest{$_}->{to_way} eq $wayid } @{$nodetr{$chain[0]}} ) {
+                            $trest{$relid}->{to_way} = "$wayid:0";
+                            $trest{$relid}->{to_dir} = 1;
+                            $trest{$relid}->{to_pos} = 0;
+                        }
                     }
-                    for my $relid ( grep { $trest{$_}->{to_way} eq $wayid } @{$nodetr{$chain[-1]}} ) {
-                        $trest{$relid}->{to_way} = "$wayid:" . ($#chainlist-1);
-                        $trest{$relid}->{to_dir} = -1;
-                        $trest{$relid}->{to_pos} = $chainlist[-1] - $chainlist[-2];
+                    if ( $chainlist[-1] == $#chain ) {
+                        for my $relid ( grep { $trest{$_}->{fr_way} eq $wayid } @{$nodetr{$chain[-1]}} ) {
+                            $trest{$relid}->{fr_way} = "$wayid:" . ($#chainlist-1);
+                            $trest{$relid}->{fr_dir} = 1;
+                            $trest{$relid}->{fr_pos} = $chainlist[-1] - $chainlist[-2];
+                        }
+                        for my $relid ( grep { $trest{$_}->{to_way} eq $wayid } @{$nodetr{$chain[-1]}} ) {
+                            $trest{$relid}->{to_way} = "$wayid:" . ($#chainlist-1);
+                            $trest{$relid}->{to_dir} = -1;
+                            $trest{$relid}->{to_pos} = $chainlist[-1] - $chainlist[-2];
+                        }
                     }
                 }
-            }
-        } # if road
+            } # if road
+        } # if line
     } # </way>
 
     last  if $line =~ /<relation/;
