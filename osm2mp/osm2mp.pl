@@ -2383,7 +2383,7 @@ sub AddPolygon {
 
 sub country_name {
     my ($code) = @_;
-    return $country_code{$code}.' (OSM)'    if $country_code{$code};
+    return $country_code{$code}     if $country_code{$code};
     return $code;
 }
 
