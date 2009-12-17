@@ -538,6 +538,7 @@ print  STDERR "                          $countsigns destination signs\n"     if
 ###     loading cities, multipolygon parts and checking node dupes
 
 my %city;
+my %suburb;
 my %waychain;
 
 my %ways_to_load;
@@ -596,10 +597,12 @@ while ( my $line = <IN> ) {
     if ( $line =~ /<\/way/ ) {
 
         ##      part of multipolygon
-        $waychain{$wayid} = [ @chain ]      if  $ways_to_load{$wayid};
+        if ( $ways_to_load{$wayid} ) {
+            $waychain{$wayid} = [ @chain ];
+        }
 
-        ##      this way is city bound
-        if ( exists $waytag{'place'} && ( $waytag{'place'} eq 'city' || $waytag{'place'} eq 'town' ) ) { 
+        ##      this way is address bound
+        if ( exists $waytag{'place'} && ( $waytag{'place'} ~~ [ qw{ city town suburb } ] ) ) { 
 
             if ( $chain[0] eq $chain[-1] ) {
                 $waychain{$wayid} = [ @chain ];
@@ -609,7 +612,7 @@ while ( my $line = <IN> ) {
                 };
             }
             else {
-                print "; ERROR: City polygon WayID=$wayid is not closed\n"   if  $chain[0] ne $chain[-1];
+                print "; ERROR: Address polygon WayID=$wayid is not closed\n"   if  $chain[0] ne $chain[-1];
             }
         }
         next;
@@ -698,7 +701,25 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
             };
         }
         else {
-            print "; ERROR: City without name WayID=$wayid\n"            unless  $name;
+            print "; ERROR: City without name WayID=$wayid\n";
+        }
+    }
+
+    # load if suburb
+    if ( exists $tags{'place'} &&  $tags{'place'} eq 'suburb' ) {
+        my $name = convert_string ( first {defined} @tags{@citynamelist} );
+                
+        if ( $name ) {
+            printf "; Found suburb: %sID=%s - $name\n", ( $mpid =~ /^w(.+)/ ? ('Way', $1) : ('Rel', $mpid) );
+            $suburb{$mpid} = {
+                name        =>  $name,
+                bound       =>  Math::Polygon::Tree->new( 
+                        map { [ map { [ split q{,}, $node{$_} ] } @{ $waychain{$_} } ] } @{ $mp->{outer} } 
+                    ),
+            };
+        }
+        else {
+            print "; ERROR: Suburb without name WayID=$wayid\n";
         }
     }
 
@@ -736,7 +757,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
 }
 
 printf STDERR "%d polygons written\n", $countpolygons;
-printf STDERR "                          %d cities loaded\n", scalar keys %city;
+printf STDERR "                          %d cities and %d suburbs loaded\n", scalar keys %city, scalar keys %suburb;
 
 
 
@@ -1010,9 +1031,11 @@ while ( my $line = <IN> ) {
                 $rp[3] = $yesno{$waytag{'toll'}}        if  exists $yesno{$waytag{'toll'}};
                 @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
 
-                # determine city
+                # determine city and suburb
                 if ( $name ) {
-                    $city =  FindCity( $chain[0], $chain[-1] );
+                    $city = FindCity( $chain[0], $chain[-1] );
+                    my $suburb = FindSuburb( $chain[0], $chain[-1] );
+                    $name .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
                 }
         
                 # load roads and external nodes
@@ -2080,6 +2103,14 @@ sub FindCity {
         } keys %city;
 }
 
+sub FindSuburb {
+    my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $node{$_} ? $node{$_} : $_ ) ] } @_;
+    return first { 
+            my $cbound = $suburb{$_}->{bound};
+            all { $cbound->contains( $_ ) } @nodes;
+        } keys %suburb;
+}
+
 
 sub AddPOI {
     my %param = %{$_[0]};
@@ -2132,7 +2163,14 @@ sub AddPOI {
                                                             
         my $housenumber = convert_string( first {defined} @waytag{@housenamelist} );
         print  "HouseNumber=$housenumber\n"     if $housenumber;
-        printf "StreetDesc=%s\n",   convert_string($tag{'addr:street'})     if  $tag{'addr:street'};
+
+        my $street = convert_string($tag{'addr:street'});
+        if ( $street ) {
+            my $suburb = FindSuburb( $chain[0], $chain[-1] );
+            $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
+            print "StreetDesc=$street\n";
+        }
+
         printf "Zip=%s\n",          convert_string($tag{'addr:postcode'})   if  $tag{'addr:postcode'};
         printf "Phone=%s\n",        convert_string($tag{'phone'})           if  $tag{'phone'};
     }
@@ -2339,10 +2377,16 @@ sub AddPolygon {
     ## Navitel
     if ( $navitel ) {
         my $housenumber = convert_string( first { defined } @tag{@housenamelist} );
-        if ( $housenumber && $tag{'addr:street'} ) {
+        my $street = convert_string($tag{'addr:street'});
+
+        if ( $housenumber && $street ) {
+    
             my $city = $city{ FindCity( $plist[0]->[0] ) };
+            my $suburb = FindSuburb( $chain[0], $chain[-1] );
+            $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
+
             print  "HouseNumber=$housenumber\n";
-            printf "StreetDesc=%s\n", convert_string( $tag{'addr:street'} );
+            print  "StreetDesc=$street\n";
             if ( $city ) {
                 print "CityName="    . $city->{name}      . "\n";
                 print "RegionName="  . $city->{region}    . "\n"      if $city->{region};
