@@ -684,13 +684,14 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     }
 
     my %tags = %{ $mp->{tags} };
+    my ($otype, $oid) = ( $mpid =~ /^w(.+)/ ? ('Way', $1) : ('Rel', $mpid) );
 
     # load if city
     if ( exists $tags{'place'} && ( $tags{'place'} eq 'city' || $tags{'place'} eq 'town' ) ) {
         my $name = convert_string ( first {defined} @tags{@citynamelist} );
                 
         if ( $name ) {
-            printf "; Found city: %sID=%s - $name\n", ( $mpid =~ /^w(.+)/ ? ('Way', $1) : ('Rel', $mpid) );
+            print "; Found city: ${otype}ID=$oid - $name\n";
             $city{$mpid} = {
                 name        =>  $name,
                 region      =>  convert_string( first {defined} @tags{@regionnamelist} ),
@@ -701,7 +702,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
             };
         }
         else {
-            print "; ERROR: City without name WayID=$wayid\n";
+            printf "; ERROR: City without name ${otype}ID=$oid\n";
         }
     }
 
@@ -710,7 +711,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
         my $name = convert_string ( first {defined} @tags{@citynamelist} );
                 
         if ( $name ) {
-            printf "; Found suburb: %sID=%s - $name\n", ( $mpid =~ /^w(.+)/ ? ('Way', $1) : ('Rel', $mpid) );
+            printf "; Found suburb: ${otype}ID=$oid - $name\n";
             $suburb{$mpid} = {
                 name        =>  $name,
                 bound       =>  Math::Polygon::Tree->new( 
@@ -719,7 +720,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
             };
         }
         else {
-            print "; ERROR: Suburb without name WayID=$wayid\n";
+            printf "; ERROR: Suburb without name ${otype}ID=$oid\n";
         }
     }
 
@@ -1822,7 +1823,7 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
 
 
 print STDERR "All done!!\n\n";
-
+print "\n; ### That's all, folks!\n\n";
 
 
 
@@ -2414,7 +2415,8 @@ sub AddPolygon {
     print "[END]\n\n\n";
 
 
-    if ( $makepoi && $param{poi} && $param{name} ) {
+#    if ( $makepoi && $param{poi} && $param{name} ) {
+    if ( $makepoi && $param{poi} ) {
 
         my ($poi, $pll, $phl) = split q{,}, $param{poi};
 
