@@ -629,6 +629,8 @@ printf STDERR "%d loaded\n", scalar keys %waychain;
 
 print STDERR "Processing multipolygons  ";
 
+print "\n\n\n; ### Multipolygons\n\n";
+
 my $countpolygons = 0;
 while ( my ( $mpid, $mp ) = each %ampoly ) {
 
@@ -674,7 +676,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
                 next;
             }
 
-            printf "; %s Multipolygon's RelID=$mpid part WayID=$id is not closed\n",
+            printf "; %s Multipolygon's RelID=$mpid part WayID=$id is not closed\n\n",
                 ( ( all { exists $waychain{$_} } @$list_ref )
                     ? "ERROR:"
                     : "WARNING: Incomplete RelID=$mpid. " ); 
@@ -702,7 +704,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
             };
         }
         else {
-            printf "; ERROR: City without name ${otype}ID=$oid\n";
+            printf "; ERROR: City without name ${otype}ID=$oid\n\n";
         }
     }
 
@@ -720,7 +722,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
             };
         }
         else {
-            printf "; ERROR: Suburb without name ${otype}ID=$oid\n";
+            printf "; ERROR: Suburb without name ${otype}ID=$oid\n\n";
         }
     }
 
@@ -1109,7 +1111,7 @@ if ( $shorelines ) {
 
     my $boundcross = 0;
 
-    print "\n\n\n";
+    print "\n\n\n; ### Sea areas generated from coastlines\n\n";
     print STDERR "Processing shorelines...  ";
 
 
@@ -1126,15 +1128,6 @@ if ( $shorelines ) {
             push @{$coast{$keys[$i]}}, @{$coast{$mnode}};
             delete $coast{$mnode};
         }
-
-#        if ( $coast{$keys[$i]} ) {
-#            print  "; merged coastline $keys[$i]\n";
-#            print  "[POLYLINE]\n";
-#            print  "Type=0x15\n";
-#            print  "EndLevel=4\n";
-#            printf "Data0=(%s)\n",          join (q{), (}, @node{ @{ $coast{$keys[$i]} } });
-#            print  "[END]\n\n\n";
-#        }
 
         $i++;
     }
@@ -1241,19 +1234,26 @@ if ( $shorelines ) {
     my %lake;
     my %island;
 
-    for my $loop ( grep { $coast{$_}->[0] eq $coast{$_}->[-1] } keys %coast ) {
-
-        # filter huge polygons to avoid cgpsmapper's crash
-        if ( scalar @{$coast{$loop}} > 100000 ) {
-            printf "; WARNING: skipped too big coastline $loop (%d nodes)\n", scalar @{$coast{$loop}};
+    while ( my ($loop,$chain_ref) = each %coast ) {
+    
+        if ( $chain_ref->[0] ne $chain_ref->[-1] ) {
+            printf "; %s: Broken coastline at (%s) or (%s)\n\n", 
+                ( $bounds ? 'ERROR' : 'WARNING' ), 
+                @node{ @$chain_ref[0,-1] };
             next;
         }
 
-        if ( Math::Polygon->new( map { [ split q{,}, $node{$_} ] } @{$coast{$loop}} )->isClockwise() ) {
+        # filter huge polygons to avoid cgpsmapper's crash
+        if ( scalar @$chain_ref > 200000 ) {
+            printf "; WARNING: skipped too big coastline $loop (%d nodes)\n", scalar @$chain_ref;
+            next;
+        }
+
+        if ( Math::Polygon->new( map { [ split q{,}, $node{$_} ] } @$chain_ref )->isClockwise() ) {
             $island{$loop} = 1;
         } 
         else {
-            $lake{$loop} = Math::Polygon::Tree->new( [ map { [ reverse split q{,}, $node{$_} ] } @{$coast{$loop}} ] );
+            $lake{$loop} = Math::Polygon::Tree->new( [ map { [ reverse split q{,}, $node{$_} ] } @$chain_ref ] );
         }
     }
 
@@ -1307,6 +1307,8 @@ my %nodeways;
 
 if ( $routing ) {
 
+    print "\n\n\n; ### Roads\n\n";
+
     ###     detecting end nodes
 
     my %enode;
@@ -1323,7 +1325,6 @@ if ( $routing ) {
     ###     merging roads
 
     if ( $mergeroads ) {
-        print "\n\n\n";
         print STDERR "Merging roads...          ";
     
         my $countmerg = 0;
@@ -1464,9 +1465,8 @@ if ( $routing ) {
         my %segway;
     
         print STDERR "Detecting duplicates...   ";
+        print "\n\n\n";
         
-        print "\n\n\n; ### Duplicate roads\n\n";
-    
         while ( my ($roadid, $road) = each %road ) {
             for my $i ( 0 .. $#{$road->{chain}} - 1 ) {
                 if (  $nodid{ $road->{chain}->[$i] } 
@@ -1505,7 +1505,6 @@ if ( $routing ) {
     if ( $splitroads ) {
 
         print STDERR "Splitting roads...        ";
-
         print "\n\n\n";
         
         my $countself = 0;
@@ -1639,8 +1638,6 @@ if ( $routing ) {
 
 
     print STDERR "Writing roads...          ";
-
-    print "\n\n\n; ### Roads\n\n";
 
     my $roadcount = 1;
     
@@ -2422,7 +2419,7 @@ sub AddPolygon {
 
         AddPOI ({
                 latlon       => ( join q{,}, centroid( @{$plist[0]} ) ),
-                comment      => "for area $param{comment} WayID=$param{wayid}",
+                comment      => "for area $param{comment} " . ( $param{relid} ? "RelID=$param{relid}" : "WayID=$param{wayid}" ),
                 type         => $poi,
                 tags         => \%tag,
                 level_l      => $pll,
