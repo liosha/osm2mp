@@ -1122,9 +1122,9 @@ if ( $shorelines ) {
         next  unless  $coast{ $line_start };
 
         my $line_end = $coast{ $line_start }->[-1];
-        next  unless  $coast{ $line_end };
         next  if  $line_end eq $line_start;
-        next  unless  !$bounds  ||  is_inside_bounds( $node{$coast{$line_end}} );
+        next  unless  $coast{ $line_end };
+        next  unless  ( !$bounds  ||  is_inside_bounds( $node{$line_end} ) );
 
         pop  @{$coast{$line_start}};
         push @{$coast{$line_start}}, @{$coast{$line_end}};
@@ -1144,7 +1144,7 @@ if ( $shorelines ) {
             push @tbound, {
                 type    =>  'bound', 
                 point   =>  $bound[$i], 
-                pos     =>  $pos
+                pos     =>  $pos,
             };
 
             for my $sline ( keys %coast ) {
@@ -1220,6 +1220,7 @@ if ( $shorelines ) {
                     push @{$coast{$node->{line}}}, $coast{$node->{line}}->[0];
                 } else {
                     push @{$coast{$node->{line}}}, @{$coast{$tmp->{line}}};
+                    delete $coast{$tmp->{line}};
                     for ( grep { $_->{line} eq $tmp->{line} } @tbound ) {
                         $_->{line} = $node->{line};
                     }
@@ -1237,9 +1238,19 @@ if ( $shorelines ) {
     while ( my ($loop,$chain_ref) = each %coast ) {
     
         if ( $chain_ref->[0] ne $chain_ref->[-1] ) {
-            printf "; %s: Possible coastline break at (%s) or (%s)\n\n", 
-                ( $bounds ? 'ERROR' : 'WARNING' ), 
-                @node{ @$chain_ref[0,-1] };
+
+            printf "; %s: Possible coastline WayID=$loop break at (%s) or (%s)\n\n", 
+                    ( $bounds ? 'ERROR' : 'WARNING' ), 
+                    @node{ @$chain_ref[0,-1] }
+                unless  $#$chain_ref < 3;
+
+#            print  "; merged coastline $loop\n";
+#            print  "[POLYLINE]\n";
+#            print  "Type=0x15\n";
+#            print  "EndLevel=4\n";
+#            printf "Data0=(%s)\n",          join (q{), (}, @node{ @$chain_ref });
+#            print  "[END]\n\n\n";
+
             next;
         }
 
