@@ -2358,6 +2358,32 @@ sub AddPolygon {
 
     return    unless @plist;
 
+
+    ## POI
+    if ( $makepoi ) {
+        for my $poi ( map  { "$_=$tag{$_}" }  keys %tag ) {
+            next unless exists $polytype{$poi};
+            my ($mode, undef, undef, undef, undef, $rp) = @{$polytype{$poi}};
+            next unless $mode eq 'p' && $rp;
+
+            my ($poitype, $pll, $phl) = split q{,}, $rp;
+
+            AddPOI ({
+                    latlon       => ( join q{,}, centroid( @{$plist[0]} ) ),
+                    comment      => "for area $poi " . ( $param{relid} ? "RelID=$param{relid}" : "WayID=$param{wayid}" ),
+                    type         => $poitype,
+                    tags         => \%tag,
+                    level_l      => $pll,
+                    level_h      => $phl,
+                    add_contacts => 1,
+                });
+        }
+    }
+
+    return    if  $param{type} eq 'undef';
+
+
+    ## polygon
     my $llev  =  $param{level_l};
     my $hlev  =  $param{level_h};
 
@@ -2412,22 +2438,6 @@ sub AddPolygon {
 
     print "[END]\n\n\n";
 
-
-#    if ( $makepoi && $param{poi} && $param{name} ) {
-    if ( $makepoi && $param{poi} ) {
-
-        my ($poi, $pll, $phl) = split q{,}, $param{poi};
-
-        AddPOI ({
-                latlon       => ( join q{,}, centroid( @{$plist[0]} ) ),
-                comment      => "for area $param{comment} " . ( $param{relid} ? "RelID=$param{relid}" : "WayID=$param{wayid}" ),
-                type         => $poi,
-                tags         => \%tag,
-                level_l      => $pll,
-                level_h      => $phl,
-                add_contacts => 1,
-            });
-    }
 }
 
 
