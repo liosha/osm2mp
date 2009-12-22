@@ -692,8 +692,9 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     if ( exists $tags{'place'} && ( $tags{'place'} eq 'city' || $tags{'place'} eq 'town' ) ) {
         my $name = convert_string ( first {defined} @tags{@citynamelist} );
                 
-        if ( $name ) {
+        if ( $name  &&  @{ $mp->{outer} } ) {
             print "; Found city: ${otype}ID=$oid - $name\n";
+
             $city{$mpid} = {
                 name        =>  $name,
                 region      =>  convert_string( first {defined} @tags{@regionnamelist} ),
@@ -712,7 +713,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     if ( exists $tags{'place'} &&  $tags{'place'} eq 'suburb' ) {
         my $name = convert_string ( first {defined} @tags{@citynamelist} );
                 
-        if ( $name ) {
+        if ( $name  &&  @{ $mp->{outer} } ) {
             printf "; Found suburb: ${otype}ID=$oid - $name\n";
             $suburb{$mpid} = {
                 name        =>  $name,
