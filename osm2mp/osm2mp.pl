@@ -930,7 +930,7 @@ while ( my $line = <IN> ) {
                 } 
                 else {
                     for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
-                        $coast{$chain[$chainlist[$i]]} = [ @chain[$chainlist[$i]..$chainlist[$i+1]] ];
+                        $coast{$chain[$chainlist[$i]]} = [ @chain[ $chainlist[$i]..$chainlist[$i+1] ] ];
                     }
                 }
             }
@@ -1118,19 +1118,18 @@ if ( $shorelines ) {
 
     ##  merging
     my @keys = keys %coast;
-    my $i = 0;
-    while ($i < scalar @keys) {
-        while (    $coast{$keys[$i]}
-                && $coast{$coast{$keys[$i]}->[-1]}  
-                && $coast{$keys[$i]}->[-1] ne $keys[$i] 
-                && ( !$bounds  ||  is_inside_bounds( $node{$coast{$keys[$i]}->[-1]} ) ) ) {
-            my $mnode = $coast{$keys[$i]}->[-1];
-            pop  @{$coast{$keys[$i]}};
-            push @{$coast{$keys[$i]}}, @{$coast{$mnode}};
-            delete $coast{$mnode};
-        }
+    for my $line_start ( @keys ) {
+        next  unless  $coast{ $line_start };
 
-        $i++;
+        my $line_end = $coast{ $line_start }->[-1];
+        next  unless  $coast{ $line_end };
+        next  if  $line_end eq $line_start;
+        next  unless  !$bounds  ||  is_inside_bounds( $node{$coast{$line_end}} );
+
+        pop  @{$coast{$line_start}};
+        push @{$coast{$line_start}}, @{$coast{$line_end}};
+        delete $coast{$line_end};
+        redo;
     }
 
 
@@ -1238,7 +1237,7 @@ if ( $shorelines ) {
     while ( my ($loop,$chain_ref) = each %coast ) {
     
         if ( $chain_ref->[0] ne $chain_ref->[-1] ) {
-            printf "; %s: Broken coastline at (%s) or (%s)\n\n", 
+            printf "; %s: Possible coastline break at (%s) or (%s)\n\n", 
                 ( $bounds ? 'ERROR' : 'WARNING' ), 
                 @node{ @$chain_ref[0,-1] };
             next;
