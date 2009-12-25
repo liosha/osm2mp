@@ -91,7 +91,7 @@ my $defaultcountry  = "Earth";
 my $defaultregion   = "OSM";
 my $defaultcity     = q{};
 
-my $poiregion       = 0;        # sometimes causes mapsource crash
+my $poiregion       = 1;
 my $poicontacts     = 1;
 
 my $nametaglist     = "name,ref,int_ref,addr:housenumber,operator";
@@ -1239,7 +1239,7 @@ if ( $shorelines ) {
     
         if ( $chain_ref->[0] ne $chain_ref->[-1] ) {
 
-            printf "; %s: Possible coastline WayID=$loop break at (%s) or (%s)\n\n", 
+            printf "; %s: Possible coastline break at (%s) or (%s)\n\n", 
                     ( $bounds ? 'ERROR' : 'WARNING' ), 
                     @node{ @$chain_ref[0,-1] }
                 unless  $#$chain_ref < 3;
@@ -1416,48 +1416,19 @@ if ( $routing ) {
         for my $node (@{$road->{chain}}) {
             $rnode{$node} ++;
             push @{$nodeways{$node}}, $roadid
-                if ( $nodetr{$node}  ||  $barrier{$node}  ||  ( $disableuturns && $enode{$node}==2 ) );
+                if  $disableuturns  ||  $nodetr{$node}  ||  $barrier{$node};
         }
     }
 
     my $nodcount = 1;
-    my $utcount  = 0;
 
     for my $node ( keys %rnode ) {
-        if (  $rnode{$node} > 1  ||  $enode{$node}  ||  $xnode{$node}  ||  $barrier{$node}
-          ||  exists $nodetr{$node}  &&  scalar @{$nodetr{$node}} ) {
-            $nodid{$node} = $nodcount++;
-        }
-        
-        ##  Disable U-turns
-        if ( $disableuturns  &&  $rnode{$node} == 2  &&  $enode{$node} == 2  &&  !$barrier{$node} ) {
-            if ( $road{ $nodeways{$node}->[0] }->{rp}  =~  /^.,.,0/ ) {
-                my $pos = first_index { $_ eq $node } @{$road{ $nodeways{$node}->[0] }->{chain}};
-                $trest{ 'ut'.$utcount++ } = { 
-                    node    => $node,
-                    type    => 'no',
-                    fr_way  => $nodeways{$node}->[0],
-                    fr_dir  => $pos > 0  ?   1  :  -1,
-                    fr_pos  => $pos,
-                    to_way  => $nodeways{$node}->[0],
-                    to_dir  => $pos > 0  ?  -1  :   1,
-                    to_pos  => $pos,
-                };
-            }
-            if ( $road{ $nodeways{$node}->[1] }->{rp}  =~  /^.,.,0/ ) {
-                my $pos = first_index { $_ eq $node } @{$road{ $nodeways{$node}->[1] }->{chain}};
-                $trest{ 'ut'.$utcount++ } = {
-                    node    => $node,
-                    type    => 'no',
-                    fr_way  => $nodeways{$node}->[1],
-                    fr_dir  => $pos > 0  ?   1  :  -1,
-                    fr_pos  => $pos,
-                    to_way  => $nodeways{$node}->[1],
-                    to_dir  => $pos > 0  ?  -1  :   1,
-                    to_pos  => $pos,
-                };
-            }
-        }
+        $nodid{$node} = $nodcount++
+            if  $rnode{$node} > 1
+                ||  $enode{$node}
+                ||  $xnode{$node}
+                ||  $barrier{$node}
+                ||  ( exists $nodetr{$node}  &&  scalar @{$nodetr{$node}} );
     }
 
     undef %rnode;
@@ -1615,7 +1586,63 @@ if ( $routing ) {
         }
         print STDERR "$countself self-intersections, $countlong long roads\n";
     }
-    
+
+
+    ####    disable U-turns
+    if ( $disableuturns ) {
+
+        %nodeways = ();
+        print STDERR "Removing U-turns...       ";
+
+        while (my ($roadid, $road) = each %road) {
+            for my $node (@{$road->{chain}}) {
+                push @{$nodeways{$node}}, $roadid       if  $nodid{$node};
+            }
+        }
+        
+        my $utcount  = 0;
+        
+        for my $node ( keys %nodid ) {
+            next  if $barrier{$node};
+        
+            # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
+            my @auto_links = 
+                map { $node eq $road{$_}->{chain}->[0] || $node eq $road{$_}->{chain}->[-1]  ?  ($_)  :  ($_,$_) } 
+                    grep { $road{$_}->{rp} =~ /^.,.,.,.,.,.,0/ } @{ $nodeways{$node} };
+        
+            next  unless scalar @auto_links == 2;
+            next  unless scalar( grep { $road{$_}->{rp} =~ /^.,.,0/ } @auto_links ) == 2;
+
+            my $pos = first_index { $_ eq $node } @{ $road{$auto_links[0]}->{chain} };
+            $trest{ 'ut'.$utcount++ } = { 
+                node    => $node,
+                type    => 'no',
+                fr_way  => $auto_links[0],
+                fr_dir  => $pos > 0  ?   1  :  -1,
+                fr_pos  => $pos,
+                to_way  => $auto_links[0],
+                to_dir  => $pos > 0  ?  -1  :   1,
+                to_pos  => $pos,
+                param   => '0,0,0,0,0,1,0,0',
+            };
+            
+            $pos = first_index { $_ eq $node } @{ $road{$auto_links[1]}->{chain} };
+            $trest{ 'ut'.$utcount++ } = { 
+                node    => $node,
+                type    => 'no',
+                fr_way  => $auto_links[1],
+                fr_dir  => $pos < $#{ $road{$auto_links[1]}->{chain} }  ?  -1  :  1,
+                fr_pos  => $pos,
+                to_way  => $auto_links[1],
+                to_dir  => $pos < $#{ $road{$auto_links[1]}->{chain} }  ?   1  : -1,
+                to_pos  => $pos,
+                param   => '0,0,0,0,0,1,0,0',
+            };
+            
+        }
+        print STDERR "$utcount restrictions added\n";
+    }
+
 
 
 
