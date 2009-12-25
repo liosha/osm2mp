@@ -1415,8 +1415,6 @@ if ( $routing ) {
     while (my ($roadid, $road) = each %road) {
         for my $node (@{$road->{chain}}) {
             $rnode{$node} ++;
-            push @{$nodeways{$node}}, $roadid
-                if  $disableuturns  ||  $nodetr{$node}  ||  $barrier{$node};
         }
     }
 
@@ -1430,6 +1428,14 @@ if ( $routing ) {
                 ||  $barrier{$node}
                 ||  ( exists $nodetr{$node}  &&  scalar @{$nodetr{$node}} );
     }
+
+
+    while (my ($roadid, $road) = each %road) {
+        for my $node (@{$road->{chain}}) {
+            push @{$nodeways{$node}}, $roadid       if  $nodid{$node};
+        }
+    }
+
 
     undef %rnode;
 
@@ -1591,15 +1597,8 @@ if ( $routing ) {
     ####    disable U-turns
     if ( $disableuturns ) {
 
-        %nodeways = ();
         print STDERR "Removing U-turns...       ";
-
-        while (my ($roadid, $road) = each %road) {
-            for my $node (@{$road->{chain}}) {
-                push @{$nodeways{$node}}, $roadid       if  $nodid{$node};
-            }
-        }
-        
+      
         my $utcount  = 0;
         
         for my $node ( keys %nodid ) {
