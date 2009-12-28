@@ -772,6 +772,7 @@ printf STDERR "                          %d cities and %d suburbs loaded\n", sca
 
 my %barrier;
 my %xnode;
+my %entrance;
 
 
 print STDERR "Processing nodes...       ";
@@ -808,6 +809,11 @@ while ( my $line = <IN> ) {
         ##  Forced external nodes
         if ( $routing  &&  exists $nodetag{'garmin:extnode'}  &&  $yesno{$nodetag{'garmin:extnode'}} ) {
             $xnode{$nodeid} = 1;
+        }
+
+        ##  Building entrances
+        if ( $navitel  &&  exists $nodetag{'building'}  &&  $nodetag{'building'} eq 'entrance' ) {
+            $entrance{$nodeid} = convert_string( first { defined } @nodetag{@nametagarray} );
         }
 
         ##  POI
@@ -964,16 +970,17 @@ while ( my $line = <IN> ) {
                 }
 
                 AddPolygon({
-                    areas   => [ [ map { [reverse split q{,}, $node{$_}] } @chain ] ],
-                    holes   => \@plist,
-                    tags    => \%waytag,
-                    wayid   => $wayid,
-                    comment => $poly,
-                    type    => $type,
-                    name    => $name,
-                    level_h => $hlev,
-                    level_l => $llev,
-                    poi     => $rp,    
+                    areas       => [ [ map { [reverse split q{,}, $node{$_}] } @chain ] ],
+                    holes       => \@plist,
+                    tags        => \%waytag,
+                    wayid       => $wayid,
+                    comment     => $poly,
+                    type        => $type,
+                    name        => $name,
+                    level_h     => $hlev,
+                    level_l     => $llev,
+                    poi         => $rp,
+                    entrance    => [ map { [ $node{$_}, $entrance{$_} ] } grep { exists $entrance{$_} } @chain ],
                 });
             }
         }
@@ -2456,6 +2463,12 @@ sub AddPolygon {
             elsif ( $defaultcity ) {
                 print "CityName=$defaultcity\n";
             }
+        }
+
+        # entrances
+        for my $entr ( @{ $param{entrance} } ) {
+            next unless is_inside_bounds( $entr->[0] );
+            printf "EntryPoint=(%s),%s\n", @$entr;
         }
     }
 
