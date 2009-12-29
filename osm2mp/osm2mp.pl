@@ -35,6 +35,7 @@ use List::Util qw{ first reduce };
 use List::MoreUtils qw{ all none any first_index };
 
 # debug
+use POSIX qw{ strftime };
 use Data::Dump qw{ dd };
 
 
@@ -94,13 +95,13 @@ my $defaultcity     = q{};
 my $poiregion       = 1;
 my $poicontacts     = 1;
 
-my $nametaglist     = "name,ref,int_ref,addr:housenumber,operator";
-
-# ??? make command-line parameters?
-my @housenamelist   = qw{ addr:housenumber addr:housename };
-my @citynamelist    = qw{ place_name name };
-my @regionnamelist  = qw{ addr:region is_in:region addr:state is_in:state };
-my @countrynamelist = qw{ addr:country is_in:country_code is_in:country };
+# name selection priority
+my $namelist        = "name ref int_ref addr:housenumber operator";
+my $housenamelist   = "addr:housenumber addr:housename";
+my $citynamelist    = "place_name name";
+my $regionnamelist  = "addr:region is_in:region addr:state is_in:state";
+my $countrynamelist = "addr:country is_in:country_code is_in:country";
+my $destnamelist    = "destination label name";
 
 
 my %yesno = (
@@ -140,7 +141,7 @@ GetOptions (
     'defaultcountry=s'  => \$defaultcountry,
     'defaultregion=s'   => \$defaultregion,
     'defaultcity=s'     => \$defaultcity,
-    'nametaglist=s'     => \$nametaglist,
+    'nametaglist=s'     => \$namelist,
     'upcase!'           => \$upcase,
     'translit!'         => \$translit,
     'ttable=s'          => \$ttable,
@@ -156,9 +157,24 @@ GetOptions (
     'makepoi!'          => \$makepoi,
     'poiregion!'        => \$poiregion,
     'poicontacts!'      => \$poicontacts,
+
+    # undocumented :)
+    'housenamelist=s'   => \$housenamelist,
+    'citynamelist=s'    => \$citynamelist,
+    'regionnamelist=s'  => \$regionnamelist,
+    'countrynamelist=s' => \$countrynamelist,
+    'destnamelist=s'    => \$destnamelist,
 );
 
 undef $codepage     if $nocodepage;
+
+my @namelist        = split /[ ,]/, $namelist;
+my @housenamelist   = split /[ ,]/, $housenamelist;
+my @citynamelist    = split /[ ,]/, $citynamelist;
+my @regionnamelist  = split /[ ,]/, $regionnamelist;
+my @countrynamelist = split /[ ,]/, $countrynamelist;
+my @destnamelist    = split /[ ,]/, $destnamelist;
+
 
 our %cmap;
 if ( $ttable ) {
@@ -182,7 +198,6 @@ if ( $country_list ) {
     close CL;
 }
 
-my @nametagarray = split q{,}, $nametaglist;
 
 
 
@@ -263,7 +278,6 @@ or die $tmpl->error();
 
 ####    Info
 
-use POSIX qw{ strftime };
 print "\n; Converted from OpenStreetMap data with  osm2mp $version  (" . strftime ("%Y-%m-%d %H:%M:%S", localtime) . ")\n\n";
 
 
@@ -501,7 +515,7 @@ while ( my $line = <IN> ) {
                 next;
             }
 
-            my $name = first { defined } @reltag{ qw{ destination label name } };
+            my $name = first { defined } @reltag{ @destnamelist };
             unless ( $name ) {
                 print "; ERROR: Destination sign RelID=$relid doesn't have label tag\n";
                 next;
@@ -753,7 +767,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
         relid   => $mpid,
         comment => $poly,
         type    => $type,
-        name    => convert_string( first {defined} @{$mp->{tags}}{@nametagarray} ),
+        name    => convert_string( first {defined} @{$mp->{tags}}{@namelist}),
         level_h => $hlev,
         level_l => $llev,
         poi     => $rp,    
@@ -813,7 +827,7 @@ while ( my $line = <IN> ) {
 
         ##  Building entrances
         if ( $navitel  &&  exists $nodetag{'building'}  &&  $nodetag{'building'} eq 'entrance' ) {
-            $entrance{$nodeid} = convert_string( first { defined } @nodetag{@nametagarray} );
+            $entrance{$nodeid} = convert_string( first { defined } @nodetag{@namelist} );
         }
 
         ##  POI
@@ -919,7 +933,7 @@ while ( my $line = <IN> ) {
 
         my $poly;
 
-        my $name = convert_string( first {defined} @waytag{@nametagarray} );
+        my $name = convert_string( first {defined} @waytag{@namelist} );
 
         @chainlist = (0)            unless $bounds;
         push @chainlist, $#chain    unless ($#chainlist % 2);
@@ -2044,7 +2058,7 @@ Possible options [defaults]:
  --translit                tranliterate labels               [$onoff[$translit]]
  --ttable <file>           character conversion table
 
- --nametaglist <list>      comma-separated list of tags for Label    [$nametaglist]
+ --nametaglist <list>      comma-separated list of tags for Label    [$namelist]
  --countrylist <file>      replace country code by name
  --defaultcountry <name>   default data for street indexing  [$defaultcountry]
  --defaultregion <name>                                      [$defaultregion]
@@ -2176,7 +2190,7 @@ sub AddPOI {
     print  "[POI]\n";
     
     print  "Type=$type\n";
-    my $label = convert_string( first { defined } @{$param{tags}}{@nametagarray} );
+    my $label = convert_string( first { defined } @{$param{tags}}{@namelist} );
     printf "Label=%s\n", $label     if $label && !exists( $param{Label} ); 
 
     printf "Data%d=$data\n", $llev;
