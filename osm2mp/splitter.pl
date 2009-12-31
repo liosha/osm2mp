@@ -14,7 +14,7 @@ my $lat_cell = 0.1;        # in degrees
 my $lon_cell = 0.2;
 
 
-my $MAXNODES    = 600_000_000;      # see current OSM values
+my $MAXNODES    = 650_000_000;      # see current OSM values
 my $MAXWAYS     =  50_000_000;
 my $MAXRELS     =   1_000_000;
 
@@ -27,7 +27,7 @@ my $optimize        = 1;
 
 
 
-print STDERR "\n    ---|  OSM tile splitter  v0.5    (c) liosha  2009\n\n";
+print STDERR "\n    ---|  OSM tile splitter  v0.6    (c) liosha  2009\n\n";
 
 
 ##  reading command-line options
@@ -146,7 +146,7 @@ $area_init->{maxlon} += $lon_cell;
 ##  calculating tiles
 
 my @areas = ( @areas_init  ?  @areas_init  :  ($area_init) );
-my @tiles = ();
+my @total_tiles = ();
 
 print STDERR "Calculating...                ";
 
@@ -154,7 +154,7 @@ while ( my $area = shift @areas ) {
 
     if ( $area->{count} <= $max_tile_nodes ) {
         print STDERR '.';
-        push @tiles, $area;
+        push @total_tiles, $area;
         next;
     }
 
@@ -234,291 +234,306 @@ while ( my $area = shift @areas ) {
     push @areas, $new_area0, $new_area1;
 }
 
-@tiles = sort { $a->{minlon} <=> $b->{minlon}  or  $b->{minlat} <=> $a->{minlat} } @tiles;
+@total_tiles = sort { $a->{minlon} <=> $b->{minlon}  or  $b->{minlat} <=> $a->{minlat} } @total_tiles;
 
-printf STDERR " %d tiles\n", scalar @tiles;
-
-
-
-
-print STDERR "Reserving memory...           ";
-for my $tile (@tiles) {
-#    $tile->{nodes} = Bit::Vector->new($nodeid_max+1);
-    $tile->{nodes} = Bit::Vector->new($MAXNODES);
-    $tile->{ways}  = Bit::Vector->new($MAXWAYS);
-    $tile->{rels}  = Bit::Vector->new($MAXRELS);
-}
-print STDERR "Ok\n";
+printf STDERR " %d tiles\n", scalar @total_tiles;
 
 
 
 
-##  nodes 2nd pass - loading
+##  Multipass splitting
+my $pass = 0;
 
-print STDERR "Loading nodes...              ";
+while ( @total_tiles ) {
 
-seek IN, 0, 0;
+    printf STDERR "Pass #%d\n", ++$pass;
 
-while (my $line = <IN>) {
-    my ($id, $lat, $lon) = $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/;
-    next unless $id;
+    my @tiles = ();
 
-    for my $tile (@tiles) {
-        if ( $lat >= $tile->{minlat}  &&  $lat <= $tile->{maxlat}
-          && $lon >= $tile->{minlon}  &&  $lon <= $tile->{maxlon} ) {
-            $tile->{nodes}->Bit_On($id);
-            next;   # ???
-        }
+    print STDERR "Reserving memory...           ";
+    while ( @total_tiles ) {
+        eval {
+            $total_tiles[0]->{nodes} = Bit::Vector->new($MAXNODES);
+            $total_tiles[0]->{ways}  = Bit::Vector->new($MAXWAYS);
+            $total_tiles[0]->{rels}  = Bit::Vector->new($MAXRELS);
+        };
+
+        last if $@;
+
+        my $tile = shift @total_tiles;
+        push @tiles, $tile;
+
     }
-}
-
-print STDERR "Ok\n";
+    printf STDERR "%d tiles\n", scalar @tiles;
 
 
 
+    ##  nodes 2nd pass - loading
 
+    print STDERR "Loading nodes...              ";
 
-##  ways 1st pass - loading
+    seek IN, 0, 0;
 
+    while (my $line = <IN>) {
+        my ($id, $lat, $lon) = $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/;
+        next unless $id;
 
-seek IN, $way_pos, 0;
-my $rel_pos = $way_pos;
-
-my @chain = ();
-my $reading_way = 0;
-my $way_id;
-
-my $count_ways = 0;
-
-print STDERR "Reading ways...               ";
-
-while ( my $line = <IN> ) {
-
-    if ( my ($id) = $line =~ /<way.* id=["']([^"']+)["']/ ) {
-        $way_id = $id;
-        $reading_way = 1;
-        @chain = ();
-        next;
-    }
-
-    if ( $reading_way  &&  $line =~ /<\/way/ ) {
-        $count_ways ++;
-        for my $area (@tiles) {
-            if ( any { $area->{nodes}->contains($_) } @chain ) {
-                $area->{ways}->Bit_On($way_id);
+        for my $tile (@tiles) {
+            if ( $lat >= $tile->{minlat}  &&  $lat <= $tile->{maxlat}
+              && $lon >= $tile->{minlon}  &&  $lon <= $tile->{maxlon} ) {
+                $tile->{nodes}->Bit_On($id);
+                next;   # ???
             }
         }
-        
-        $reading_way = 0;
-        next;
     }
 
-    if ( $reading_way  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
-        push @chain, $nd;
-        next;
-    }
-
-    last if $line =~ /<relation /;
-} 
-continue { $rel_pos = tell IN; }
-
-print STDERR "$count_ways processed\n";
+    print STDERR "Ok\n";
 
 
 
 
 
-##  loading relations
+    ##  ways 1st pass - loading
 
-my %objects_to_add = ();
 
-my $count_rels = 0;
+    seek IN, $way_pos, 0;
+    my $rel_pos = $way_pos;
 
-print STDERR "Reading relations...          ";
+    my @chain = ();
+    my $reading_way = 0;
+    my $way_id;
 
-for my $pass ( 0 .. ( $relations ? $relations-1 : 0 ) ) {
-    
-    seek IN, $rel_pos, 0;
+    my $count_ways = 0;
 
-    my $rel_id;
-    my $reading_rel = 0;
-    my %members;
+    print STDERR "Reading ways...               ";
 
-    print STDERR q{.};
-    
     while ( my $line = <IN> ) {
 
-        if ( my ($id) = $line =~ /<relation.* id=["']([^"']+)["']/ ) {
-            $rel_id = $id;
-            $reading_rel = 1;
-            %members = ();
+        if ( my ($id) = $line =~ /<way.* id=["']([^"']+)["']/ ) {
+            $way_id = $id;
+            $reading_way = 1;
+            @chain = ();
             next;
         }
 
-        if ( $reading_rel  &&  ( my ($type, $ref) = $line =~ /<member type=["']([^"']+)["'].* ref=["']([^"']+)["']/ ) ) {
-            push @{ $members{$type} }, $ref;
-            next;
-        }
-
-        if ( $reading_rel  &&  $line =~ /<\/relation/ ) {
-
+        if ( $reading_way  &&  $line =~ /<\/way/ ) {
+            $count_ways ++;
             for my $area (@tiles) {
-                if ( ( $members{'node'}     && any { $area->{nodes}->contains($_) } @{ $members{'node'} }     )
-                  || ( $members{'way'}      && any { $area->{ways}->contains($_) }  @{ $members{'way'} }      ) 
-                  || ( $members{'relation'} && any { $area->{rels}->contains($_) }  @{ $members{'relation'} } ) 
-                  || $area->{rels}->contains($rel_id) ) {
-
-                    for my $obj ( qw{ node way relation } ) {
-                        next unless $members{$obj};
-                        push @{ $objects_to_add{$area}->{relation} }, $rel_id;
-                        push @{ $objects_to_add{$area}->{$obj} }, @{ $members{$obj} };
-                    }
+                if ( any { $area->{nodes}->contains($_) } @chain ) {
+                    $area->{ways}->Bit_On($way_id);
                 }
             }
-            $count_rels ++  unless $pass;
+        
             $reading_way = 0;
             next;
         }
-    }
 
-
-    for my $area (@tiles) {
-        for my $id ( @{ $objects_to_add{$area}->{'relation'} } ) {
-            $area->{rels}->Bit_On($id);
+        if ( $reading_way  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
+            push @chain, $nd;
+            next;
         }
-        $objects_to_add{$area}->{'relation'} = [];
-    }
-} 
 
-print STDERR "   $count_rels processed\n";
+        last if $line =~ /<relation /;
+    } 
+    continue { $rel_pos = tell IN; }
 
-
-if ( $relations ) {
-    for my $area (@tiles) {
-        for my $id ( @{ $objects_to_add{$area}->{'node'} } ) {
-            $area->{nodes}->Bit_On($id);
-        }
-        for my $id ( @{ $objects_to_add{$area}->{'way'} } ) {
-            $area->{ways}->Bit_On($id);
-        }
-    }
-}
+    print STDERR "$count_ways processed\n";
 
 
 
 
-##  ways 2nd pass - redistributing nodes
 
-seek IN, $way_pos, 0;
+    ##  loading relations
 
-my @chain = ();
-my $reading_way = 0;
-my $way_id;
+    my %objects_to_add = ();
 
-print STDERR "Redistributing nodes...       ";
+    my $count_rels = 0;
 
-while ( my $line = <IN> ) {
+    print STDERR "Reading relations...          ";
 
-    if ( my ($id) = $line =~ /<way.* id=["']([^"']+)["']/ ) {
-        $way_id = $id;
-        $reading_way = 1;
-        @chain = ();
-        next;
-    }
+    for my $pass ( 0 .. ( $relations ? $relations-1 : 0 ) ) {
+    
+        seek IN, $rel_pos, 0;
 
-    if ( $reading_way  &&  $line =~ /<\/way/ ) {
-        for my $area (@tiles) {
-            if ( $area->{ways}->contains( $way_id ) ) {
-                for my $nd ( @chain ) {
-                    $area->{nodes}->Bit_On( $nd );
+        my $rel_id;
+        my $reading_rel = 0;
+        my %members;
+
+        print STDERR q{.};
+    
+        while ( my $line = <IN> ) {
+
+            if ( my ($id) = $line =~ /<relation.* id=["']([^"']+)["']/ ) {
+                $rel_id = $id;
+                $reading_rel = 1;
+                %members = ();
+                next;
+            }
+
+            if ( $reading_rel  &&  ( my ($type, $ref) = $line =~ /<member type=["']([^"']+)["'].* ref=["']([^"']+)["']/ ) ) {
+                push @{ $members{$type} }, $ref;
+                next;
+            }
+
+            if ( $reading_rel  &&  $line =~ /<\/relation/ ) {
+
+                for my $area (@tiles) {
+                    if ( ( $members{'node'}     && any { $area->{nodes}->contains($_) } @{ $members{'node'} }     )
+                      || ( $members{'way'}      && any { $area->{ways}->contains($_) }  @{ $members{'way'} }      ) 
+                      || ( $members{'relation'} && any { $area->{rels}->contains($_) }  @{ $members{'relation'} } ) 
+                      || $area->{rels}->contains($rel_id) ) {
+
+                        for my $obj ( qw{ node way relation } ) {
+                            next unless $members{$obj};
+                            push @{ $objects_to_add{$area}->{relation} }, $rel_id;
+                            push @{ $objects_to_add{$area}->{$obj} }, @{ $members{$obj} };
+                        }
+                    }
                 }
+                $count_rels ++  unless $pass;
+                $reading_way = 0;
+                next;
             }
         }
-        
-        $reading_way = 0;
-        next;
-    }
-
-    if ( $reading_way  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
-        push @chain, $nd;
-        next;
-    }
-
-    last if $line =~ /<relation /;
-} 
-
-print STDERR "Ok\n";
 
 
+        for my $area (@tiles) {
+            for my $id ( @{ $objects_to_add{$area}->{'relation'} } ) {
+                $area->{rels}->Bit_On($id);
+            }
+            $objects_to_add{$area}->{'relation'} = [];
+        }
+    } 
+
+    print STDERR "   $count_rels processed\n";
 
 
-print STDERR "Writing output files...       ";
-
-##  creating output files
-
-for my $area (@tiles) {
-    open my $fh, '>', "$mapid.osm";
-    $area->{mapid} = $mapid;
-    $area->{file}  = $fh;
-    print  $fh "<?xml version='1.0' encoding='UTF-8'?>\n";
-    print  $fh "<osm version='0.6' generator='Tile Splitter'>\n";
-    printf $fh "  <bound box='%f,%f,%f,%f' origin='http://www.openstreetmap.org/api/0.6'/>\n", 
-           $area->{minlat},
-           $area->{minlon} < -180  ?  -180  :  $area->{minlon},
-           $area->{maxlat},
-           $area->{maxlon} >  180  ?   180  :  $area->{maxlon};
-
-    $mapid ++;
-}
-
-
-##  writing results
-
-seek IN, 0, 0;
-my $reading_obj = 0;
-my $obj_id;
-my @write_areas = ();
-
-while ( my $line = <IN> ) {
-
-    if ( my ($obj, $id) = $line =~ /<(node|way|relation).* id=["']([^"']+)["']/ ) {
-        $reading_obj = $obj;
-        @write_areas = grep {  $obj eq "node"      &&  $_->{nodes}->contains($id)
-                            || $obj eq "way"       &&  $_->{ways}->contains($id)
-                            || $obj eq "relation"  &&  $_->{rels}->contains($id)  } @tiles;
-    }
-
-    if ( $reading_obj ) {
-        for my $area (@write_areas) {
-            my $fh = $area->{file};
-            print $fh $line;
+    if ( $relations ) {
+        for my $area (@tiles) {
+            for my $id ( @{ $objects_to_add{$area}->{'node'} } ) {
+                $area->{nodes}->Bit_On($id);
+            }
+            for my $id ( @{ $objects_to_add{$area}->{'way'} } ) {
+                $area->{ways}->Bit_On($id);
+            }
         }
     }
 
-    if ( $reading_obj  &&  $line =~ /<\/$reading_obj/ ) {
-        $reading_obj = 0;
+
+
+    ##  ways 2nd pass - redistributing nodes
+
+    seek IN, $way_pos, 0;
+
+    my @chain = ();
+    my $reading_way = 0;
+    my $way_id;
+
+    print STDERR "Redistributing nodes...       ";
+
+    while ( my $line = <IN> ) {
+
+        if ( my ($id) = $line =~ /<way.* id=["']([^"']+)["']/ ) {
+            $way_id = $id;
+            $reading_way = 1;
+            @chain = ();
+            next;
+        }
+
+        if ( $reading_way  &&  $line =~ /<\/way/ ) {
+            for my $area (@tiles) {
+                if ( $area->{ways}->contains( $way_id ) ) {
+                    for my $nd ( @chain ) {
+                        $area->{nodes}->Bit_On( $nd );
+                    }
+                }
+            }
+        
+            $reading_way = 0;
+            next;
+        }
+
+        if ( $reading_way  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
+            push @chain, $nd;
+            next;
+        }
+
+        last if $line =~ /<relation /;
+    } 
+
+    print STDERR "Ok\n";
+
+
+
+
+    print STDERR "Writing output files...       ";
+
+    ##  creating output files
+
+    for my $area (@tiles) {
+        open my $fh, '>', "$mapid.osm";
+        $area->{mapid} = $mapid;
+        $area->{file}  = $fh;
+        print  $fh "<?xml version='1.0' encoding='UTF-8'?>\n";
+        print  $fh "<osm version='0.6' generator='Tile Splitter'>\n";
+        printf $fh "  <bound box='%f,%f,%f,%f' origin='http://www.openstreetmap.org/api/0.6'/>\n", 
+               $area->{minlat},
+               $area->{minlon} < -180  ?  -180  :  $area->{minlon},
+               $area->{maxlat},
+               $area->{maxlon} >  180  ?   180  :  $area->{maxlon};
+
+        $mapid ++;
     }
-} 
 
-##  closing files
 
-for my $area (@tiles) {
-     my $fh = $area->{file};
-     print $fh "</osm>\n";
-     close ($fh);
+    ##  writing results
+
+    seek IN, 0, 0;
+    my $reading_obj = 0;
+    my $obj_id;
+    my @write_areas = ();
+
+    while ( my $line = <IN> ) {
+
+        if ( my ($obj, $id) = $line =~ /<(node|way|relation).* id=["']([^"']+)["']/ ) {
+            $reading_obj = $obj;
+            @write_areas = grep {  $obj eq "node"      &&  $_->{nodes}->contains($id)
+                                || $obj eq "way"       &&  $_->{ways}->contains($id)
+                                || $obj eq "relation"  &&  $_->{rels}->contains($id)  } @tiles;
+        }
+
+        if ( $reading_obj ) {
+            for my $area (@write_areas) {
+                my $fh = $area->{file};
+                print $fh $line;
+            }
+        }
+
+        if ( $reading_obj  &&  $line =~ /<\/$reading_obj/ ) {
+            $reading_obj = 0;
+        }
+    } 
+
+    ##  closing files
+
+    for my $area (@tiles) {
+         my $fh = $area->{file};
+         print $fh "</osm>\n";
+         close ($fh);
+    }
+
+
+    print STDERR "Ok\n";
+
+
+    ##  log tiles data
+
+    for my $tile (@tiles) {
+        printf "\n%08d:   %f,%f,%f,%f\n", @$tile{ qw{ mapid minlon minlat maxlon maxlat } };
+        printf "# Nodes: %d,  Ways: %d,  Rels: %d\n", $tile->{nodes}->Norm(), $tile->{ways}->Norm(), $tile->{rels}->Norm();
+    }
+
+
 }
-
-
-print STDERR "Ok\n";
 
 print STDERR "All done\n";
-
-
-##  log tiles data
-
-for my $tile (@tiles) {
-    printf "\n%08d:   %f,%f,%f,%f\n", @$tile{ qw{ mapid minlon minlat maxlon maxlat } };
-    printf "# Nodes: %d,  Ways: %d,  Rels: %d\n", $tile->{nodes}->Norm(), $tile->{ways}->Norm(), $tile->{rels}->Norm();
-}
-
-
