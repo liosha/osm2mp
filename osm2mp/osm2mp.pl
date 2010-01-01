@@ -1980,16 +1980,16 @@ sub lcos {                      # NodeID1, NodeID2, NodeID3
 
 
 
-sub speed_code {                        # $speed
+sub speed_code {
     my ($spd) = @_;
-    return 7        if $spd >= 110;
-    return 6        if $spd >= 90;
-    return 5        if $spd >= 80;
-    return 4        if $spd >= 60;
-    return 3        if $spd >= 40;
-    return 2        if $spd >= 20;
-    return 1        if $spd >= 10;
-    return 0;
+    return 7        if $spd > 120;  # no limit
+    return 6        if $spd > 100;  # 110
+    return 5        if $spd > 85;   # 90
+    return 4        if $spd > 70;   # 80
+    return 3        if $spd > 50;   # 60
+    return 2        if $spd > 30;   # 40
+    return 1        if $spd > 10;   # 20
+    return 0;                       # 5
 }
 
 
