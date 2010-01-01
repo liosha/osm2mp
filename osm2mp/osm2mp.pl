@@ -1039,6 +1039,14 @@ while ( my $line = <IN> ) {
                     @chain = reverse @chain;
                 }
 
+                # determine city
+                $city = FindCity( $chain[0], $chain[-1] );
+
+                if ( $city && exists $polytype{"$poly/city"} ) {
+                    $poly = "$poly/city";
+                    ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
+                }
+
                 # set routing parameters and access rules
                 # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
                 my @rp = split q{,}, $rp;
@@ -1056,9 +1064,9 @@ while ( my $line = <IN> ) {
                 $rp[3] = $yesno{$waytag{'toll'}}        if  exists $yesno{$waytag{'toll'}};
                 @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
 
-                # determine city and suburb
-                if ( $name ) {
-                    $city = FindCity( $chain[0], $chain[-1] );
+
+                # determine suburb
+                if ( $city && $name ) {
                     my $suburb = FindSuburb( $chain[0], $chain[-1] );
                     $name .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
                 }
@@ -1276,7 +1284,7 @@ if ( $shorelines ) {
         }
 
         # filter huge polygons to avoid cgpsmapper's crash
-        if ( scalar @$chain_ref > 200000 ) {
+        if ( scalar @$chain_ref > 70000 ) {
             printf "; WARNING: skipped too big coastline $loop (%d nodes)\n", scalar @$chain_ref;
             next;
         }
