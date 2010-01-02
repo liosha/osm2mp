@@ -1053,7 +1053,7 @@ while ( my $line = <IN> ) {
 
                 if ( $waytag{'maxspeed'} > 0 ) {
                    $waytag{'maxspeed'} *= 1.61      if  $waytag{'maxspeed'} =~ /mph$/i;
-                   $rp[0]  = speed_code( $waytag{'maxspeed'} / 1.3 ); # real speed ?
+                   $rp[0]  = speed_code( $waytag{'maxspeed'} * ( $city ? 0.8 : 0.9 ) ); # real speed ?
                 }
                 if ( $waytag{'maxspeed:practical'} > 0 ) {
                    $waytag{'maxspeed:practical'} *= 1.61        if  $waytag{'maxspeed:practical'} =~ /mph$/i;
