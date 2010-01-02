@@ -1546,6 +1546,7 @@ if ( $routing ) {
                         $break = ($i + $prev) >> 1;
                         push @breaks, $break;
                         $nodid{ $road->{chain}->[$break] }  =  $nodcount++;
+                        $nodeways{ $road->{chain}->[$break] } = [ $roadid ];
                         printf "; FIX: Added NodID=%d for NodeID=%s at (%s)\n", 
                             $nodid{ $road->{chain}->[$break] },
                             $road->{chain}->[$break],
@@ -1612,8 +1613,13 @@ if ( $routing ) {
                 }
 
                 #   update nod->road list
-                for my $nod ( grep { exists $nodeways{$_} } @{$road->{chain}}[$breaks[0]+1 ..$#{$road->{chain}}] ) {
+                for my $nod ( @{ $road->{chain} } ) {
+                    next unless exists $nodeways{$nod};
                     $nodeways{$nod} = [ grep { $_ ne $roadid } @{$nodeways{$nod}} ];
+                }
+                for my $nod ( @{ $road->{chain} }[ 0 .. $breaks[0] ] ) {
+                    next unless exists $nodeways{$nod};
+                    push @{ $nodeways{$nod} }, $roadid;
                 }
 
                 $#{$road->{chain}} = $breaks[0];
