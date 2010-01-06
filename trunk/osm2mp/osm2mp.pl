@@ -204,7 +204,7 @@ if ( $country_list ) {
 
 ####    Action
 
-print STDERR "\n  ---|   OSM -> MP converter  $version   (c) 2008,2009  liosha, xliosha\@gmail.com\n\n";
+print STDERR "\n  ---|   OSM -> MP converter  $version   (c) 2008-2010  liosha, xliosha\@gmail.com\n\n";
 
 usage() unless (@ARGV);
 
@@ -707,8 +707,6 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
         my $name = convert_string ( first {defined} @tags{@citynamelist} );
                 
         if ( $name  &&  @{ $mp->{outer} } ) {
-            print "; Found city: ${otype}ID=$oid - $name\n";
-
             $city{$mpid} = {
                 name        =>  $name,
                 region      =>  convert_string( first {defined} @tags{@regionnamelist} ),
@@ -717,6 +715,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
                         map { [ map { [ split q{,}, $node{$_} ] } @{ $waychain{$_} } ] } @{ $mp->{outer} } 
                     ),
             };
+            print "; Found city: ${otype}ID=$oid - $name [ $city{$mpid}->{country}, $city{$mpid}->{region} ]\n";
         }
         else {
             printf "; ERROR: City without name ${otype}ID=$oid\n\n";
@@ -1053,7 +1052,7 @@ while ( my $line = <IN> ) {
 
                 if ( $waytag{'maxspeed'} > 0 ) {
                    $waytag{'maxspeed'} *= 1.61      if  $waytag{'maxspeed'} =~ /mph$/i;
-                   $rp[0]  = speed_code( $waytag{'maxspeed'} * ( $city ? 0.8 : 0.9 ) ); # real speed ?
+                   $rp[0]  = speed_code( $waytag{'maxspeed'} * 0.9 ); # real speed ?
                 }
                 if ( $waytag{'maxspeed:practical'} > 0 ) {
                    $waytag{'maxspeed:practical'} *= 1.61        if  $waytag{'maxspeed:practical'} =~ /mph$/i;

@@ -27,7 +27,7 @@ my $optimize        = 1;
 
 
 
-print STDERR "\n    ---|  OSM tile splitter  v0.6    (c) liosha  2009\n\n";
+print STDERR "\n    ---|  OSM tile splitter  v0.6    (c) liosha  2009-2010\n\n";
 
 
 ##  reading command-line options
