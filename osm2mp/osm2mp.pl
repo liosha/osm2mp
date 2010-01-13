@@ -1065,9 +1065,19 @@ while ( my $line = <IN> ) {
                 $rp[3] = $yesno{$waytag{'toll'}}        if  exists $yesno{$waytag{'toll'}};
                 @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
 
-                # decrease class of unsurfaced roads
+                # decrease road class for unsurfaced roads
                 if ( $rp[1] > 0  &&  exists $waytag{'surface'}
                         &&  $waytag{'surface'} ~~ [ qw{ unpaved ground earth mud grass sand dirt } ] ) {
+                    $rp[1] --;
+                }
+
+                # increase road class for motorroads
+                if ( $rp[1] < 4  &&  $poly !~ /motorway/ 
+                        &&  exists $waytag{'motorroad'}  &&  $yesno{ $waytag{'motorroad'} } ) {
+                    $rp[1] ++;
+                }
+                if ( $rp[1] > 0  &&  $poly =~ /motorway/ 
+                        &&  exists $waytag{'motorroad'}  &&  !$yesno{ $waytag{'motorroad'} } ) {
                     $rp[1] --;
                 }
 
