@@ -1065,6 +1065,11 @@ while ( my $line = <IN> ) {
                 $rp[3] = $yesno{$waytag{'toll'}}        if  exists $yesno{$waytag{'toll'}};
                 @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
 
+                # decrease class of unsurfaced roads
+                if ( $rp[1] > 0  &&  exists $waytag{'surface'}
+                        &&  $waytag{'surface'} ~~ [ qw{ unpaved ground earth mud grass sand dirt } ] ) {
+                    $rp[1] --;
+                }
 
                 # determine suburb
                 if ( $city && $name ) {
