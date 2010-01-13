@@ -965,10 +965,12 @@ while ( my $line = <IN> ) {
         if ( $poly ) {
             
             if ( scalar @chain <= 3 ) {
-                print "; ERROR: Area WayID=$wayid has too few nodes near ($node{$chain[0]})\n";
+                printf "; %s: Area WayID=$wayid has too few nodes near ($node{$chain[0]})\n",
+                    ( $poly =~ /admin_level/ ? 'WARNING' : 'ERROR' );
             }
             elsif ( $chain[0] ne $chain[-1] ) {
-                print "; ERROR: Area WayID=$wayid is not closed at ($node{$chain[0]})\n";
+                printf "; %s: Area WayID=$wayid is not closed at ($node{$chain[0]})\n",
+                    ( $poly =~ /admin_level/ ? 'WARNING' : 'ERROR' );
             }
             elsif ( !$bounds  ||  scalar @chainlist ) {
 
