@@ -228,7 +228,7 @@ while (<CFG>) {
             $prio = $2;
         }
         $llev = 0   unless defined $llev;
-        $hlev = 1   unless defined $hlev;
+        $hlev = 0   unless defined $hlev;
         $poitype{"$k=$v"} = [ $type, $llev, $hlev, $mode, $prio ];
     }
 }
