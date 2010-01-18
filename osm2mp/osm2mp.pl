@@ -700,6 +700,8 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
         $list_ref = [ @newlist ];
     }
 
+    next unless @{ $mp->{outer} };
+
     my %tags = %{ $mp->{tags} };
     my ($otype, $oid) = ( $mpid =~ /^w(.+)/ ? ('Way', $1) : ('Rel', $mpid) );
 
@@ -707,7 +709,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     if ( exists $tags{'place'} && ( $tags{'place'} eq 'city' || $tags{'place'} eq 'town' ) ) {
         my $name = convert_string ( first {defined} @tags{@citynamelist} );
                 
-        if ( $name  &&  @{ $mp->{outer} } ) {
+        if ( $name ) {
             $city{$mpid} = {
                 name        =>  $name,
                 region      =>  convert_string( first {defined} @tags{@regionnamelist} ),
@@ -727,7 +729,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     if ( exists $tags{'place'} &&  $tags{'place'} eq 'suburb' ) {
         my $name = convert_string ( first {defined} @tags{@citynamelist} );
                 
-        if ( $name  &&  @{ $mp->{outer} } ) {
+        if ( $name ) {
             printf "; Found suburb: ${otype}ID=$oid - $name\n";
             $suburb{$mpid} = {
                 name        =>  $name,
