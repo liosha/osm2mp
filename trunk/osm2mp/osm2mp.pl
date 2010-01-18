@@ -19,6 +19,7 @@
 
 
 
+use 5.0100;
 use strict;
 
 use Template;
@@ -44,7 +45,7 @@ use Data::Dump qw{ dd };
 
 ####    Settings
 
-my $version = '0.80b';
+my $version = '0.80';
 
 my $cfgpoi          = 'poi.cfg';
 my $cfgpoly         = 'poly.cfg';
