@@ -22,6 +22,7 @@
 use 5.0100;
 use strict;
 
+use YAML;
 use Template;
 use Getopt::Long;
 
@@ -46,6 +47,8 @@ use Data::Dump qw{ dd };
 ####    Settings
 
 my $version = '0.80';
+
+my $config          = 'config.yml';
 
 my $cfgpoi          = 'poi.cfg';
 my $cfgpoly         = 'poly.cfg';
@@ -165,6 +168,8 @@ GetOptions (
     'regionnamelist=s'  => \$regionnamelist,
     'countrynamelist=s' => \$countrynamelist,
     'destnamelist=s'    => \$destnamelist,
+
+    'config=s'          => \$config,
 );
 
 undef $codepage     if $nocodepage;
@@ -180,7 +185,7 @@ my @destnamelist    = split /[ ,]/, $destnamelist;
 our %cmap;
 if ( $ttable ) {
     open TT, '<', $ttable;
-    my $code = "%cmap = ( " . join( q{}, <TT> ) . " );";
+    my $code = '%cmap = ( ' . join( q{}, <TT> ) . " );";
     close TT;
 
     eval $code;
@@ -213,6 +218,10 @@ usage() unless (@ARGV);
 
 
 ####    Reading configs
+
+my %config = YAML::LoadFile $config;
+
+
 
 my %poitype;
 
@@ -704,6 +713,12 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
 
     my %tags = %{ $mp->{tags} };
     my ($otype, $oid) = ( $mpid =~ /^w(.+)/ ? ('Way', $1) : ('Rel', $mpid) );
+
+
+    if ( exists $config{address} ) {
+        dd $config{address};
+        exit;
+    }
 
     # load if city
     if ( exists $tags{'place'} && ( $tags{'place'} eq 'city' || $tags{'place'} eq 'town' ) ) {
