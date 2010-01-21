@@ -108,6 +108,16 @@ my $countrynamelist = "addr:country is_in:country_code is_in:country";
 my $destnamelist    = "destination label name";
 
 
+
+####    Global vars
+
+my %node;
+my %waychain;
+
+my %city;
+my %suburb;
+
+
 my %yesno = (
     'yes'            => '1',
     'true'           => '1',
@@ -119,6 +129,8 @@ my %yesno = (
     '0'              => '0',
     'private'        => '0',
 );
+
+
 
 
 GetOptions (
@@ -340,7 +352,6 @@ if ($bpolyfile) {
 ####    1st pass 
 ###     loading nodes
 
-my %node;
 my ( $waypos, $relpos ) = ( 0, 0 );
 
 print STDERR "Loading nodes...          ";
@@ -561,9 +572,6 @@ print  STDERR "                          $countsigns destination signs\n"     if
 ####    2nd pass
 ###     loading cities, multipolygon parts and checking node dupes
 
-my %city;
-my %suburb;
-my %waychain;
 
 my %ways_to_load;
 for my $mp ( values %ampoly ) {
@@ -618,6 +626,7 @@ while ( my $line = <IN> ) {
         next;
     }
 
+
     if ( $line =~ /<\/way/ ) {
 
         ##      part of multipolygon
@@ -625,20 +634,15 @@ while ( my $line = <IN> ) {
             $waychain{$wayid} = [ @chain ];
         }
 
-        ##      this way is address bound
-        if ( exists $waytag{'place'} && ( $waytag{'place'} ~~ [ qw{ city town suburb } ] ) ) { 
+        ##      address bound
+        process_config( $config{address}, {
+                type    => 'Way',
+                id      => $wayid,
+                tag     => { %waytag },
+                outer   => [ [ @chain ] ],
+            } )
+            if exists $config{address};
 
-            if ( $chain[0] eq $chain[-1] ) {
-                $waychain{$wayid} = [ @chain ];
-                $ampoly{"w$wayid"} = {
-                    outer   =>  [ $wayid ],
-                    tags    =>  { %waytag },
-                };
-            }
-            else {
-                print "; ERROR: Address polygon WayID=$wayid is not closed\n"   if  $chain[0] ne $chain[-1];
-            }
-        }
         next;
     }
 
@@ -714,49 +718,15 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     my %tags = %{ $mp->{tags} };
     my ($otype, $oid) = ( $mpid =~ /^w(.+)/ ? ('Way', $1) : ('Rel', $mpid) );
 
+    # load if addressing polygon
+    process_config( $config{address}, {
+            type    => 'Rel',
+            id      => $mpid,
+            tag     => $mp->{tags},
+            outer   => [ map { [ @{ $waychain{$_} } ] } @{ $mp->{outer} } ],
+        } )
+        if exists $config{address};
 
-    if ( exists $config{address} ) {
-        dd $config{address};
-        exit;
-    }
-
-    # load if city
-    if ( exists $tags{'place'} && ( $tags{'place'} eq 'city' || $tags{'place'} eq 'town' ) ) {
-        my $name = convert_string ( first {defined} @tags{@citynamelist} );
-                
-        if ( $name ) {
-            $city{$mpid} = {
-                name        =>  $name,
-                region      =>  convert_string( first {defined} @tags{@regionnamelist} ),
-                country     =>  convert_string( country_name( first {defined} @tags{@countrynamelist} ) ),
-                bound       =>  Math::Polygon::Tree->new( 
-                        map { [ map { [ split q{,}, $node{$_} ] } @{ $waychain{$_} } ] } @{ $mp->{outer} } 
-                    ),
-            };
-            print "; Found city: ${otype}ID=$oid - $name [ $city{$mpid}->{country}, $city{$mpid}->{region} ]\n";
-        }
-        else {
-            printf "; ERROR: City without name ${otype}ID=$oid\n\n";
-        }
-    }
-
-    # load if suburb
-    if ( exists $tags{'place'} &&  $tags{'place'} eq 'suburb' ) {
-        my $name = convert_string ( first {defined} @tags{@citynamelist} );
-                
-        if ( $name ) {
-            printf "; Found suburb: ${otype}ID=$oid - $name\n";
-            $suburb{$mpid} = {
-                name        =>  $name,
-                bound       =>  Math::Polygon::Tree->new( 
-                        map { [ map { [ split q{,}, $node{$_} ] } @{ $waychain{$_} } ] } @{ $mp->{outer} } 
-                    ),
-            };
-        }
-        else {
-            printf "; ERROR: Suburb without name ${otype}ID=$oid\n\n";
-        }
-    }
 
     # draw if presents in config
     my $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
@@ -793,6 +763,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
 
 printf STDERR "%d polygons written\n", $countpolygons;
 printf STDERR "                          %d cities and %d suburbs loaded\n", scalar keys %city, scalar keys %suburb;
+
 
 
 
@@ -2556,5 +2527,108 @@ sub country_name {
     my ($code) = @_;
     return $country_code{$code}     if $country_code{$code};
     return $code;
+}
+
+
+
+####    Config processing
+
+sub condition_matches {
+    
+    my ($condition, $obj) = @_;
+
+    if ( my ($key, $val) =  $condition =~ /(\w+)\s*=\s*(.+)/ ) {
+        return 1    if  exists $obj->{tag}->{$key}  &&  $obj->{tag}->{$key} eq $val;
+    }
+}
+
+
+sub execute_action {
+
+    my ($action, $obj) = @_;
+
+    if ( exists $action->{load_city} ) {
+
+        my %param = %{ $action->{load_city} };
+
+        my $placename    = convert_string ( first {defined} @{$obj->{tag}}{@citynamelist} );
+        my $regionname   = convert_string ( first {defined} @{$obj->{tag}}{@regionnamelist} );
+        my $countryname  = convert_string ( country_name( first {defined} @{$obj->{tag}}{@countrynamelist} ) );
+
+        for my $key ( keys %param ) {
+            $param{$key} = $placename       if $param{$key} =~ /%placename/;
+            $param{$key} = $regionname      if $param{$key} =~ /%regionname/;
+            $param{$key} = $countryname     if $param{$key} =~ /%countryname/;
+        }
+
+        if ( !$param{name} ) {
+            print "; ERROR: City without name $obj->{type}ID=$obj->{id}\n\n";   
+        }
+        elsif ( $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1] ) {
+            print "; ERROR: City polygon $obj->{type}ID=$obj->{id} is not closed\n";
+        }
+        else {
+            print "; Found city: $obj->{type}ID=$obj->{id} - $param{name} [ $param{country}, $param{region} ]\n";
+            $city{ $obj->{type} . $obj->{id} } = {
+                name        =>  $param{name},
+                region      =>  $param{region},
+                country     =>  $param{country},
+                bound       =>  Math::Polygon::Tree->new( 
+                        map { [ map { [ split q{,}, $node{$_} ] } @$_ ] } @{ $obj->{outer} } 
+                    ),
+            };
+
+        }
+    }
+
+    if ( exists $action->{load_suburb} ) {
+
+        my %param = %{ $action->{load_suburb} };
+
+        my $placename    = convert_string ( first {defined} @{$obj->{tag}}{@citynamelist} );
+
+        for my $key ( keys %param ) {
+            $param{$key} = $placename       if $param{$key} =~ /%placename/;
+        }
+
+        if ( !$param{name} ) {
+            print "; ERROR: Suburb without name $obj->{type}ID=$obj->{id}\n\n";   
+        }
+        elsif ( $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1] ) {
+            print "; ERROR: Suburb polygon $obj->{type}ID=$obj->{id} is not closed\n";
+        }
+        else {
+            print "; Found suburb: $obj->{type}ID=$obj->{id} - $param{name} [ $param{country}, $param{region} ]\n";
+            $suburb{ $obj->{type} . $obj->{id} } = {
+                name        =>  $param{name},
+                bound       =>  Math::Polygon::Tree->new( 
+                        map { [ map { [ split q{,}, $node{$_} ] } @$_ ] } @{ $obj->{outer} } 
+                    ),
+            };
+
+        }
+    }
+}
+
+
+sub process_config {
+    
+    my ($cfg, $obj) = @_;
+
+    CFG:
+    for my $cfg_item ( @$cfg ) {
+        
+        CONDITION:
+        for my $cfg_condition ( @{ $cfg_item->{condition} } ) {
+            next CFG    unless  condition_matches( $cfg_condition, $obj );
+        }
+ 
+        ACTION:
+        for my $cfg_action ( @{ $cfg_item->{action} } ) {
+            execute_action( $cfg_action, $obj );
+        }
+
+        return;
+    }
 }
 
