@@ -49,11 +49,10 @@ use Data::Dump qw{ dd };
 
 my $version = '0.82b';
 
-my $config          = 'config.yml';
+my $config          = 'garmin.yml';
 
 my $cfgpoi          = 'poi.cfg';
 my $cfgpoly         = 'poly.cfg';
-my $cfgheader       = 'header.tpl';
 
 my $mapid           = '88888888';
 my $mapname         = 'OSM';
@@ -139,7 +138,6 @@ my %yesno = (
 GetOptions (
     'cfgpoi=s'          => \$cfgpoi,
     'cfgpoly=s'         => \$cfgpoly,
-    'header=s'          => \$cfgheader,
 
     'mapid=s'           => \$mapid,
     'mapname=s'         => \$mapname,
@@ -282,8 +280,8 @@ close CFG;
 
 ####    Header
 
-my $tmpl = Template->new( { ABSOLUTE => 1 } );
-$tmpl->process ($cfgheader, {
+my $tmpl = Template->new();
+$tmpl->process (\$config{header}, {
     mapid           => $mapid,
     mapname         => $mapname,
     codepage        => $codepage,
@@ -2057,12 +2055,12 @@ Usage:  osm2mp.pl [options] file.osm > file.mp
 
 Possible options [defaults]:
 
- --cfgpoi <file>           poi config        [$cfgpoi]
- --cfgpoly <file>          way config        [$cfgpoly]
- --header <file>           header template   [$cfgheader]
+ --config <file>           configuration file   [$config]
+ --mapid <id>              map id               [$mapid]
+ --mapname <name>          map name             [$mapname]
 
- --mapid <id>              map id            [$mapid]
- --mapname <name>          map name          [$mapname]
+ --cfgpoi <file>           poi config /to remove/   [$cfgpoi]
+ --cfgpoly <file>          way config /to remove/   [$cfgpoly]
 
  --codepage <num>          codepage number                   [$codepage]
  --upcase                  convert all labels to upper case  [$onoff[$upcase]]

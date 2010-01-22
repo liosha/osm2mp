@@ -1,0 +1,75 @@
+################################
+##  MP header
+################################
+
+--- header
+--- |
+  [IMG ID]
+  ID=[% mapid %]
+  Name=[% mapname %]
+  Copyright=OpenStreetMap project contributors under CC-BY-SA
+ 
+  [% IF codepage %]
+  LblCoding=9
+  CodePage=[% codepage %]
+  [% ELSE %]
+  ; UTF-8 encoding
+  CodePage=utf8
+  [% END %]
+
+  POINumberFirst=N
+  DefaultCityCountry=[% defaultcountry %]
+  DefaultRegionCountry=[% defaultregion %]
+
+  MG=Y
+  POIIndex=Y
+  Routing=Y
+
+  Elevation=M
+  Preprocess=F
+  TreSize=3000
+
+  Levels=6
+  Level0=24
+  Level1=22
+  Level2=20
+  Level3=18
+  Level4=16
+  Level5=15
+
+  [END-IMG ID]
+  
+
+
+################################
+##  Addressible places
+################################
+
+
+--- address
+---
+
+
+- condition:
+    - place = city
+  action:
+    - load_city:
+        name:           %place
+        region:         %region
+        country:        %country
+
+
+- condition:
+    - place = town
+  action:
+    - load_city:
+        name:           %place
+        region:         %region
+        country:        %country
+
+
+- condition:
+    - place = suburb
+  action:
+    - load_suburb:
+        name:           %place
