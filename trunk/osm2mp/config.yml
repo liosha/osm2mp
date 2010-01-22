@@ -9,22 +9,22 @@
     - place = city
   action:
     - load_city:
-        name:           %placename
-        region:         %regionname
-        country:        %countryname
+        name:           %place
+        region:         %region
+        country:        %country
 
 
 - condition:
     - place = town
   action:
     - load_city:
-        name:           %placename
-        region:         %regionname
-        country:        %countryname
+        name:           %place
+        region:         %region
+        country:        %country
 
 
 - condition:
     - place = suburb
   action:
     - load_suburb:
-        name:           %placename
+        name:           %place
