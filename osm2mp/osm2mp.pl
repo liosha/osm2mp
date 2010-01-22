@@ -4,6 +4,7 @@
 ##  Required packages: 
 ##    * Template-toolkit
 ##    * Getopt::Long
+##    * YAML  
 ##    * Text::Unidecode
 ##    * List::MoreUtils
 ##    * Math::Polygon
@@ -46,7 +47,7 @@ use Data::Dump qw{ dd };
 
 ####    Settings
 
-my $version = '0.80';
+my $version = '0.82b';
 
 my $config          = 'config.yml';
 
@@ -58,7 +59,6 @@ my $mapid           = '88888888';
 my $mapname         = 'OSM';
 
 my $codepage        = '1251';
-my $nocodepage      = 0;
 
 my $detectdupes     = 1;
 
@@ -95,18 +95,20 @@ my $navitel         = 0;
 my $country_list;
 my $defaultcountry  = "Earth";
 my $defaultregion   = "OSM";
-my $defaultcity     = q{};
+my $defaultcity;
 
 my $poiregion       = 1;
 my $poicontacts     = 1;
 
 # name selection priority
-my $namelist        = "name ref int_ref addr:housenumber operator";
-my $housenamelist   = "addr:housenumber addr:housename";
-my $citynamelist    = "place_name name";
-my $regionnamelist  = "addr:region is_in:region addr:state is_in:state";
-my $countrynamelist = "addr:country is_in:country_code is_in:country";
-my $destnamelist    = "destination label name";
+my %name_list = (
+    label       => [ qw{ name loc_name addr:housenumber operator } ],
+    house       => [ qw{ addr:housenumber addr:housename } ],
+    place       => [ qw{ place_name name } ],
+    region      => [ qw{ addr:region is_in:region addr:state is_in:state } ],
+    country     => [ qw{ addr:country is_in:country_code is_in:country } ],
+    destination => [ qw{ destination label name } ],
+);
 
 
 
@@ -138,62 +140,56 @@ GetOptions (
     'cfgpoi=s'          => \$cfgpoi,
     'cfgpoly=s'         => \$cfgpoly,
     'header=s'          => \$cfgheader,
+
     'mapid=s'           => \$mapid,
     'mapname=s'         => \$mapname,
     'codepage=s'        => \$codepage,
-    'nocodepage'        => \$nocodepage,
+    'nocodepage'        => sub { undef $codepage },
+    'upcase!'           => \$upcase,
+    'translit!'         => \$translit,
+    'ttable=s'          => \$ttable,
+    
     'oneway!'           => \$oneway,
     'routing!'          => \$routing,
     'mergeroads!'       => \$mergeroads,
     'mergecos=f'        => \$mergecos,
     'detectdupes!'      => \$detectdupes,
     'splitroads!'       => \$splitroads,
+    'maxroadnodes=f'    => \$maxroadnodes,
     'fixclosenodes!'    => \$fixclosenodes,
     'fixclosedist=f'    => \$fixclosedist,
-    'maxroadnodes=f'    => \$maxroadnodes,
     'restrictions!'     => \$restrictions,
     'barriers!'         => \$barriers,
+    'disableuturns!'    => \$disableuturns,
     'destsigns!'        => \$destsigns,
-    'countrylist=s'     => \$country_list,
+
     'defaultcountry=s'  => \$defaultcountry,
     'defaultregion=s'   => \$defaultregion,
     'defaultcity=s'     => \$defaultcity,
-    'nametaglist=s'     => \$namelist,
-    'upcase!'           => \$upcase,
-    'translit!'         => \$translit,
-    'ttable=s'          => \$ttable,
+    'countrylist=s'     => \$country_list,
+
     'bbox=s'            => \$bbox,
     'bpoly=s'           => \$bpolyfile,
     'osmbbox!'          => \$osmbbox,
     'background!'       => \$background,
-    'disableuturns!'    => \$disableuturns,
     'shorelines!'       => \$shorelines,
     'waterback!'        => \$waterback,
     'marine!'           => \$marine,
+
     'addressing!'       => \$addressing,
     'navitel!'          => \$navitel,
     'makepoi!'          => \$makepoi,
     'poiregion!'        => \$poiregion,
     'poicontacts!'      => \$poicontacts,
 
-    # undocumented :)
-    'housenamelist=s'   => \$housenamelist,
-    'citynamelist=s'    => \$citynamelist,
-    'regionnamelist=s'  => \$regionnamelist,
-    'countrynamelist=s' => \$countrynamelist,
-    'destnamelist=s'    => \$destnamelist,
+    'namelist=s%'       => sub { $name_list{$_[1]} = [ split /[ ,]/, $_[2] ] },
+    
+    # deprecated
+    'nametaglist=s'     => sub { $name_list{label} = [ split /[ ,]/, $_[1] ] },
 
+    # experimental
     'config=s'          => \$config,
 );
-
-undef $codepage     if $nocodepage;
-
-my @namelist        = split /[ ,]/, $namelist;
-my @housenamelist   = split /[ ,]/, $housenamelist;
-my @citynamelist    = split /[ ,]/, $citynamelist;
-my @regionnamelist  = split /[ ,]/, $regionnamelist;
-my @countrynamelist = split /[ ,]/, $countrynamelist;
-my @destnamelist    = split /[ ,]/, $destnamelist;
 
 
 our %cmap;
@@ -538,7 +534,7 @@ while ( my $line = <IN> ) {
                 next;
             }
 
-            my $name = first { defined } @reltag{ @destnamelist };
+            my $name = first { defined } @reltag{ @{$name_list{destination}} };
             unless ( $name ) {
                 print "; ERROR: Destination sign RelID=$relid doesn't have label tag\n";
                 next;
@@ -756,7 +752,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
         relid   => $mpid,
         comment => $poly,
         type    => $type,
-        name    => convert_string( first {defined} @{$mp->{tags}}{@namelist}),
+        name    => convert_string( first {defined} @{$mp->{tags}}{@{$name_list{label}}}),
         level_h => $hlev,
         level_l => $llev,
         poi     => $rp,    
@@ -818,7 +814,7 @@ while ( my $line = <IN> ) {
 
         ##  Building entrances
         if ( $navitel  &&  exists $nodetag{'building'}  &&  $nodetag{'building'} eq 'entrance' ) {
-            $entrance{$nodeid} = convert_string( first { defined } @nodetag{@namelist} );
+            $entrance{$nodeid} = convert_string( first { defined } @nodetag{@{$name_list{label}}} );
         }
 
         ##  POI
@@ -924,7 +920,7 @@ while ( my $line = <IN> ) {
 
         my $poly;
 
-        my $name = convert_string( first {defined} @waytag{@namelist} );
+        my $name = convert_string( first {defined} @waytag{@{$name_list{label}}} );
 
         @chainlist = (0)            unless $bounds;
         push @chainlist, $#chain    unless ($#chainlist % 2);
@@ -1925,7 +1921,7 @@ sub convert_string {            # String
     $str = unidecode($str)      if $translit;
     $str = uc($str)             if $upcase;
     
-    $str = encode( ($nocodepage ? 'utf8' : 'cp'.$codepage), $str );
+    $str = encode( ( defined $codepage ? 'cp'.$codepage : 'utf8' ), $str );
    
     $str =~ s/\&#(\d+)\;/chr($1)/ge;
     $str =~ s/\&amp\;/\&/gi;
@@ -2061,60 +2057,57 @@ Usage:  osm2mp.pl [options] file.osm > file.mp
 
 Possible options [defaults]:
 
- --mapid <id>              map id            [$mapid]
- --mapname <name>          map name          [$mapname]
-
  --cfgpoi <file>           poi config        [$cfgpoi]
  --cfgpoly <file>          way config        [$cfgpoly]
  --header <file>           header template   [$cfgheader]
 
- --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
- --osmbbox                 use bounds from .osm              [$onoff[$osmbbox]]
- --bpoly <poly-file>       use bounding polygon from .poly-file
-
- --background              create background object          [$onoff[$background]]
+ --mapid <id>              map id            [$mapid]
+ --mapname <name>          map name          [$mapname]
 
  --codepage <num>          codepage number                   [$codepage]
- --nocodepage              leave all labels in utf-8         [$onoff[$nocodepage]]
  --upcase                  convert all labels to upper case  [$onoff[$upcase]]
  --translit                tranliterate labels               [$onoff[$translit]]
  --ttable <file>           character conversion table
+ --namelist <key>=<list>   comma-separated list of tags to select names; defaults:%s
 
- --addressing              process addressing polygons       [$onoff[$addressing]]
- --nametaglist <list>      comma-separated list of tags for Label    [$namelist]
+ --addressing              use city polygons for addressing  [$onoff[$addressing]]
+ --navitel                 write addresses for polygons      [$onoff[$navitel]]
+ --makepoi                 create POIs for polygons          [$onoff[$makepoi]]
+ --poiregion               write region info for settlements [$onoff[$poiregion]]
+ --poicontacts             write contact info for POIs       [$onoff[$poicontacts]]
+ --defaultcity <name>      default city for addresses        [$defaultcity]
+ --defaultregion <name>            region                    [$defaultregion]
+ --defaultcountry <name>           country                   [$defaultcountry]
  --countrylist <file>      replace country code by name
- --defaultcountry <name>   default data for street indexing  [$defaultcountry]
- --defaultregion <name>                                      [$defaultregion]
- --defaultcity <name>                                        [$defaultcity]
- --navitel                 write addresses for polygons              [$onoff[$navitel]]
 
- --oneway                  set oneway attribute for roads            [$onoff[$oneway]]
  --routing                 produce routable map                      [$onoff[$routing]]
+ --oneway                  set oneway attribute for roads            [$onoff[$oneway]]
  --mergeroads              merge same ways                           [$onoff[$mergeroads]]
- --mergecos <cosine>       maximum allowed angle between roads to merge      [$mergecos]
+ --mergecos <cosine>       max allowed angle between roads to merge  [$mergecos]
  --splitroads              split long and self-intersecting roads    [$onoff[$splitroads]]
+ --maxroadnodes <dist>     maximum number of nodes in road segment   [$maxroadnodes]
  --fixclosenodes           enlarge distance between too close nodes  [$onoff[$fixclosenodes]]
  --fixclosedist <dist>     minimum allowed distance                  [$fixclosedist m]
- --maxroadnodes <dist>     maximum number of nodes in road segment   [$maxroadnodes]
- --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
-
  --restrictions            process turn restrictions                 [$onoff[$restrictions]]
  --barriers                process barriers                          [$onoff[$barriers]]
  --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
  --destsigns               process destination signs                 [$onoff[$destsigns]]
+ --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
+
+ --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
+ --osmbbox                 use bounds from .osm                      [$onoff[$osmbbox]]
+ --bpoly <poly-file>       use bounding polygon from .poly-file
+ --background              create background object                  [$onoff[$background]]
 
  --shorelines              process shorelines                        [$onoff[$shorelines]]
  --waterback               water background (for island maps)        [$onoff[$waterback]]
  --marine                  process marine data (buoys etc)           [$onoff[$marine]]
- --makepoi                 create POIs for polygons                  [$onoff[$makepoi]]
- --poiregion               write region info for settlements         [$onoff[$poiregion]]
- --poicontacts             write contact info for POIs               [$onoff[$poicontacts]]
 
-
-You can use no<option> to disable features (i.e --nomergeroads)
+You can use no<option> to disable features (i.e --norouting)
 END_USAGE
 
-    print $usage;
+    printf $usage, 
+        join( q{}, map { sprintf "\n     %-12s -  %s", $_, join( q{, }, @{$name_list{$_}} ) } sort keys %name_list );
     exit;
 }
 
@@ -2213,7 +2206,7 @@ sub AddPOI {
     print  "[POI]\n";
     
     print  "Type=$type\n";
-    my $label = convert_string( first { defined } @{$param{tags}}{@namelist} );
+    my $label = convert_string( first { defined } @{$param{tags}}{@{$name_list{label}}} );
     printf "Label=%s\n", $label     if $label && !exists( $param{Label} ); 
 
     printf "Data%d=$data\n", $llev;
@@ -2221,9 +2214,9 @@ sub AddPOI {
 
     # region and country - for cities
     if ( $poiregion  &&  $label  &&  $param{add_region} ) {
-        my $region  = convert_string( first { defined } @{$param{tags}}{@regionnamelist} );
+        my $region  = convert_string( first { defined } @{$param{tags}}{@{$name_list{region}}} );
         print "RegionName=$region\n"        if $region;
-        my $country = convert_string( country_name( first { defined } @{$param{tags}}{@countrynamelist} ) );
+        my $country = convert_string( country_name( first { defined } @{$param{tags}}{@{$name_list{country}}} ) );
         print "CountryName=$country\n"      if $country;
     }
 
@@ -2240,7 +2233,7 @@ sub AddPOI {
             print "CityName=$defaultcity\n";
         }
                                                             
-        my $housenumber = convert_string( first {defined} @waytag{@housenamelist} );
+        my $housenumber = convert_string( first {defined} @waytag{@{$name_list{house}}} );
         print  "HouseNumber=$housenumber\n"     if $housenumber;
 
         my $street = convert_string($tag{'addr:street'});
@@ -2481,7 +2474,7 @@ sub AddPolygon {
 
     ## Navitel
     if ( $navitel ) {
-        my $housenumber = convert_string( first { defined } @tag{@housenamelist} );
+        my $housenumber = convert_string( first { defined } @tag{@{$name_list{house}}} );
         my $street = convert_string($tag{'addr:street'});
 
         if ( $housenumber && $street ) {
@@ -2554,15 +2547,8 @@ sub execute_action {
     if ( exists $action->{load_city} ) {
 
         my %param = %{ $action->{load_city} };
-
-        my $placename    = convert_string ( first {defined} @{$obj->{tag}}{@citynamelist} );
-        my $regionname   = convert_string ( first {defined} @{$obj->{tag}}{@regionnamelist} );
-        my $countryname  = convert_string ( country_name( first {defined} @{$obj->{tag}}{@countrynamelist} ) );
-
         for my $key ( keys %param ) {
-            $param{$key} = $placename       if $param{$key} =~ /%placename/;
-            $param{$key} = $regionname      if $param{$key} =~ /%regionname/;
-            $param{$key} = $countryname     if $param{$key} =~ /%countryname/;
+            $param{$key} =~ s/%(\w+)/ convert_string ( first {defined} @{$obj->{tag}}{@{$name_list{$1}}} ) /ge;
         }
 
         if ( !$param{name} ) {
@@ -2588,11 +2574,8 @@ sub execute_action {
     if ( exists $action->{load_suburb} ) {
 
         my %param = %{ $action->{load_suburb} };
-
-        my $placename    = convert_string ( first {defined} @{$obj->{tag}}{@citynamelist} );
-
         for my $key ( keys %param ) {
-            $param{$key} = $placename       if $param{$key} =~ /%placename/;
+            $param{$key} =~ s/%(\w+)/ convert_string ( first {defined} @{$obj->{tag}}{@{$name_list{$1}}} ) /ge;
         }
 
         if ( !$param{name} ) {
