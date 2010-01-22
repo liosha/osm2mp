@@ -88,9 +88,10 @@ my $shorelines      = 0;
 my $waterback       = 0;
 my $marine          = 1;
 
-my $navitel         = 0;
 my $makepoi         = 1;
 
+my $addressing      = 1;
+my $navitel         = 0;
 my $country_list;
 my $defaultcountry  = "Earth";
 my $defaultregion   = "OSM";
@@ -169,6 +170,7 @@ GetOptions (
     'shorelines!'       => \$shorelines,
     'waterback!'        => \$waterback,
     'marine!'           => \$marine,
+    'addressing!'       => \$addressing,
     'navitel!'          => \$navitel,
     'makepoi!'          => \$makepoi,
     'poiregion!'        => \$poiregion,
@@ -641,7 +643,7 @@ while ( my $line = <IN> ) {
                 tag     => { %waytag },
                 outer   => [ [ @chain ] ],
             } )
-            if exists $config{address};
+            if $addressing && exists $config{address};
 
         next;
     }
@@ -725,7 +727,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
             tag     => $mp->{tags},
             outer   => [ map { [ @{ $waychain{$_} } ] } @{ $mp->{outer} } ],
         } )
-        if exists $config{address};
+        if $addressing && exists $config{address};
 
 
     # draw if presents in config
@@ -762,7 +764,8 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
 }
 
 printf STDERR "%d polygons written\n", $countpolygons;
-printf STDERR "                          %d cities and %d suburbs loaded\n", scalar keys %city, scalar keys %suburb;
+printf STDERR "                          %d cities and %d suburbs loaded\n", scalar keys %city, scalar keys %suburb
+    if $addressing;
 
 
 
@@ -2077,6 +2080,7 @@ Possible options [defaults]:
  --translit                tranliterate labels               [$onoff[$translit]]
  --ttable <file>           character conversion table
 
+ --addressing              process addressing polygons       [$onoff[$addressing]]
  --nametaglist <list>      comma-separated list of tags for Label    [$namelist]
  --countrylist <file>      replace country code by name
  --defaultcountry <name>   default data for street indexing  [$defaultcountry]
