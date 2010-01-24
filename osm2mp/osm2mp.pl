@@ -207,7 +207,7 @@ if ( $country_list ) {
         next if $line =~ /^#/;
         next if $line =~ /^\s+$/;
         my ($code, $name) = split /\s\s\s+/, $line;
-        $country_code{$code} = $name;
+        $country_code{uc $code} = $name;
     }
     close CL;
 }
@@ -308,7 +308,7 @@ print STDERR "Processing file $infile\n\n";
 
 ####    Bounds
 
-my $bounds;
+my $bounds = 0;
 my @bound;
 my $boundtree;
 
@@ -532,7 +532,7 @@ while ( my $line = <IN> ) {
                 next;
             }
 
-            my $name = first { defined } @reltag{ @{$name_list{destination}} };
+            my $name = name_from_list( 'destination', \%reltag );
             unless ( $name ) {
                 print "; ERROR: Destination sign RelID=$relid doesn't have label tag\n";
                 next;
@@ -750,7 +750,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
         relid   => $mpid,
         comment => $poly,
         type    => $type,
-        name    => convert_string( first {defined} @{$mp->{tags}}{@{$name_list{label}}}),
+        name    => name_from_list( 'label', $mp->{tags} ),
         level_h => $hlev,
         level_l => $llev,
         poi     => $rp,    
@@ -812,7 +812,7 @@ while ( my $line = <IN> ) {
 
         ##  Building entrances
         if ( $navitel  &&  exists $nodetag{'building'}  &&  $nodetag{'building'} eq 'entrance' ) {
-            $entrance{$nodeid} = convert_string( first { defined } @nodetag{@{$name_list{label}}} );
+            $entrance{$nodeid} = name_from_list( 'label', \%nodetag);
         }
 
         ##  POI
@@ -918,7 +918,7 @@ while ( my $line = <IN> ) {
 
         my $poly;
 
-        my $name = convert_string( first {defined} @waytag{@{$name_list{label}}} );
+        my $name = name_from_list( 'label', \%waytag);
 
         @chainlist = (0)            unless $bounds;
         push @chainlist, $#chain    unless ($#chainlist % 2);
@@ -1937,6 +1937,14 @@ sub convert_string {            # String
     return $str;
 }
 
+sub name_from_list {
+    my ($list_name, $tag_ref) = @_;
+    my $key = first { exists $tag_ref->{$_} } @{$name_list{$list_name}};
+    my $name = $tag_ref->{$key}         if  $key;
+    $name = $country_code{uc $name}     if  $list_name eq 'country'  &&  exists $country_code{uc $name};
+    return convert_string( $name );
+}
+
 
 
 sub fix_close_nodes {                # NodeID1, NodeID2
@@ -2204,7 +2212,7 @@ sub AddPOI {
     print  "[POI]\n";
     
     print  "Type=$type\n";
-    my $label = convert_string( first { defined } @{$param{tags}}{@{$name_list{label}}} );
+    my $label = name_from_list( 'label', $param{tags});
     printf "Label=%s\n", $label     if $label && !exists( $param{Label} ); 
 
     printf "Data%d=$data\n", $llev;
@@ -2212,9 +2220,9 @@ sub AddPOI {
 
     # region and country - for cities
     if ( $poiregion  &&  $label  &&  $param{add_region} ) {
-        my $region  = convert_string( first { defined } @{$param{tags}}{@{$name_list{region}}} );
+        my $region  = name_from_list( 'region', $param{tags});
         print "RegionName=$region\n"        if $region;
-        my $country = convert_string( country_name( first { defined } @{$param{tags}}{@{$name_list{country}}} ) );
+        my $country = name_from_list( 'country', $param{tags});
         print "CountryName=$country\n"      if $country;
     }
 
@@ -2231,7 +2239,7 @@ sub AddPOI {
             print "CityName=$defaultcity\n";
         }
                                                             
-        my $housenumber = convert_string( first {defined} @waytag{@{$name_list{house}}} );
+        my $housenumber = name_from_list( 'house', \%tag );
         print  "HouseNumber=$housenumber\n"     if $housenumber;
 
         my $street = convert_string($tag{'addr:street'});
@@ -2472,7 +2480,7 @@ sub AddPolygon {
 
     ## Navitel
     if ( $navitel ) {
-        my $housenumber = convert_string( first { defined } @tag{@{$name_list{house}}} );
+        my $housenumber = name_from_list( 'house', \%tag );
         my $street = convert_string($tag{'addr:street'});
 
         if ( $housenumber && $street ) {
@@ -2495,7 +2503,7 @@ sub AddPolygon {
 
         # entrances
         for my $entr ( @{ $param{entrance} } ) {
-            next unless is_inside_bounds( $entr->[0] );
+            next unless !$bounds || is_inside_bounds( $entr->[0] );
             printf "EntryPoint=(%s),%s\n", @$entr;
         }
     }
@@ -2518,11 +2526,6 @@ sub AddPolygon {
 }
 
 
-sub country_name {
-    my ($code) = @_;
-    return $country_code{$code}     if $country_code{$code};
-    return $code;
-}
 
 
 
@@ -2546,7 +2549,7 @@ sub execute_action {
 
         my %param = %{ $action->{load_city} };
         for my $key ( keys %param ) {
-            $param{$key} =~ s/%(\w+)/ convert_string ( first {defined} @{$obj->{tag}}{@{$name_list{$1}}} ) /ge;
+            $param{$key} =~ s/%(\w+)/ name_from_list( $1, $obj->{tag} ) /ge;
         }
 
         if ( !$param{name} ) {
@@ -2573,7 +2576,7 @@ sub execute_action {
 
         my %param = %{ $action->{load_suburb} };
         for my $key ( keys %param ) {
-            $param{$key} =~ s/%(\w+)/ convert_string ( first {defined} @{$obj->{tag}}{@{$name_list{$1}}} ) /ge;
+            $param{$key} =~ s/%(\w+)/ name_from_list( $1, $obj->{tag} ) /ge;
         }
 
         if ( !$param{name} ) {
@@ -2583,7 +2586,7 @@ sub execute_action {
             print "; ERROR: Suburb polygon $obj->{type}ID=$obj->{id} is not closed\n";
         }
         else {
-            print "; Found suburb: $obj->{type}ID=$obj->{id} - $param{name} [ $param{country}, $param{region} ]\n";
+            print "; Found suburb: $obj->{type}ID=$obj->{id} - $param{name}\n";
             $suburb{ $obj->{type} . $obj->{id} } = {
                 name        =>  $param{name},
                 bound       =>  Math::Polygon::Tree->new( 
