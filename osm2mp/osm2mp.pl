@@ -58,8 +58,9 @@ my $mapid           = '88888888';
 my $mapname         = 'OSM';
 
 my $codepage        = '1251';
-
-my $detectdupes     = 1;
+my $upcase          = 0;
+my $translit        = 0;
+my $ttable          = q{};
 
 my $oneway          = 1;
 my $routing         = 1;
@@ -73,10 +74,7 @@ my $restrictions    = 1;
 my $barriers        = 1;
 my $disableuturns   = 0;
 my $destsigns       = 1;
-
-my $upcase          = 0;
-my $translit        = 0;
-my $ttable          = q{};
+my $detectdupes     = 1;
 
 my $bbox;
 my $bpolyfile;
@@ -87,15 +85,13 @@ my $shorelines      = 0;
 my $waterback       = 0;
 my $marine          = 1;
 
-my $makepoi         = 1;
-
 my $addressing      = 1;
 my $navitel         = 0;
+my $makepoi         = 1;
 my $country_list;
 my $defaultcountry  = "Earth";
 my $defaultregion   = "OSM";
 my $defaultcity;
-
 my $poiregion       = 1;
 my $poicontacts     = 1;
 
@@ -2545,12 +2541,14 @@ sub execute_action {
 
     my ($action, $obj) = @_;
 
-    if ( exists $action->{load_city} ) {
+    my %param = %{ $action };
 
-        my %param = %{ $action->{load_city} };
-        for my $key ( keys %param ) {
-            $param{$key} =~ s/%(\w+)/ name_from_list( $1, $obj->{tag} ) /ge;
-        }
+    for my $key ( keys %param ) {
+        $param{$key} =~ s/%(\w+)/ name_from_list( $1, $obj->{tag} ) /ge;
+    }
+
+    ##  Load area as city
+    if ( $param{type} eq 'load_city' ) {
 
         if ( !$param{name} ) {
             print "; ERROR: City without name $obj->{type}ID=$obj->{id}\n\n";   
@@ -2572,12 +2570,8 @@ sub execute_action {
         }
     }
 
-    if ( exists $action->{load_suburb} ) {
-
-        my %param = %{ $action->{load_suburb} };
-        for my $key ( keys %param ) {
-            $param{$key} =~ s/%(\w+)/ name_from_list( $1, $obj->{tag} ) /ge;
-        }
+    ##  Load area as suburb
+    if ( $param{type} eq 'load_suburb' ) {
 
         if ( !$param{name} ) {
             print "; ERROR: Suburb without name $obj->{type}ID=$obj->{id}\n\n";   
