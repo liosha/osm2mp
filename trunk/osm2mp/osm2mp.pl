@@ -329,7 +329,7 @@ if ($bpolyfile) {
             @bound = ();
         } 
         elsif (/^\s+([0-9.E+-]+)\s+([0-9.E+-]+)/) {
-            push @bound, [$1,$2];
+            push @bound, [ $1+0, $2+0 ];
         }
         elsif (/^END/) {
             @bound = reverse @bound     if  Math::Polygon->new( @bound )->isClockwise();
