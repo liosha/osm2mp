@@ -1023,7 +1023,8 @@ while ( my $line = <IN> ) {
                 }
 
                 # determine city
-                $city = FindCity( $chain[0], $chain[-1] );
+                # $city = FindCity( $chain[0], $chain[-1] );
+                $city = FindCity( $chain[ floor $#chain/3 ], $chain[ ceil $#chain*2/3 ] );
 
                 if ( $city && exists $polytype{"$poly/city"} ) {
                     $poly = "$poly/city";
