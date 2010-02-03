@@ -23,6 +23,7 @@
 use 5.0100;
 use strict;
 
+use POSIX;
 use YAML;
 use Template;
 use Getopt::Long;
@@ -31,15 +32,14 @@ use Encode;
 use Text::Unidecode;
 
 use Math::Polygon;
-use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
+use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 use Math::Polygon::Tree;
 
 use List::Util qw{ first reduce };
 use List::MoreUtils qw{ all none any first_index };
 
 # debug
-use POSIX qw{ strftime };
-use Data::Dump qw{ dd };
+use Data::Dump 'dd';
 
 
 
