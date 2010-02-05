@@ -2238,7 +2238,7 @@ sub AddPOI {
         my @stops = ( @{ $trstop{$param{nodeid}} } )    
             if exists $param{nodeid}  &&  exists $trstop{$param{nodeid}};
         push @stops, split( /\s+[,;]\s+/, $tag{'route_ref'} )   if exists $tag{'route_ref'};
-        $label .= q{ (} . join( q{,}, uniq( sort @stops ) ) . q{)}      if @stops; 
+        $label .= q{ (} . convert_string( join q{,}, uniq( sort @stops ) ) . q{)}   if @stops; 
     }
 
     printf "Label=%s\n", $label     if $label && !exists( $param{Label} ); 
