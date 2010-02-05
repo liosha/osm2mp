@@ -36,7 +36,7 @@ use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 use Math::Polygon::Tree;
 
 use List::Util qw{ first reduce };
-use List::MoreUtils qw{ all none any first_index };
+use List::MoreUtils qw{ all none any first_index uniq };
 
 # debug
 use Data::Dump 'dd';
@@ -398,6 +398,10 @@ my $countsigns = 0;
 my %trest;
 my %nodetr;
 
+# transport
+my $countroutes = 0;
+my %trstop;
+
 
 print STDERR "Loading relations...      ";
 
@@ -551,12 +555,28 @@ while ( my $line = <IN> ) {
 
             push @{$nodetr{ $node }}, $relid;
         }
+
+        # transport stops
+        if ( $reltag{'type'} eq 'route'  
+                &&  $reltag{'route'} ~~ [ qw{ bus } ]  
+                &&  exists $reltag{'ref'}  ) {
+            $countroutes ++;
+            for my $role ( keys %relmember ) {
+                next unless $role =~ /^node:.*stop/;
+                for my $stop ( @{ $relmember{$role} } ) {
+                    push @{ $trstop{$stop} }, $reltag{'ref'};
+                    # push @{ $trstop{$stop}->{$reltag{'route'}} }, $reltag{'ref'};
+                }
+            }
+        }
+
     }
 }
 
 printf STDERR "%d multipolygons\n", scalar keys %mpoly;
 print  STDERR "                          $counttrest turn restrictions\n"     if $restrictions;
 print  STDERR "                          $countsigns destination signs\n"     if $destsigns;
+print  STDERR "                          $countroutes transport routes\n";
 
 
 
@@ -835,6 +855,9 @@ while ( my $line = <IN> ) {
         if ( $poimode eq 'city' ) {
             $poiinfo{City}          = 'Y';
             $poiinfo{add_region}    = 1;
+        }
+        elsif ( $poimode eq 'transport' ) {
+            $poiinfo{add_stops}  = 1;
         }
         elsif ( $poimode eq 'contacts' ) {
             $poiinfo{add_contacts}  = 1;
@@ -2209,7 +2232,15 @@ sub AddPOI {
     print  "[POI]\n";
     
     print  "Type=$type\n";
+
     my $label = name_from_list( 'label', $param{tags});
+    if ( exists $param{add_stops} ) {
+        my @stops = ( @{ $trstop{$param{nodeid}} } )    
+            if exists $param{nodeid}  &&  exists $trstop{$param{nodeid}};
+        push @stops, split( /\s+[,;]\s+/, $tag{'route_ref'} )   if exists $tag{'route_ref'};
+        $label .= q{ (} . join( q{,}, sort uniq @stops ) . q{)}      if @stops; 
+    }
+
     printf "Label=%s\n", $label     if $label && !exists( $param{Label} ); 
 
     printf "Data%d=$data\n", $llev;
@@ -2365,7 +2396,7 @@ sub AddBarrier {
     $acc = [ 1,1,1,1,1,0,1,1 ]      if  $param{tags}->{'barrier'} ~~ [ qw{ block stile chain } ];
     $acc = [ 1,1,1,1,1,0,0,1 ]      if  $param{tags}->{'barrier'} eq 'bollard';
     $acc = [ 1,1,1,0,1,0,0,1 ]      if  $param{tags}->{'barrier'} eq 'bus_trap';
-    $acc = [ 0,0,0,0,0,0,0,0 ]      if  $param{tags}->{'barrier'} eq 'cattle_grid';
+    $acc = [ 0,0,0,0,0,0,0,0 ]      if  $param{tags}->{'barrier'} ~~ [ qw{ toll_booth cattle_grid } ];
 
     my @acc = map { 1-$_ } CalcAccessRules( $param{tags}, $acc );
     return  if  all { $_ } @acc;
