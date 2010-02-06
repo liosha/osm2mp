@@ -2237,8 +2237,8 @@ sub AddPOI {
     if ( exists $param{add_stops} ) {
         my @stops = ( @{ $trstop{$param{nodeid}} } )    
             if exists $param{nodeid}  &&  exists $trstop{$param{nodeid}};
-        push @stops, split( /\s+[,;]\s+/, $tag{'route_ref'} )   if exists $tag{'route_ref'};
-        $label .= q{ (} . convert_string( join q{,}, uniq( sort @stops ) ) . q{)}   if @stops; 
+        push @stops, split( /\s*[,;]\s*/, $tag{'route_ref'} )   if exists $tag{'route_ref'};
+        $label .= q{ (} . convert_string( join q{,}, uniq( sort { $a <=> $b or $a cmp $b } @stops ) ) . q{)}   if @stops; 
     }
 
     printf "Label=%s\n", $label     if $label && !exists( $param{Label} ); 
@@ -2359,7 +2359,6 @@ sub AddPOI {
         ( $light_type ) = split /[\(\. ]/, $light_type;
         print "LightType=$light_type{$light_type}\n";
 
-#        dd \@sectors;
         for my $sector ( grep { /seamark:light:\d/ } keys %tag ) {
             print ";;; $sector -> $tag{$sector}\n";
         }
