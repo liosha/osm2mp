@@ -208,6 +208,7 @@ if ( $country_list ) {
     close CL;
 }
 
+$defaultcountry = name_from_list( $defaultcountry );
 
 
 
