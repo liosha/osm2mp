@@ -208,7 +208,8 @@ if ( $country_list ) {
     close CL;
 }
 
-$defaultcountry = $country_code{uc $defaultcountry}     if exists $country_code{uc $defaultcountry};
+$defaultcountry = convert_string( $country_code{uc $defaultcountry} )   
+    if exists $country_code{uc $defaultcountry};
 
 
 
