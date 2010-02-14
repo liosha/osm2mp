@@ -208,7 +208,7 @@ if ( $country_list ) {
     close CL;
 }
 
-$defaultcountry = name_from_list( 'country', $defaultcountry );
+$defaultcountry = $country_code{uc $defaultcountry}     if exists $country_code{uc $defaultcountry};
 
 
 
