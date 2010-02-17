@@ -75,6 +75,7 @@ my $barriers        = 1;
 my $disableuturns   = 0;
 my $destsigns       = 1;
 my $detectdupes     = 1;
+my $roadshields     = 1;
 
 my $bbox;
 my $bpolyfile;
@@ -156,6 +157,7 @@ GetOptions (
     'barriers!'         => \$barriers,
     'disableuturns!'    => \$disableuturns,
     'destsigns!'        => \$destsigns,
+    'roadshields!'      => \$roadshields,
 
     'defaultcountry=s'  => \$defaultcountry,
     'defaultregion=s'   => \$defaultregion,
@@ -1093,6 +1095,13 @@ while ( my $line = <IN> ) {
                 if ( $city && $name ) {
                     my $suburb = FindSuburb( $chain[0], $chain[-1] );
                     $name .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
+                }
+
+                # road shield
+                if ( $roadshields  &&  !$city  &&  exists $waytag{'ref'} ) {
+                    my $ref = convert_string( $waytag{'ref'} );
+                    $ref =~ s/\s+//g;
+                    $name = '~[0x05]' . $ref . q{ } . $name;
                 }
         
                 # load roads and external nodes
@@ -2096,8 +2105,9 @@ Possible options [defaults]:
  --upcase                  convert all labels to upper case  [$onoff[$upcase]]
  --translit                tranliterate labels               [$onoff[$translit]]
  --ttable <file>           character conversion table
+ --roadshields             shields with road numbers         [$onoff[$roadshields]]
  --namelist <key>=<list>   comma-separated list of tags to select names; defaults:%s
-
+ 
  --addressing              use city polygons for addressing  [$onoff[$addressing]]
  --navitel                 write addresses for polygons      [$onoff[$navitel]]
  --makepoi                 create POIs for polygons          [$onoff[$makepoi]]
