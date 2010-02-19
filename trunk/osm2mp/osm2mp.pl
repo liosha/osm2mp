@@ -338,6 +338,7 @@ if ($bpolyfile) {
         elsif (/^END/) {
             @bound = reverse @bound     if  Math::Polygon->new( @bound )->isClockwise();
             $boundtree = Math::Polygon::Tree->new( \@bound );
+            last;
         }
     }
     close (PF);
@@ -1101,7 +1102,7 @@ while ( my $line = <IN> ) {
                 if ( $roadshields  &&  !$city  &&  exists $waytag{'ref'} ) {
                     my $ref = convert_string( $waytag{'ref'} );
                     $ref =~ s/\s+//g;
-                    $name = '~[0x05]' . $ref . q{ } . $name;
+                    $name = '~[0x05]' . $ref . ( $name ? q{ } . $name : q{});
                 }
         
                 # load roads and external nodes
