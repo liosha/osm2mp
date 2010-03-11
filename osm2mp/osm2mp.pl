@@ -681,6 +681,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
 
     # merge parts
     for my $list_ref (( $mp->{outer}, $mp->{inner} )) {
+
         next unless $list_ref;
 
         my @list = grep { exists $waychain{$_} } @$list_ref;
@@ -694,7 +695,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
                 push @newlist, $id;
                 next;
             }
-
+            
             my $add = first_index { $waychain{$id}->[-1] eq $waychain{$_}->[0] } @list;
             if ( $add > -1 ) {
                 my $newid = "$id:$list[$add]";
