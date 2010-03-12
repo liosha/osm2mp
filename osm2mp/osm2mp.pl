@@ -541,7 +541,8 @@ while ( my $line = <IN> ) {
                 next;
             }
 
-            my $node = $relmember{'node:sign'}->[0]         if $relmember{'node:sign'};
+            my $node;
+            $node = $relmember{'node:sign'}->[0]            if $relmember{'node:sign'};
             $node = $relmember{'node:intersection'}->[0]    if $relmember{'node:intersection'};
             unless ( $node ) {
                 print "; ERROR: Destination sign RelID=$relid doesn't have SIGN or INTERSECTION node\n";
@@ -1128,7 +1129,8 @@ while ( my $line = <IN> ) {
 
                 # road shield
                 if ( $roadshields  &&  !$city ) {
-                    my @ref = @{ $road_ref{$wayid} }                if exists $road_ref{$wayid};
+                    my @ref;
+                    @ref = @{ $road_ref{$wayid} }                   if exists $road_ref{$wayid};
                     push @ref, convert_string( $waytag{'ref'} )     if exists $waytag{'ref'};
                     push @ref, convert_string( $waytag{'int_ref'} ) if exists $waytag{'int_ref'};
                     
@@ -2005,7 +2007,8 @@ sub convert_string {            # String
 sub name_from_list {
     my ($list_name, $tag_ref) = @_;
     my $key = first { exists $tag_ref->{$_} } @{$name_list{$list_name}};
-    my $name = $tag_ref->{$key}         if  $key;
+    my $name;
+    $name = $tag_ref->{$key}            if  $key;
     $name = $country_code{uc $name}     if  $list_name eq 'country'  &&  exists $country_code{uc $name};
     return convert_string( $name );
 }
@@ -2272,8 +2275,9 @@ sub AddPOI {
 
     my ($type, $type2) = split q{:}, $param{type};
 
-    my $data = "($node{$param{nodeid}})"    if  exists $param{nodeid};
-    $data    = "($param{latlon})"           if  exists $param{latlon};    
+    my $data;
+    $data = "($node{$param{nodeid}})"    if  exists $param{nodeid};
+    $data = "($param{latlon})"           if  exists $param{latlon};    
 
     print  "[POI]\n";
     
@@ -2282,7 +2286,8 @@ sub AddPOI {
     my $label = name_from_list( 'label', $param{tags});
 
     if ( $transportstops && exists $param{add_stops} ) {
-        my @stops = ( @{ $trstop{$param{nodeid}} } )    
+        my @stops;
+        @stops = ( @{ $trstop{$param{nodeid}} } )    
             if exists $param{nodeid}  &&  exists $trstop{$param{nodeid}};
         push @stops, split( /\s*[,;]\s*/, $tag{'route_ref'} )   if exists $tag{'route_ref'};
         $label .= q{ (} . convert_string( join q{,}, uniq( sort { $a <=> $b or $a cmp $b } @stops ) ) . q{)}   if @stops; 
@@ -2303,7 +2308,8 @@ sub AddPOI {
 
     # contact information: address, phone
     if ( $poicontacts  &&  $param{add_contacts} ) {
-        my $city = $city{ FindCity( $param{nodeid} ) }  if  $param{nodeid};
+        my $city;
+        $city = $city{ FindCity( $param{nodeid} ) }     if  $param{nodeid};
         $city = $city{ FindCity( $param{latlon} ) }     if  $param{latlon};
         if ( $city ) {
             print "CityName=$city->{name}\n";
