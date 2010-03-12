@@ -1,6 +1,8 @@
 #!/usr/bin/perl -w
 
 use strict;
+use LWP::UserAgent;
+
 
 my $bdir = '_bounds/';
 my $api  = 'http://www.openstreetmap.org/api/0.6';
@@ -100,7 +102,24 @@ die     unless @ARGV;
 my $name =  $ARGV[0];
 my $rel  =  exists $rename{$name}  ?  $rename{$name}  :  $name;
 
-`curl $api/relation/$rel/full -o $rel.osm`;
+my $ua = LWP::UserAgent->new;
+$ua->timeout( 60 );
+my $req = HTTP::Request->new( GET => "$api/relation/$rel/full" );
+my $res;
+
+for my $attempt ( 1 .. 5 ) {
+    $res = $ua->request($req);
+    last if $res->is_success;
+}
+
+exit    unless $res->is_success;
+
+open  OSM, '>', "$rel.osm";
+binmode OSM;
+print OSM  $res->content;
+close OSM;
+
+
 `boundaries.pl -in=$rel.osm -poly -csv=$nul -html=$nul -polybase=reg`;
 unlink "$rel.osm";
 if ( -f "reg.$rel.poly" ) {
