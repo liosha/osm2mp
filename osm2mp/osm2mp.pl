@@ -78,6 +78,7 @@ my $detectdupes     = 1;
 
 my $roadshields     = 1;
 my $transportstops  = 1;
+my $streetrelations = 1;
 
 my $bbox;
 my $bpolyfile;
@@ -103,6 +104,7 @@ my %name_list = (
     label       => [ qw{ name loc_name addr:housenumber operator } ],
     house       => [ qw{ addr:housenumber addr:housename } ],
     place       => [ qw{ place_name name } ],
+    street      => [ qw{ addr:street name } ],
     region      => [ qw{ addr:region is_in:region addr:state is_in:state } ],
     country     => [ qw{ addr:country is_in:country_code is_in:country } ],
     destination => [ qw{ destination label name } ],
@@ -161,6 +163,7 @@ GetOptions (
     'destsigns!'        => \$destsigns,
     'roadshields!'      => \$roadshields,
     'transportstops!'   => \$transportstops,
+    'streetrelations!'  => \$streetrelations,
 
     'defaultcountry=s'  => \$defaultcountry,
     'defaultregion=s'   => \$defaultregion,
@@ -412,7 +415,7 @@ my %trstop;
 
 # streets
 my %street;
-my %count_streets = 0;
+my $count_streets = 0;
 
 # roads numbers
 my %road_ref;
@@ -602,6 +605,21 @@ while ( my $line = <IN> ) {
             }
         }
 
+        # streets
+        if ( $streetrelations
+                &&  $reltag{'type'}  ~~ [ qw{ street associatedStreet } ]
+                &&  name_from_list( 'street', \%reltag ) ) {
+            $count_streets ++;
+            my $street_name = name_from_list( 'street', \%reltag );
+            for my $role ( keys %relmember ) {
+                next unless $role =~ /:(house|address)/;
+                my ($obj) = $role =~ /(.+):/;
+                for my $member ( @{ $relmember{$role} } ) {
+                    $street{ "$obj:$member" } = $street_name;
+                }
+            }
+        }
+
     }
 }
 
@@ -610,6 +628,7 @@ print  STDERR "                          $counttrest turn restrictions\n"       
 print  STDERR "                          $countsigns destination signs\n"       if $destsigns;
 print  STDERR "                          $countroutes transport routes\n"       if $transportstops;
 print  STDERR "                          $count_ref_roads numbered roads\n"     if $roadshields;
+print  STDERR "                          $count_streets streets\n"              if $streetrelations;
 
 
 
@@ -2562,6 +2581,7 @@ sub AddPolygon {
     if ( $navitel ) {
         my $housenumber = name_from_list( 'house', \%tag );
         my $street = convert_string($tag{'addr:street'});
+        $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
 
         if ( $housenumber && $street ) {
     
