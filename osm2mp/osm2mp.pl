@@ -75,7 +75,9 @@ my $barriers        = 1;
 my $disableuturns   = 0;
 my $destsigns       = 1;
 my $detectdupes     = 1;
+
 my $roadshields     = 1;
+my $transportstops  = 1;
 
 my $bbox;
 my $bpolyfile;
@@ -158,6 +160,7 @@ GetOptions (
     'disableuturns!'    => \$disableuturns,
     'destsigns!'        => \$destsigns,
     'roadshields!'      => \$roadshields,
+    'transportstops!'   => \$transportstops,
 
     'defaultcountry=s'  => \$defaultcountry,
     'defaultregion=s'   => \$defaultregion,
@@ -178,10 +181,10 @@ GetOptions (
     'poiregion!'        => \$poiregion,
     'poicontacts!'      => \$poicontacts,
 
-    'namelist=s%'       => sub { $name_list{$_[1]} = [ split /[ ,]/, $_[2] ] },
+    'namelist=s%'       => sub { $name_list{$_[1]} = [ split /[ ,]+/, $_[2] ] },
     
     # deprecated
-    'nametaglist=s'     => sub { $name_list{label} = [ split /[ ,]/, $_[1] ] },
+    'nametaglist=s'     => sub { $name_list{label} = [ split /[ ,]+/, $_[1] ] },
 
     # experimental
     'config=s'          => \$config,
@@ -407,6 +410,14 @@ my %nodetr;
 my $countroutes = 0;
 my %trstop;
 
+# streets
+my %street;
+my %count_streets = 0;
+
+# roads numbers
+my %road_ref;
+my $count_ref_roads = 0;
+
 
 print STDERR "Loading relations...      ";
 
@@ -562,7 +573,8 @@ while ( my $line = <IN> ) {
         }
 
         # transport stops
-        if ( $reltag{'type'} eq 'route'  
+        if ( $transportstops
+                &&  $reltag{'type'} eq 'route'  
                 &&  $reltag{'route'} ~~ [ qw{ bus } ]  
                 &&  exists $reltag{'ref'}  ) {
             $countroutes ++;
@@ -570,7 +582,21 @@ while ( my $line = <IN> ) {
                 next unless $role =~ /^node:.*stop/;
                 for my $stop ( @{ $relmember{$role} } ) {
                     push @{ $trstop{$stop} }, $reltag{'ref'};
-                    # push @{ $trstop{$stop}->{$reltag{'route'}} }, $reltag{'ref'};
+                }
+            }
+        }
+
+        # road refs
+        if ( $roadshields
+                &&  $reltag{'type'}  eq 'route'  
+                &&  $reltag{'route'} eq 'road'
+                &&  ( exists $reltag{'ref'}  ||  exists $reltag{'int_ref'} )  ) {
+            $count_ref_roads ++;
+            for my $role ( keys %relmember ) {
+                next unless $role =~ /^way:/;
+                for my $way ( @{ $relmember{$role} } ) {
+                    push @{ $road_ref{$way} }, convert_string($reltag{'ref'})       if exists $reltag{'ref'};
+                    push @{ $road_ref{$way} }, convert_string($reltag{'int_ref'})   if exists $reltag{'int_ref'};
                 }
             }
         }
@@ -579,9 +605,10 @@ while ( my $line = <IN> ) {
 }
 
 printf STDERR "%d multipolygons\n", scalar keys %mpoly;
-print  STDERR "                          $counttrest turn restrictions\n"     if $restrictions;
-print  STDERR "                          $countsigns destination signs\n"     if $destsigns;
-print  STDERR "                          $countroutes transport routes\n";
+print  STDERR "                          $counttrest turn restrictions\n"       if $restrictions;
+print  STDERR "                          $countsigns destination signs\n"       if $destsigns;
+print  STDERR "                          $countroutes transport routes\n"       if $transportstops;
+print  STDERR "                          $count_ref_roads numbered roads\n"     if $roadshields;
 
 
 
@@ -1100,10 +1127,15 @@ while ( my $line = <IN> ) {
                 }
 
                 # road shield
-                if ( $roadshields  &&  !$city  &&  exists $waytag{'ref'} ) {
-                    my $ref = convert_string( $waytag{'ref'} );
-                    $ref =~ s/\s+//g;
-                    $name = '~[0x05]' . $ref . ( $name ? q{ } . $name : q{});
+                if ( $roadshields  &&  !$city ) {
+                    my @ref = @{ $road_ref{$wayid} }                if exists $road_ref{$wayid};
+                    push @ref, convert_string( $waytag{'ref'} )     if exists $waytag{'ref'};
+                    push @ref, convert_string( $waytag{'int_ref'} ) if exists $waytag{'int_ref'};
+                    
+                    if ( @ref ) {
+                        my $ref = join q{,}, sort map { s/[\s\-]+//g; $_ } uniq( @ref );
+                        $name = '~[0x05]' . $ref . ( $name ? q{ } . $name : q{});
+                    }
                 }
         
                 # load roads and external nodes
@@ -2248,7 +2280,8 @@ sub AddPOI {
     print  "Type=$type\n";
 
     my $label = name_from_list( 'label', $param{tags});
-    if ( exists $param{add_stops} ) {
+
+    if ( $transportstops && exists $param{add_stops} ) {
         my @stops = ( @{ $trstop{$param{nodeid}} } )    
             if exists $param{nodeid}  &&  exists $trstop{$param{nodeid}};
         push @stops, split( /\s*[,;]\s*/, $tag{'route_ref'} )   if exists $tag{'route_ref'};
