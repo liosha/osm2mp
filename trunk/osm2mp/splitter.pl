@@ -14,8 +14,8 @@ my $lat_cell = 0.1;        # in degrees
 my $lon_cell = 0.2;
 
 
-my $MAXNODES    = 650_000_000;      # see current OSM values
-my $MAXWAYS     =  50_000_000;
+my $MAXNODES    = 700_000_000;      # see current OSM values
+my $MAXWAYS     =  60_000_000;
 my $MAXRELS     =   1_000_000;
 
 
