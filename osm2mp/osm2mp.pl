@@ -912,7 +912,7 @@ while ( my $line = <IN> ) {
         elsif ( $poimode eq 'transport' ) {
             $poiinfo{add_stops}  = 1;
         }
-        elsif ( $poimode eq 'contacts' ) {
+        elsif ( $poimode eq 'contacts'  ||  !$poimode ) {
             $poiinfo{add_contacts}  = 1;
         }
         elsif ( $poimode eq 'marine_buoy' ) {
@@ -1154,7 +1154,7 @@ while ( my $line = <IN> ) {
                     push @ref, convert_string( $waytag{'int_ref'} ) if exists $waytag{'int_ref'};
                     
                     if ( @ref ) {
-                        my $ref = join q{,}, sort map { s/[\s\-]+//g; $_ } uniq( @ref );
+                        my $ref = join q{,}, sort( uniq( map { s/[\s\-]+//g; $_ } @ref ) );
                         $name = '~[0x05]' . $ref . ( $name ? q{ } . $name : q{});
                     }
                 }
@@ -1614,6 +1614,7 @@ if ( $routing ) {
         
         my $countself = 0;
         my $countlong = 0;
+        my $countrest = 0;
         
         while ( my ($roadid, $road) = each %road ) {
             my $break   = 0;
@@ -1623,34 +1624,45 @@ if ( $routing ) {
 
             #   test for split conditions
             for my $i ( 1 .. $#{$road->{chain}} ) {
-                $rnod ++    if  $nodid{ $road->{chain}->[$i] };
+                my $cnode = $road->{chain}->[$i];
+                $rnod ++    if  $nodid{ $cnode };
 
-                if ( any { $_ eq $road->{chain}->[$i] } @{$road->{chain}}[$break..$i-1] ) {
+                if ( any { $_ eq $cnode } @{$road->{chain}}[$break..$i-1] ) {
                     $countself ++;
-                    if ( $road->{chain}->[$i] ne $road->{chain}->[$prev] ) {
+                    if ( $cnode ne $road->{chain}->[$prev] ) {
                         $break = $prev;
                         push @breaks, $break;
                     } else {
                         $break = ($i + $prev) >> 1;
                         push @breaks, $break;
-                        $nodid{ $road->{chain}->[$break] }  =  $nodcount++;
-                        $nodeways{ $road->{chain}->[$break] } = [ $roadid ];
+
+                        my $bnode = $road->{chain}->[$break];
+                        $nodid{ $bnode }  =  $nodcount++;
+                        $nodeways{ $bnode } = [ $roadid ];
                         printf "; FIX: Added NodID=%d for NodeID=%s at (%s)\n", 
-                            $nodid{ $road->{chain}->[$break] },
-                            $road->{chain}->[$break],
-                            $node{$road->{chain}->[$break]};
+                            $nodid{ $bnode },
+                            $bnode,
+                            $node{ $bnode };
                     }
                     $rnod = 2;
                 }
 
-                if ( $rnod == $maxroadnodes ) {
+                elsif ( $rnod == $maxroadnodes ) {
                     $countlong ++;
                     $break = $prev;
                     push @breaks, $break;
                     $rnod = 2;
                 }
 
-                $prev = $i      if  $nodid{ $road->{chain}->[$i] };
+                elsif ( $i < $#{$road->{chain}}  &&  exists $barrier{ $cnode } ) {
+                    # ||  (exists $nodetr{ $cnode }  &&  @{ $nodetr{ $cnode } } ) ) {
+                    $countrest ++;
+                    $break = $i;
+                    push @breaks, $break;
+                    $rnod = 1;
+                }
+
+                $prev = $i      if  $nodid{ $cnode };
             }
 
 
@@ -1713,7 +1725,7 @@ if ( $routing ) {
                 $#{$road->{chain}} = $breaks[0];
             }
         }
-        print STDERR "$countself self-intersections, $countlong long roads\n";
+        print STDERR "$countself self-intersections, $countlong long roads, $countrest barriers\n";
     }
 
 
