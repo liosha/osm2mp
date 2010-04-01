@@ -79,6 +79,7 @@ my $detectdupes     = 1;
 my $roadshields     = 1;
 my $transportstops  = 1;
 my $streetrelations = 1;
+my $interchange3d   = 1;
 
 my $bbox;
 my $bpolyfile;
@@ -164,6 +165,7 @@ GetOptions (
     'roadshields!'      => \$roadshields,
     'transportstops!'   => \$transportstops,
     'streetrelations!'  => \$streetrelations,
+    'interchange3d!'    => \$interchange3d,
 
     'defaultcountry=s'  => \$defaultcountry,
     'defaultregion=s'   => \$defaultregion,
@@ -938,6 +940,7 @@ printf STDERR "                          %d barriers loaded\n", scalar keys %bar
 
 my %road;
 my %coast;
+my %hlevel;
 
 print STDERR "Processing ways...        ";
 
@@ -1096,6 +1099,17 @@ while ( my $line = <IN> ) {
                 if ( $waytag{'oneway'} == -1 ) {
                     $waytag{'oneway'} = 'yes';
                     @chain = reverse @chain;
+                }
+
+                # navitel-style 3d interchanges
+                if ( $interchange3d && exists $waytag{'layer'} && $waytag{'layer'} != 0 ) {
+                    my $layer = ( $waytag{'layer'}<0 ? $waytag{'layer'} : $waytag{'layer'} * 2 );
+                    for my $node ( @chain ) {
+                        $hlevel{ $node } = $layer;
+                    }
+                    $layer = $layer - ( $layer < 0  ?  0  :  1 );
+                    $hlevel { $chain[0] }  = $layer;
+                    $hlevel { $chain[-1] } = $layer;
                 }
 
                 # determine city
@@ -1844,13 +1858,29 @@ if ( $routing ) {
         
         
         my $nodcount = 0;
+        my @levelchain = ();
+        my $prevlevel = 0;
         for my $i ( 0 .. $#{$road->{chain}} ) {
             my $node = $road->{chain}->[$i];
-            if ( $nodid{$node} ) {
-                printf "Nod%d=%d,%d,%d\n", $nodcount++, $i, $nodid{$node}, $xnode{$node};
+
+            if ( $interchange3d ) {
+                if ( exists $hlevel{ $node } ) {
+                    push @levelchain, '(' . ($i-1) . ',0)'  if  $i > 0  &&  $prevlevel == 0;
+                    push @levelchain, "($i,$hlevel{$node})";
+                    $prevlevel = $hlevel{$node};
+                }
+                else {
+                    push @levelchain, "($i,0)"              if  $i > 0  &&  $prevlevel != 0;
+                    $prevlevel = 0;
+                }
             }
+
+            next unless $nodid{$node};
+            printf "Nod%d=%d,%d,%d\n", $nodcount++, $i, $nodid{$node}, $xnode{$node};
         }
-        
+
+        printf "HLevel0=%s\n", join( q{,}, @levelchain)   if @levelchain;
+
         print  "[END]\n\n\n";
     }
 
