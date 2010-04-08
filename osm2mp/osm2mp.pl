@@ -1377,8 +1377,8 @@ if ( $shorelines ) {
 
 #            print  "; merged coastline $loop\n";
 #            print  "[POLYLINE]\n";
-#            print  "Type=0x15\n";
-#            print  "EndLevel=4\n";
+#            print  "Type=$config{types}->{coastline}->{type}\n";
+#            print  "EndLevel=$config{types}->{coastline}->{endlevel}\n";
 #            printf "Data0=(%s)\n",          join (q{), (}, @node{ @$chain_ref });
 #            print  "[END]\n\n\n";
 
@@ -1411,8 +1411,8 @@ if ( $shorelines ) {
     for my $sea ( sort { scalar @{$coast{$b}} <=> scalar @{$coast{$a}} } keys %lake ) {
         print  "; sea $sea\n";
         print  "[POLYGON]\n";
-        print  "Type=0x3c\n";
-        print  "EndLevel=4\n";
+        print  "Type=$config{types}->{sea}->{type}\n";
+        print  "EndLevel=$config{types}->{sea}->{endlevel}\n";
 
         printf "Data0=(%s)\n",  join( q{), (},  
             $sea eq 'background'  
@@ -1893,12 +1893,12 @@ if ( $routing ) {
 ####    Background object (?)
 
 
-if ( $bounds && $background ) {
+if ( $bounds && $background  &&  exists $config{types}->{background} ) {
 
     print "\n\n\n; ### Background\n\n";
     print  "[POLYGON]\n";
-    print  "Type=0x4b\n";
-    print  "EndLevel=4\n";
+    print  "Type=$config{types}->{background}->{type}\n";
+    print  "EndLevel=$config{types}->{background}->{endlevel}\n";
     printf "Data0=(%s)\n",      join( q{), (},  map { join q{,}, reverse @{$_} } @bound );
     print  "[END]\n\n\n";
 

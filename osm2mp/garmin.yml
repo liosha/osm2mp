@@ -38,6 +38,24 @@
   Level5=15
 
   [END-IMG ID]
+
+
+
+################################
+##  Common types
+################################
+
+
+--- types
+---
+
+background:
+    type:       0x4B
+    endlevel:   4
+
+sea:
+    type:       0x3C
+    endlevel:   4
   
 
 
