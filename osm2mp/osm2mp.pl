@@ -100,6 +100,8 @@ my $defaultcity;
 my $poiregion       = 1;
 my $poicontacts     = 1;
 
+my $transport_mode  = undef;
+
 # name selection priority
 my %name_list = (
     label       => [ qw{ name loc_name addr:housenumber operator } ],
@@ -166,6 +168,8 @@ GetOptions (
     'transportstops!'   => \$transportstops,
     'streetrelations!'  => \$streetrelations,
     'interchange3d!'    => \$interchange3d,
+    'transport=s'       => \$transport_mode,
+    'notransport'       => sub { undef $transport_mode },
 
     'defaultcountry=s'  => \$defaultcountry,
     'defaultregion=s'   => \$defaultregion,
@@ -204,6 +208,23 @@ if ( $ttable ) {
 
     eval $code;
 }
+
+my %transport_code = (
+    emergency   => 0,
+    police      => 0,
+    delivery    => 1,
+    car         => 2,
+    motorcar    => 2,
+    bus         => 3,
+    taxi        => 4,
+    foot        => 5,
+    pedestrian  => 5,
+    bike        => 6,
+    bicycle     => 6,
+    truck       => 7,
+);
+$transport_mode = $transport_code{ $transport_mode }
+    if exists  $transport_code{ $transport_mode };
 
 my %country_code;
 if ( $country_list ) {
@@ -1076,30 +1097,53 @@ while ( my $line = <IN> ) {
 
             my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
 
+            my @rp = split q{,}, $rp;
+            @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
+
             ##  simple line - dump it
-            if ( $mode eq 'l'  ||  $mode eq 's'  || ( !$routing && $mode eq 'r' ) ) {
+            if ( $mode eq 'l'  ||  $mode eq 's'  || ( !$routing && $mode eq 'r' )
+                    ||  ( defined $transport_mode && $rp[ 4 + $transport_mode ] ) ) {
 
                 for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
                     $countlines ++;
 
-                    print  "; WayID = $wayid\n";
-                    print  "; $poly\n";
-                    print  "[POLYLINE]\n";
-                    printf "Type=%s\n",         $type;
-                    printf "EndLevel=%d\n",     $hlev       if  $hlev > $llev;
-                    print  "Label=$name\n"                  if  $name;
-                    printf "Data%d=(%s)\n",     $llev, join( q{), (}, @node{@chain[$chainlist[$i]..$chainlist[$i+1]]} );
-                    print  "[END]\n\n\n";
+                    AddLine({
+                        wayid       => $wayid,
+                        comment     => $poly,
+                        type        => $type,
+                        level_l     => $llev,
+                        level_h     => $hlev,
+                        name        => $name,
+                        chain       => [ @node{@chain[$chainlist[$i]..$chainlist[$i+1]]} ],
+                    });
                 }
             }
 
             ##   road - load
-            if ( $mode eq 'r'  &&  $routing ) {
+            if ( $mode eq 'r'  &&  $routing 
+                    && ( !defined $transport_mode || !$rp[ 4 + $transport_mode ] )) {
+
+                # set routing parameters and access rules
+                # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
+
+                if ( $waytag{'maxspeed'} > 0 ) {
+                   $waytag{'maxspeed'} *= 1.61      if  $waytag{'maxspeed'} =~ /mph$/i;
+                   $rp[0]  = speed_code( $waytag{'maxspeed'} * 0.9 ); # real speed ?
+                }
+                if ( $waytag{'maxspeed:practical'} > 0 ) {
+                   $waytag{'maxspeed:practical'} *= 1.61        if  $waytag{'maxspeed:practical'} =~ /mph$/i;
+                   $rp[0]  = speed_code( $waytag{'maxspeed:practical'} );
+                }
 
                 if ( $waytag{'oneway'} == -1 ) {
                     $waytag{'oneway'} = 'yes';
                     @chain = reverse @chain;
+                    #!!! change $chainlist order!
                 }
+                $rp[2] = $yesno{$waytag{'oneway'}}      if  $oneway && exists $yesno{$waytag{'oneway'}};
+                $rp[3] = $yesno{$waytag{'toll'}}        if  exists $yesno{$waytag{'toll'}};
+
+                
 
                 # navitel-style 3d interchanges
                 if ( $interchange3d && exists $waytag{'layer'} && $waytag{'layer'} != 0 ) {
@@ -1120,23 +1164,6 @@ while ( my $line = <IN> ) {
                     $poly = "$poly/city";
                     ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
                 }
-
-                # set routing parameters and access rules
-                # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
-                my @rp = split q{,}, $rp;
-
-                if ( $waytag{'maxspeed'} > 0 ) {
-                   $waytag{'maxspeed'} *= 1.61      if  $waytag{'maxspeed'} =~ /mph$/i;
-                   $rp[0]  = speed_code( $waytag{'maxspeed'} * 0.9 ); # real speed ?
-                }
-                if ( $waytag{'maxspeed:practical'} > 0 ) {
-                   $waytag{'maxspeed:practical'} *= 1.61        if  $waytag{'maxspeed:practical'} =~ /mph$/i;
-                   $rp[0]  = speed_code( $waytag{'maxspeed:practical'} );
-                }
-
-                $rp[2] = $yesno{$waytag{'oneway'}}      if  $oneway && exists $yesno{$waytag{'oneway'}};
-                $rp[3] = $yesno{$waytag{'toll'}}        if  exists $yesno{$waytag{'toll'}};
-                @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
 
                 # decrease road class for unsurfaced roads
                 if ( $rp[1] > 0  &&  exists $waytag{'surface'}
@@ -2229,6 +2256,8 @@ Possible options [defaults]:
  --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
  --destsigns               process destination signs                 [$onoff[$destsigns]]
  --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
+ --interchange3d           navitel-style 3D interchanges             [$onoff[$interchange3d]]
+ --transport <mode>        single transport mode
 
  --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
  --osmbbox                 use bounds from .osm                      [$onoff[$osmbbox]]
@@ -2319,6 +2348,28 @@ sub FindSuburb {
         } keys %suburb;
 }
 
+sub AddLine {
+
+    my %param = %{$_[0]};
+
+    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
+
+    return      unless  exists $param{chain}; 
+    return      unless  exists $param{type};
+
+    my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
+    my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
+
+    print  "; WayID = $param{wayid}\n"      if  exists $param{wayid};;
+    print  "; $param{comment}\n"            if  exists $param{comment};
+
+    print  "[POLYLINE]\n";
+    printf "Type=%s\n",         $param{type};
+    printf "EndLevel=%d\n",     $hlev           if $hlev > $llev;
+    printf "Label=%s\n",        $param{name}    if exists $param{name}; 
+    printf "Data%d=(%s)\n",     $llev, join( q{), (}, @{ $param{chain} } );
+    print  "[END]\n\n\n";
+}
 
 sub AddPOI {
     my %param = %{$_[0]};
