@@ -1413,7 +1413,7 @@ if ( $shorelines ) {
         }
 
         # filter huge polygons to avoid cgpsmapper's crash
-        if ( scalar @$chain_ref > 70000 ) {
+        if ( scalar @$chain_ref > 80000 ) {
             printf "; WARNING: skipped too big coastline $loop (%d nodes)\n", scalar @$chain_ref;
             next;
         }

@@ -1,3 +1,4 @@
+#!/usr/bin/perl -w
 
 use strict;
 
@@ -14,7 +15,7 @@ my $lat_cell = 0.1;        # in degrees
 my $lon_cell = 0.2;
 
 
-my $MAXNODES    = 700_000_000;      # see current OSM values
+my $MAXNODES    = 750_000_000;      # see current OSM values
 my $MAXWAYS     =  60_000_000;
 my $MAXRELS     =   1_000_000;
 
@@ -53,6 +54,9 @@ if (!$filename) {
     exit;
 }
 
+my $ncfile = "$filename.nodes";
+my $wcfile = "$filename.ways";
+my $rcfile = "$filename.rels";
 
 ##  initial tiles configuration
 
@@ -95,39 +99,88 @@ binmode IN;
 
 my %grid;
 
-my $way_pos = 0;
 my $nodeid_min = $MAXNODES;
 my $nodeid_max = 0;
 
+open my $ncache, '>', $ncfile;
+open my $wcache, '>', $wcfile;
+open my $rcache, '>', $rcfile;
+
 print STDERR "Initialising grid...          ";
 
-while (my $line = <IN>) {
-    my ($id, $lat, $lon) = $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/;
+my $cur_obj = '';
+my ($id, $lat, $lon);
+my @chain;
+my %members;
 
-    last if $line =~ /<way /;
-    $way_pos = tell IN;
+while ( my $line = <IN> ) {
+    
+    if ( !$cur_obj &&  $line =~ /<node/ ) {
+        ($id, $lat, $lon) = $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/;
+        print $ncache "$id $lat $lon\n";
 
-    next unless $id;
+        if ( @areas_init ) {
+            my $area = first { $lat<=$_->{maxlat} && $lat>=$_->{minlat} && $lon<=$_->{maxlon} && $lon>=$_->{minlon} } @areas_init;
+            $area->{count} ++   if $area;
+            next                unless $area;
+        }
+        
+        my $glat = floor( $lat / $lat_cell );
+        my $glon = floor( $lon / $lon_cell );
+        $grid{$glat}->{$glon} ++;
+        
+        $area_init->{minlat} = $lat      if $lat < $area_init->{minlat};
+        $area_init->{maxlat} = $lat      if $lat > $area_init->{maxlat};
+        $area_init->{minlon} = $lon      if $lon < $area_init->{minlon};
+        $area_init->{maxlon} = $lon      if $lon > $area_init->{maxlon};
+        $area_init->{count} ++;
+        
+        $nodeid_max = $id       if $id > $nodeid_max;
+        $nodeid_min = $id       if $id < $nodeid_min;
 
-    if ( @areas_init ) {
-        my $area = first { $lat<=$_->{maxlat} && $lat>=$_->{minlat} && $lon<=$_->{maxlon} && $lon>=$_->{minlon} } @areas_init;
-        $area->{count} ++   if $area;
-        next                unless $area;
+        next;
     }
 
-    my $glat = floor( $lat / $lat_cell );
-    my $glon = floor( $lon / $lon_cell );
-    $grid{$glat}->{$glon} ++;
+    if ( !$cur_obj && ( ($id) = $line =~ /<way.* id=["']([^"']+)["']/ ) ) {
+        $cur_obj = 'way';
+        @chain = ();
+        next;
+    }
 
-    $area_init->{minlat} = $lat      if $lat < $area_init->{minlat};
-    $area_init->{maxlat} = $lat      if $lat > $area_init->{maxlat};
-    $area_init->{minlon} = $lon      if $lon < $area_init->{minlon};
-    $area_init->{maxlon} = $lon      if $lon > $area_init->{maxlon};
-    $area_init->{count} ++;
+    if ( $cur_obj eq 'way'  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
+        push @chain, $nd;
+        next;
+    }
 
-    $nodeid_max = $id       if $id > $nodeid_max; 
-    $nodeid_min = $id       if $id < $nodeid_min; 
+    if ( $cur_obj eq 'way'  &&  $line =~ /<\/way/ ) {
+        $cur_obj = '';
+        print $wcache "$id " . join( q{,}, @chain ) . "\n";
+        next;
+    }
+
+    if ( !$cur_obj && ( ($id) = $line =~ /<relation.* id=["']([^"']+)["']/ ) ) {
+        $cur_obj = 'relation';
+        %members = ( node => [], way => [], relation => [] );
+        next;
+    }
+
+    if ( $cur_obj eq 'relation'  &&  ( my ($type, $ref) = $line =~ /<member type=["']([^"']+)["'].* ref=["']([^"']+)["']/ ) ) {
+        push @{$members{$type}}, $ref;
+        next;
+    }
+
+    if ( $cur_obj eq 'relation'  &&  $line =~ /<\/relation/ ) {
+        $cur_obj = '';
+        print $rcache "$id " . join( q{:}, map { join q{,}, @{$members{$_}} } qw{ node way relation } ) . "\n";
+        next;
+    }
 }
+
+close $ncache;
+close $wcache;
+close $rcache;
+
+
 
 printf STDERR "%d nodes -> %d cells\n", $area_init->{count}, sum map { scalar keys %$_ } values %grid;
 
@@ -244,6 +297,11 @@ printf STDERR " %d tiles\n", scalar @total_tiles;
 ##  Multipass splitting
 my $pass = 0;
 
+open $ncache, '<', $ncfile;
+open $wcache, '<', $wcfile;
+open $rcache, '<', $rcfile;
+
+
 while ( @total_tiles ) {
 
     printf STDERR "Pass #%d\n", ++$pass;
@@ -272,11 +330,10 @@ while ( @total_tiles ) {
 
     print STDERR "Loading nodes...              ";
 
-    seek IN, 0, 0;
+    seek $ncache, 0, 0;
 
-    while (my $line = <IN>) {
-        my ($id, $lat, $lon) = $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/;
-        next unless $id;
+    while ( my $line = readline $ncache ) {
+        my ($id, $lat, $lon) = split ' ', $line;
 
         for my $tile (@tiles) {
             if ( $lat >= $tile->{minlat}  &&  $lat <= $tile->{maxlat}
@@ -296,48 +353,23 @@ while ( @total_tiles ) {
     ##  ways 1st pass - loading
 
 
-    seek IN, $way_pos, 0;
-    my $rel_pos = $way_pos;
+    seek $wcache, 0, 0;
 
-    my @chain = ();
-    my $reading_way = 0;
-    my $way_id;
+    print STDERR "Loading ways...               ";
 
-    my $count_ways = 0;
+    while ( my $line = readline $wcache ) {
 
-    print STDERR "Reading ways...               ";
+        my ($id,$chain) = split q{ }, $line;
+        my @chain = split q{,}, $chain;
 
-    while ( my $line = <IN> ) {
-
-        if ( my ($id) = $line =~ /<way.* id=["']([^"']+)["']/ ) {
-            $way_id = $id;
-            $reading_way = 1;
-            @chain = ();
-            next;
-        }
-
-        if ( $reading_way  &&  $line =~ /<\/way/ ) {
-            $count_ways ++;
-            for my $area (@tiles) {
-                if ( any { $area->{nodes}->contains($_) } @chain ) {
-                    $area->{ways}->Bit_On($way_id);
-                }
+        for my $area (@tiles) {
+            if ( any { $area->{nodes}->contains($_) } @chain ) {
+                $area->{ways}->Bit_On($id);
             }
-        
-            $reading_way = 0;
-            next;
         }
-
-        if ( $reading_way  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
-            push @chain, $nd;
-            next;
-        }
-
-        last if $line =~ /<relation /;
     } 
-    continue { $rel_pos = tell IN; }
 
-    print STDERR "$count_ways processed\n";
+    print STDERR "Ok\n";
 
 
 
@@ -347,52 +379,32 @@ while ( @total_tiles ) {
 
     my %objects_to_add = ();
 
-    my $count_rels = 0;
-
-    print STDERR "Reading relations...          ";
+    print STDERR "Loading relations...          ";
 
     for my $pass ( 0 .. ( $relations ? $relations-1 : 0 ) ) {
     
-        seek IN, $rel_pos, 0;
-
-        my $rel_id;
-        my $reading_rel = 0;
-        my %members;
+        seek $rcache, 0, 0;
 
         print STDERR q{.};
     
-        while ( my $line = <IN> ) {
+        while ( my $line = readline $rcache ) {
 
-            if ( my ($id) = $line =~ /<relation.* id=["']([^"']+)["']/ ) {
-                $rel_id = $id;
-                $reading_rel = 1;
-                %members = ();
-                next;
-            }
+            my %members;
+            my ($id,$chain) = split q{ }, $line;
+            @members{ qw{ node way relation } } = map { [ split q{,}, $_ ] } split( q{:}, $chain );
 
-            if ( $reading_rel  &&  ( my ($type, $ref) = $line =~ /<member type=["']([^"']+)["'].* ref=["']([^"']+)["']/ ) ) {
-                push @{ $members{$type} }, $ref;
-                next;
-            }
+            for my $area (@tiles) {
+                if ( ( $members{'node'}     && any { $area->{nodes}->contains($_) } @{ $members{'node'} }     )
+                  || ( $members{'way'}      && any { $area->{ways}->contains($_) }  @{ $members{'way'} }      ) 
+                  || ( $members{'relation'} && any { $area->{rels}->contains($_) }  @{ $members{'relation'} } ) 
+                  || $area->{rels}->contains($id) ) {
 
-            if ( $reading_rel  &&  $line =~ /<\/relation/ ) {
-
-                for my $area (@tiles) {
-                    if ( ( $members{'node'}     && any { $area->{nodes}->contains($_) } @{ $members{'node'} }     )
-                      || ( $members{'way'}      && any { $area->{ways}->contains($_) }  @{ $members{'way'} }      ) 
-                      || ( $members{'relation'} && any { $area->{rels}->contains($_) }  @{ $members{'relation'} } ) 
-                      || $area->{rels}->contains($rel_id) ) {
-
-                        for my $obj ( qw{ node way relation } ) {
-                            next unless $members{$obj};
-                            push @{ $objects_to_add{$area}->{relation} }, $rel_id;
-                            push @{ $objects_to_add{$area}->{$obj} }, @{ $members{$obj} };
-                        }
+                    for my $obj ( qw{ node way relation } ) {
+                        next unless $members{$obj};
+                        push @{ $objects_to_add{$area}->{relation} }, $id;
+                        push @{ $objects_to_add{$area}->{$obj} }, @{ $members{$obj} };
                     }
                 }
-                $count_rels ++  unless $pass;
-                $reading_way = 0;
-                next;
             }
         }
 
@@ -405,7 +417,7 @@ while ( @total_tiles ) {
         }
     } 
 
-    print STDERR "   $count_rels processed\n";
+    print STDERR "   Ok\n";
 
 
     if ( $relations ) {
@@ -423,42 +435,22 @@ while ( @total_tiles ) {
 
     ##  ways 2nd pass - redistributing nodes
 
-    seek IN, $way_pos, 0;
-
-    my @chain = ();
-    my $reading_way = 0;
-    my $way_id;
+    seek $wcache, 0, 0;
 
     print STDERR "Redistributing nodes...       ";
 
-    while ( my $line = <IN> ) {
+    while ( my $line = readline $wcache ) {
 
-        if ( my ($id) = $line =~ /<way.* id=["']([^"']+)["']/ ) {
-            $way_id = $id;
-            $reading_way = 1;
-            @chain = ();
-            next;
-        }
+        my ($id,$chain) = split q{ }, $line;
+        my @chain = split q{,}, $chain;
 
-        if ( $reading_way  &&  $line =~ /<\/way/ ) {
-            for my $area (@tiles) {
-                if ( $area->{ways}->contains( $way_id ) ) {
-                    for my $nd ( @chain ) {
-                        $area->{nodes}->Bit_On( $nd );
-                    }
+        for my $area (@tiles) {
+            if ( $area->{ways}->contains( $id ) ) {
+                for my $nd ( @chain ) {
+                    $area->{nodes}->Bit_On( $nd );
                 }
             }
-        
-            $reading_way = 0;
-            next;
         }
-
-        if ( $reading_way  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
-            push @chain, $nd;
-            next;
-        }
-
-        last if $line =~ /<relation /;
     } 
 
     print STDERR "Ok\n";
@@ -535,5 +527,13 @@ while ( @total_tiles ) {
 
 
 }
+
+close $ncache;
+close $wcache;
+close $rcache;
+
+unlink $ncfile;
+unlink $wcfile;
+unlink $rcfile;
 
 print STDERR "All done\n";
