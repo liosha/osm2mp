@@ -87,6 +87,7 @@ my $osmbbox         = 0;
 my $background      = 1;
 
 my $shorelines      = 0;
+my $hugesea         = 70000;
 my $waterback       = 0;
 my $marine          = 1;
 
@@ -181,6 +182,7 @@ GetOptions (
     'osmbbox!'          => \$osmbbox,
     'background!'       => \$background,
     'shorelines!'       => \$shorelines,
+    'hugesea=i'         => \$hugesea,
     'waterback!'        => \$waterback,
     'marine!'           => \$marine,
 
@@ -1413,7 +1415,7 @@ if ( $shorelines ) {
         }
 
         # filter huge polygons to avoid cgpsmapper's crash
-        if ( scalar @$chain_ref > 80000 ) {
+        if ( scalar @$chain_ref > $hugesea ) {
             printf "; WARNING: skipped too big coastline $loop (%d nodes)\n", scalar @$chain_ref;
             next;
         }
