@@ -327,7 +327,7 @@ or die $tmpl->error();
 
 ####    Info
 
-print "\n; Converted from OpenStreetMap data with  osm2mp $version  (" . strftime ("%Y-%m-%d %H:%M:%S", localtime) . ")\n\n";
+print "\n; #### Converted from OpenStreetMap data with  osm2mp $version  (" . strftime ("%Y-%m-%d %H:%M:%S", localtime) . ")\n\n\n";
 
 
 my ($infile) = @ARGV;
@@ -749,19 +749,20 @@ print STDERR "Processing multipolygons  ";
 print "\n\n\n; ### Multipolygons\n\n";
 
 my $countpolygons = 0;
+
+# merge parts
 while ( my ( $mpid, $mp ) = each %ampoly ) {
-
-    # merge parts
+    
     for my $list_ref (( $mp->{outer}, $mp->{inner} )) {
-
+    
         next unless $list_ref;
-
+    
         my @list = grep { exists $waychain{$_} } @$list_ref;
         my @newlist;
-
+    
         while ( @list ) {
             my $id = shift @list;
-
+    
             # closed way
             if ( $waychain{$id}->[0] eq $waychain{$id}->[-1] ) {
                 push @newlist, $id;
@@ -774,59 +775,67 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
                 my @add = @{$waychain{$list[$add]}};
                 shift @add;
                 $waychain{$newid} = [ @{$waychain{$id}}, @add ];
-
+    
                 splice  @list, $add, 1;
                 unshift @list, $newid;
-
+    
                 next;
             }
-
+    
             $add = first_index { $waychain{$id}->[-1] eq $waychain{$_}->[-1] } @list;
             if ( $add > -1 ) {
                 my $newid = "$id:r$list[$add]";
                 my @add = reverse @{$waychain{$list[$add]}};
                 shift @add;
                 $waychain{$newid} = [ @{$waychain{$id}}, @add ];
-
+    
                 splice  @list, $add, 1;
                 unshift @list, $newid;
-
+    
                 next;
             }
-
+    
             printf "; %s Multipolygon's RelID=$mpid part WayID=$id is not closed\n\n",
                 ( ( all { exists $waychain{$_} } @$list_ref )
                     ? "ERROR:"
                     : "WARNING: Incomplete RelID=$mpid. " ); 
         }
-
+    
         $list_ref = [ @newlist ];
     }
+}
 
+# load addressing polygons
+if ( $addressing && exists $config{address} ) {
+    while ( my ( $mpid, $mp ) = each %ampoly ) {
+        
+        next unless @{ $mp->{outer} };
+
+        process_config( $config{address}, {
+                type    => 'Rel',
+                id      => $mpid,
+                tag     => $mp->{tags},
+                outer   => [ map { [ @{ $waychain{$_} } ] } @{ $mp->{outer} } ],
+            } );
+    }
+}
+
+# draw that should be drawn
+while ( my ( $mpid, $mp ) = each %ampoly ) {
+    
     next unless @{ $mp->{outer} };
-
+    
     my %tags = %{ $mp->{tags} };
     my ($otype, $oid) = ( $mpid =~ /^w(.+)/ ? ('Way', $1) : ('Rel', $mpid) );
-
-    # load if addressing polygon
-    process_config( $config{address}, {
-            type    => 'Rel',
-            id      => $mpid,
-            tag     => $mp->{tags},
-            outer   => [ map { [ @{ $waychain{$_} } ] } @{ $mp->{outer} } ],
-        } )
-        if $addressing && exists $config{address};
-
-
-    # draw if presents in config
+    
     my $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
                 grep { exists $polytype{$_} && $polytype{$_}->[0] eq 'p' }
                 map { "$_=" . $mp->{tags}->{$_} }  keys %{$mp->{tags}};
-
+    
     next  unless $poly;
-
+    
     my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
-
+    
     my @alist;
     for my $area ( @{ $mp->{outer} } ) {
         push @alist, [ map { [reverse split q{,}, $node{$_}] } @{ $waychain{$area} } ];
@@ -835,7 +844,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     for my $area ( @{ $mp->{inner} } ) {
         push @hlist, [ map { [reverse split q{,}, $node{$_}] } @{ $waychain{$area} } ];
     }
-
+    
     $countpolygons ++;
     AddPolygon({
         areas   => \@alist,
@@ -2754,7 +2763,7 @@ sub execute_action {
             print "; ERROR: City polygon $obj->{type}ID=$obj->{id} is not closed\n";
         }
         else {
-            print "; Found city: $obj->{type}ID=$obj->{id} - $param{name} [ $param{country}, $param{region} ]\n";
+            print "; Found city: $obj->{type}ID=$obj->{id} - $param{name} [ $param{country}, $param{region} ]\n\n";
             $city{ $obj->{type} . $obj->{id} } = {
                 name        =>  $param{name},
                 region      =>  $param{region},
