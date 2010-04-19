@@ -1099,6 +1099,7 @@ while ( my $line = <IN> ) {
 
             my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
 
+            # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
             my @rp = split q{,}, $rp;
             @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
 
@@ -1123,11 +1124,19 @@ while ( my $line = <IN> ) {
 
             ##   road - load
             if ( $mode eq 'r'  &&  $routing 
-                    && ( !defined $transport_mode || !$rp[ 4 + $transport_mode ] )) {
+                    && !( defined $transport_mode && $rp[ 4 + $transport_mode ] )) {
 
-                # set routing parameters and access rules
-                # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
+                # determine city
+                $city = FindCity( $chain[ floor $#chain/3 ], $chain[ ceil $#chain*2/3 ] );
 
+                if ( $city && exists $polytype{"$poly/city"} ) {
+                    $poly = "$poly/city";
+                    ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
+                    @rp = split q{,}, $rp;
+                    @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
+                }
+
+                # calculate speed class
                 if ( $waytag{'maxspeed'} > 0 ) {
                    $waytag{'maxspeed'} *= 1.61      if  $waytag{'maxspeed'} =~ /mph$/i;
                    $rp[0]  = speed_code( $waytag{'maxspeed'} * 0.9 ); # real speed ?
@@ -1145,8 +1154,6 @@ while ( my $line = <IN> ) {
                 $rp[2] = $yesno{$waytag{'oneway'}}      if  $oneway && exists $yesno{$waytag{'oneway'}};
                 $rp[3] = $yesno{$waytag{'toll'}}        if  exists $yesno{$waytag{'toll'}};
 
-                
-
                 # navitel-style 3d interchanges
                 if ( $interchange3d && exists $waytag{'layer'} && $waytag{'layer'} != 0 ) {
                     my $layer = ( $waytag{'layer'}<0 ? $waytag{'layer'} : $waytag{'layer'} * 2 );
@@ -1156,15 +1163,6 @@ while ( my $line = <IN> ) {
                     $layer = $layer - ( $layer < 0  ?  0  :  1 );
                     $hlevel { $chain[0] }  = $layer;
                     $hlevel { $chain[-1] } = $layer;
-                }
-
-                # determine city
-                # $city = FindCity( $chain[0], $chain[-1] );
-                $city = FindCity( $chain[ floor $#chain/3 ], $chain[ ceil $#chain*2/3 ] );
-
-                if ( $city && exists $polytype{"$poly/city"} ) {
-                    $poly = "$poly/city";
-                    ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
                 }
 
                 # decrease road class for unsurfaced roads
