@@ -85,6 +85,7 @@ my $bbox;
 my $bpolyfile;
 my $osmbbox         = 0;
 my $background      = 1;
+my $lessgpc         = 0;
 
 my $shorelines      = 0;
 my $hugesea         = 70000;
@@ -181,6 +182,7 @@ GetOptions (
     'bpoly=s'           => \$bpolyfile,
     'osmbbox!'          => \$osmbbox,
     'background!'       => \$background,
+    'lessgpc!'          => \$lessgpc,
     'shorelines!'       => \$shorelines,
     'hugesea=i'         => \$hugesea,
     'waterback!'        => \$waterback,
@@ -2616,6 +2618,11 @@ sub AddPolygon {
 
     my @inside = map { $bounds ? $boundtree->contains_polygon_rough( $_ ) : 1 } @{$param{areas}};
     return      if all { defined && $_==0 } @inside;
+
+    if ( $bounds  &&  $lessgpc  &&  any { !defined } @inside ) {
+        @inside = map { $boundtree->contains_points( @$_ ) } @{$param{areas}};
+        return  if all { defined && $_==0 } @inside;
+    }
 
     $param{holes} = []      unless $param{holes};
     my @plist = grep { scalar @$_ > 3 } ( @{$param{areas}}, @{$param{holes}} );
