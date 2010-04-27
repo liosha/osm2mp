@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.031';
+our $VERSION = '0.035';
 
 use List::Util qw{ sum min max };
 use List::MoreUtils qw{ uniq };
@@ -128,6 +128,26 @@ sub contains {
     }
 
     return 0;
+}
+
+
+sub contains_points {
+    my $self  = shift;
+    my $result = undef;
+    
+    while ( my $point = shift ) {
+        next unless ref $point;
+
+        my $isin = abs $self->contains( $point );
+        if ( defined $result ) {
+            return undef  unless  $isin == $result;
+        }
+        else {
+            $result = $isin;
+        }
+    }
+
+    return $result;
 }
 
 
@@ -280,6 +300,13 @@ Checks if point is inside bound polygon.
 Returns 1 if point is inside polygon or 0 otherwise.
 
     if ( $bound->contains( [1,1] ) )  { ...
+
+=head2 contains_points
+
+Checks if some points is inside bound polygon.
+Returns 1 if all points is inside polygon, 0 if all outside, or B<undef>.
+
+    if ( $bound->contains_points( [1,1], [2,2] ... ) )  { ...
 
 =head2 contains_bbox_rough
 
