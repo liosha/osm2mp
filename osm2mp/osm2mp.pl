@@ -34,6 +34,7 @@ use Text::Unidecode;
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 use Math::Polygon::Tree;
+use Tree::R;
 
 use List::Util qw{ first reduce };
 use List::MoreUtils qw{ all none any first_index uniq };
@@ -123,6 +124,7 @@ my %node;
 my %waychain;
 
 my %city;
+my $city_rtree = new Tree::R;
 my %suburb;
 
 
@@ -2345,10 +2347,18 @@ sub centroid {
 
 sub FindCity {
     my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $node{$_} ? $node{$_} : $_ ) ] } @_;
+    
+    my @cities = ();
+    for my $node ( @nodes ) {
+        my @res;
+        $city_rtree->query_point( @$node, \@res );
+        @cities = ( @cities, @res );
+    }
+
     return first { 
             my $cbound = $city{$_}->{bound};
             all { $cbound->contains( $_ ) } @nodes;
-        } keys %city;
+        } uniq @cities;
 }
 
 sub FindSuburb {
@@ -2771,15 +2781,18 @@ sub execute_action {
         }
         else {
             print "; Found city: $obj->{type}ID=$obj->{id} - $param{name} [ $param{country}, $param{region} ]\n\n";
-            $city{ $obj->{type} . $obj->{id} } = {
+            my $cityid = $obj->{type} . $obj->{id};
+            $city{ $cityid } = {
                 name        =>  $param{name},
                 region      =>  $param{region},
                 country     =>  $param{country},
                 bound       =>  Math::Polygon::Tree->new( 
-                        map { [ map { [ split q{,}, $node{$_} ] } @$_ ] } @{ $obj->{outer} } 
+                        map { [ map { [ split q{,}, $node{$_} ] } @$_ ] } @{ $obj->{outer} }
                     ),
             };
-
+            $city_rtree->insert( $cityid, ( Math::Polygon::Tree::polygon_bbox(
+                map { map { [ split q{,}, $node{$_} ] } @$_ } @{ $obj->{outer} }
+            ) ) );
         }
     }
 
