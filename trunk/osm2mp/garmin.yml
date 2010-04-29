@@ -87,6 +87,24 @@ sea:
 
 
 - condition:
+    - place = village
+  action:
+    - type:         load_city
+      name:         %place
+      region:       %region
+      country:      %country
+
+
+- condition:
+    - place = hamlet
+  action:
+    - type:         load_city
+      name:         %place
+      region:       %region
+      country:      %country
+
+
+- condition:
     - place = suburb
   action:
     - type:         load_suburb
