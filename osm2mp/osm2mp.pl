@@ -10,6 +10,7 @@
 ##    * Math::Polygon
 ##    * Math::Polygon::Tree
 ##    * Math::Geometry::Planar::GPC::Polygon
+##    * Tree::R  
 ##
 ##  See http://cpan.org/ or use PPM (Perl package manager) or CPAN module
 ##
@@ -2346,6 +2347,7 @@ sub centroid {
 ####    Exported functions
 
 sub FindCity {
+    return unless keys %city;
     my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $node{$_} ? $node{$_} : $_ ) ] } @_;
     
     my @cities = ();
@@ -2362,6 +2364,7 @@ sub FindCity {
 }
 
 sub FindSuburb {
+    return unless keys %suburb;
     my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $node{$_} ? $node{$_} : $_ ) ] } @_;
     return first { 
             my $cbound = $suburb{$_}->{bound};
