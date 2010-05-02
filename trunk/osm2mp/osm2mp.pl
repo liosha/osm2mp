@@ -2437,6 +2437,8 @@ sub AddPOI {
     # region and country - for cities
     if ( $poiregion  &&  $label  &&  $param{add_region} ) {
         my $region  = name_from_list( 'region', $param{tags});
+        $region .= q{, }. convert_string($tag{'addr:district'})
+            if exists $tag{'addr:district'};
         print "RegionName=$region\n"        if $region;
         my $country = name_from_list( 'country', $param{tags});
         print "CountryName=$country\n"      if $country;
@@ -2772,6 +2774,8 @@ sub execute_action {
     for my $key ( keys %param ) {
         $param{$key} =~ s/%(\w+)/ name_from_list( $1, $obj->{tag} ) /ge;
     }
+    $param{region} .= q{, }. convert_string($obj->{tag}->{'addr:district'})
+        if exists $param{region} && exists $obj->{tag}->{'addr:district'};
 
     ##  Load area as city
     if ( $param{type} eq 'load_city' ) {
