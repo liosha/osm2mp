@@ -60,6 +60,29 @@ sea:
 
 
 ################################
+##  Access restrictions
+################################
+
+
+--- yesno
+---
+
+1:              1
+yes:            1
+true:           1
+designated:     1
+permissive:     1
+
+0:              0
+no:             0
+false:          0
+private:        0
+restricted:     0
+destination:    0
+  
+
+
+################################
 ##  Addressible places
 ################################
 

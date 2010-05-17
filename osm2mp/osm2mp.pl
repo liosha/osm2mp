@@ -264,6 +264,7 @@ usage() unless (@ARGV);
 ####    Reading configs
 
 my %config = YAML::LoadFile $config;
+%yesno = %{ $config{yesno} }    if exists $config{yesno};
 
 
 
