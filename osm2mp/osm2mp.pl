@@ -495,13 +495,13 @@ while ( my $line = <IN> ) {
         if ( $reltag{'type'} eq 'multipolygon'  ||  $reltag{'type'} eq 'boundary' ) {
 
             push @{$relmember{'way:outer'}}, @{$relmember{'way:'}}
-                if $relmember{'way:'};
+                if exists $relmember{'way:'};
             push @{$relmember{'way:outer'}}, @{$relmember{'way:exclave'}}
-                if $relmember{'way:exclave'};
+                if exists $relmember{'way:exclave'};
             push @{$relmember{'way:inner'}}, @{$relmember{'way:enclave'}}
-                if $relmember{'way:enclave'};
+                if exists $relmember{'way:enclave'};
 
-            unless ( $relmember{'way:outer'} ) {
+            unless ( exists $relmember{'way:outer'} ) {
                 print "; ERROR: Multipolygon RelID=$relid doesn't have OUTER way\n";
                 next;
             }
@@ -512,7 +512,7 @@ while ( my $line = <IN> ) {
                 tags    =>  { %reltag },
             };
 
-            next    unless $relmember{'way:inner'} && @{$relmember{'way:outer'}}==1;
+            next    unless exists $relmember{'way:inner'} && @{$relmember{'way:outer'}}==1;
 
             # old simple multipolygon
             my $outer = $relmember{'way:outer'}->[0];
@@ -746,6 +746,7 @@ while ( my $line = <IN> ) {
 
 printf STDERR "%d loaded\n", scalar keys %waychain;
 
+undef %ways_to_load;
 
 
 
@@ -754,79 +755,21 @@ print STDERR "Processing multipolygons  ";
 
 print "\n\n\n; ### Multipolygons\n\n";
 
-my $countpolygons = 0;
-
-# merge parts
-while ( my ( $mpid, $mp ) = each %ampoly ) {
-    
-    for my $list_ref (( $mp->{outer}, $mp->{inner} )) {
-    
-        next unless $list_ref;
-    
-        my @list = grep { exists $waychain{$_} } @$list_ref;
-        my @newlist;
-    
-        while ( @list ) {
-            my $id = shift @list;
-    
-            # closed way
-            if ( $waychain{$id}->[0] eq $waychain{$id}->[-1] ) {
-                push @newlist, $id;
-                next;
-            }
-            
-            my $add = first_index { $waychain{$id}->[-1] eq $waychain{$_}->[0] } @list;
-            if ( $add > -1 ) {
-                my $newid = "$id:$list[$add]";
-                my @add = @{$waychain{$list[$add]}};
-                shift @add;
-                $waychain{$newid} = [ @{$waychain{$id}}, @add ];
-    
-                splice  @list, $add, 1;
-                unshift @list, $newid;
-    
-                next;
-            }
-    
-            $add = first_index { $waychain{$id}->[-1] eq $waychain{$_}->[-1] } @list;
-            if ( $add > -1 ) {
-                my $newid = "$id:r$list[$add]";
-                my @add = reverse @{$waychain{$list[$add]}};
-                shift @add;
-                $waychain{$newid} = [ @{$waychain{$id}}, @add ];
-    
-                splice  @list, $add, 1;
-                unshift @list, $newid;
-    
-                next;
-            }
-    
-            printf "; %s Multipolygon's RelID=$mpid part WayID=$id is not closed\n\n",
-                ( ( all { exists $waychain{$_} } @$list_ref )
-                    ? "ERROR:"
-                    : "WARNING: Incomplete RelID=$mpid. " ); 
-        }
-    
-        $list_ref = [ @newlist ];
-    }
-}
-
 # load addressing polygons
 if ( $addressing && exists $config{address} ) {
     while ( my ( $mpid, $mp ) = each %ampoly ) {
-        
-        next unless @{ $mp->{outer} };
-
+        my $ampoly = merge_ampoly( $mpid );
         process_config( $config{address}, {
                 type    => 'Rel',
                 id      => $mpid,
                 tag     => $mp->{tags},
-                outer   => [ map { [ @{ $waychain{$_} } ] } @{ $mp->{outer} } ],
+                outer   => $ampoly->{outer},
             } );
     }
 }
 
 # draw that should be drawn
+my $countpolygons = 0;
 while ( my ( $mpid, $mp ) = each %ampoly ) {
     
     next unless @{ $mp->{outer} };
@@ -841,14 +784,16 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     next  unless $poly;
     
     my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
+
+    my $ampoly = merge_ampoly( $mpid );
     
     my @alist;
-    for my $area ( @{ $mp->{outer} } ) {
-        push @alist, [ map { [reverse split q{,}, $node{$_}] } @{ $waychain{$area} } ];
+    for my $area ( @{ $ampoly->{outer} } ) {
+        push @alist, [ map { [reverse split q{,}, $node{$_}] } @$area ];
     }
     my @hlist;
-    for my $area ( @{ $mp->{inner} } ) {
-        push @hlist, [ map { [reverse split q{,}, $node{$_}] } @{ $waychain{$area} } ];
+    for my $area ( @{ $ampoly->{inner} } ) {
+        push @hlist, [ map { [reverse split q{,}, $node{$_}] } @$area ];
     }
     
     $countpolygons ++;
@@ -1274,6 +1219,8 @@ while ( my $line = <IN> ) {
 print  STDERR "$countlines lines and $countpolygons polygons dumped\n";
 printf STDERR "                          %d roads loaded\n",      scalar keys %road     if  $routing;
 printf STDERR "                          %d coastlines loaded\n", scalar keys %coast    if  $shorelines;
+
+undef %waychain;
 
 
 
@@ -2848,3 +2795,60 @@ sub process_config {
     }
 }
 
+
+sub merge_ampoly {
+    my ($mpid) = @_;
+    my $mp = $ampoly{$mpid};
+
+    my %res;
+
+    for my $contour_type ( 'outer', 'inner' ) {
+    
+        my $list_ref = $mp->{$contour_type};
+        my @list = grep { exists $waychain{$_} } @$list_ref;
+
+        LIST:
+        while ( @list ) {
+
+            my $id = shift @list;
+            my @contour = @{$waychain{$id}};
+
+            CONTOUR:
+            while ( 1 ) {
+                # closed way
+                if ( $contour[0] eq $contour[-1] ) {
+                    push @{$res{$contour_type}}, [ @contour ];
+                    next LIST;
+                }
+
+                my $add = first_index { $contour[-1] eq $waychain{$_}->[0] } @list;
+                if ( $add > -1 ) {
+                    $id .= ":$list[$add]";
+                    pop @contour;
+                    push @contour, @{$waychain{$list[$add]}};
+
+                    splice  @list, $add, 1;
+                    next CONTOUR;
+                }
+            
+                $add = first_index { $contour[-1] eq $waychain{$_}->[-1] } @list;
+                if ( $add > -1 ) {
+                    $id .= ":r$list[$add]";
+                    pop @contour;
+                    push @contour, reverse @{$waychain{$list[$add]}};
+
+                    splice  @list, $add, 1;
+                    next CONTOUR;
+                }
+
+                printf "; %s Multipolygon's RelID=$mpid part WayID=$id is not closed\n\n",
+                    ( ( all { exists $waychain{$_} } @$list_ref )
+                        ? "ERROR:"
+                        : "WARNING: Incomplete RelID=$mpid. " );
+                last;
+            }
+        }
+    
+        return \%res;
+    }
+}
