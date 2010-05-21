@@ -658,7 +658,7 @@ while ( my $line = <IN> ) {
     }
 }
 
-printf STDERR "%d multipolygons\n", scalar keys %mpoly;
+printf STDERR "%d multipolygons\n", scalar keys %ampoly;
 print  STDERR "                          $counttrest turn restrictions\n"       if $restrictions;
 print  STDERR "                          $countsigns destination signs\n"       if $destsigns;
 print  STDERR "                          $countroutes transport routes\n"       if $transportstops;
