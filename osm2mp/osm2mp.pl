@@ -145,6 +145,8 @@ my %yesno = (
 
 
 GetOptions (
+    'config=s@'          => \$config,
+
     'cfgpoi=s'          => \$cfgpoi,
     'cfgpoly=s'         => \$cfgpoly,
 
@@ -201,9 +203,6 @@ GetOptions (
     
     # deprecated
     'nametaglist=s'     => sub { $name_list{label} = [ split /[ ,]+/, $_[1] ] },
-
-    # experimental
-    'config=s'          => \$config,
 );
 
 
@@ -263,7 +262,12 @@ usage() unless (@ARGV);
 
 ####    Reading configs
 
-my %config = YAML::LoadFile $config;
+my %config;
+for my $cfgfile ( @$config ) {
+    my %cfgpart = YAML::LoadFile $cfgfile;
+    %config = ( %config, %cfgpart );
+}
+
 %yesno = %{ $config{yesno} }    if exists $config{yesno};
 
 
