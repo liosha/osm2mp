@@ -2859,6 +2859,7 @@ sub merge_ampoly {
                     ( ( all { exists $waychain{$_} } @$list_ref )
                         ? "ERROR:"
                         : "WARNING: Incomplete RelID=$mpid. " );
+                last CONTOUR;
             }
         }
     }
