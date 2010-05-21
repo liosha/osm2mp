@@ -2531,10 +2531,9 @@ sub AddBarrier {
 
     my $acc = [ 1,1,1,1,1,1,1,1 ];
 
-    $acc = [ 1,1,1,1,1,0,1,1 ]      if  $param{tags}->{'barrier'} ~~ [ qw{ block stile chain } ];
-    $acc = [ 1,1,1,1,1,0,0,1 ]      if  $param{tags}->{'barrier'} eq 'bollard';
-    $acc = [ 1,1,1,0,1,0,0,1 ]      if  $param{tags}->{'barrier'} eq 'bus_trap';
-    $acc = [ 0,0,0,0,0,0,0,0 ]      if  $param{tags}->{'barrier'} ~~ [ qw{ toll_booth cattle_grid } ];
+    $acc = [ split q{,}, $config{barrier}->{$param{tags}->{'barrier'}} ]
+        if exists $config{barrier} 
+        && exists $config{barrier}->{$param{tags}->{'barrier'}};
 
     my @acc = map { 1-$_ } CalcAccessRules( $param{tags}, $acc );
     return  if  all { $_ } @acc;
