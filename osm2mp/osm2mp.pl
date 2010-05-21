@@ -2549,23 +2549,22 @@ sub CalcAccessRules {
     my %tag = %{ $_[0] };
     my @acc = @{ $_[1] };
 
-    # emergency, delivery, car, bus, taxi, foot, bike, truck
-    @acc[0,1,2,3,4,5,6,7]  =  (1-$yesno{$tag{'access'}})        x 8   if exists $yesno{$tag{'access'}};
-    @acc[          5,6, ]  =  (  $yesno{$tag{'motorroad'}})     x 8   if exists $yesno{$tag{'motorroad'}};
+    return @acc     unless exists $config{transport};
 
-    @acc[0,1,2,3,4,  6,7]  =  (1-$yesno{$tag{'vehicle'}})       x 8   if exists $yesno{$tag{'vehicle'}};
-    @acc[0,1,2,3,4,    7]  =  (1-$yesno{$tag{'motor_vehicle'}}) x 8   if exists $yesno{$tag{'motor_vehicle'}};
-    @acc[0,1,2,3,4,    7]  =  (1-$yesno{$tag{'motorcar'}})      x 8   if exists $yesno{$tag{'motorcar'}};
+    for my $rule ( @{$config{transport}} ) {
+        next unless exists $tag{$rule->{key}};
+        next unless exists $yesno{$tag{$rule->{key}}};
 
-    @acc[          5,   ]  =  (1-$yesno{$tag{'foot'}})          x 1   if exists $yesno{$tag{'foot'}};
-    @acc[            6, ]  =  (1-$yesno{$tag{'bicycle'}})       x 1   if exists $yesno{$tag{'bicycle'}};
-    @acc[      3,4,     ]  =  (1-$yesno{$tag{'psv'}})           x 2   if exists $yesno{$tag{'psv'}};
-    @acc[        4,     ]  =  (1-$yesno{$tag{'taxi'}})          x 1   if exists $yesno{$tag{'taxi'}};
-    @acc[      3,       ]  =  (1-$yesno{$tag{'bus'}})           x 1   if exists $yesno{$tag{'bus'}};
-    @acc[             7,]  =  (1-$yesno{$tag{'hgv'}})           x 1   if exists $yesno{$tag{'hgv'}};
-    @acc[  1,         7,]  =  (1-$yesno{$tag{'goods'}})         x 2   if exists $yesno{$tag{'goods'}};
-    @acc[0,             ]  =  (1-$yesno{$tag{'emergency'}})     x 1   if exists $yesno{$tag{'emergency'}};
+        my $val = 1-$yesno{$tag{$rule->{key}}};
+        $val = 1-$val   if $rule->{mode} == -1;
 
+        my @rule = split q{,}, $rule->{val};
+        for my $i ( 0 .. 7 ) {
+            next unless $rule[$i];
+            $acc[$i] = $val;
+        }
+    }
+    
     return @acc;
 }     
 
