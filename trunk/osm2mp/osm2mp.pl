@@ -51,7 +51,7 @@ use Data::Dump 'dd';
 
 my $version = '0.82b';
 
-my $config          = 'garmin.yml';
+my $config          = [ 'garmin.yml' ];
 
 my $cfgpoi          = 'poi.cfg';
 my $cfgpoly         = 'poly.cfg';
@@ -145,7 +145,7 @@ my %yesno = (
 
 
 GetOptions (
-    'config=s@'          => \$config,
+    'config=s@'         => \$config,
 
     'cfgpoi=s'          => \$cfgpoi,
     'cfgpoly=s'         => \$cfgpoly,
