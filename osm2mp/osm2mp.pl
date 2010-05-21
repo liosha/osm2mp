@@ -37,8 +37,8 @@ use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 use Math::Polygon::Tree;
 use Tree::R;
 
-use List::Util qw{ first reduce };
-use List::MoreUtils qw{ all none any first_index uniq };
+use List::Util qw{ first reduce sum };
+use List::MoreUtils qw{ all none any first_index last_index uniq };
 
 # debug
 use Data::Dump 'dd';
@@ -2579,6 +2579,22 @@ sub AddPolygon {
     return      unless  exists $param{areas}; 
     return      unless  exists $param{type};
 
+
+    #   select endlevel
+    my $llev  =  $param{level_l};
+    my $hlev  =  $param{level_h};
+
+    if ( ($hlev) = $hlev =~ /^\*(.*)/ ) {
+        my $square = sum map { Math::Polygon::Calc::polygon_area( @$_ ) 
+                                * cos( [centroid( @{$param{areas}->[0]} )]->[0] / 180 * 3.14159 )
+                                * (40000/360)**2 } @{$param{areas}};
+        $hlev = $llev + last_index { $square >= $_ } split q{,}, $hlev;
+        return if $hlev < $llev;
+        print "; square = $square  -> $hlev\n";
+    }
+
+
+    #   test if inside bounds
     my @inside = map { $bounds ? $boundtree->contains_polygon_rough( $_ ) : 1 } @{$param{areas}};
     return      if all { defined && $_==0 } @inside;
 
@@ -2634,9 +2650,6 @@ sub AddPolygon {
 
 
     ## polygon
-    my $llev  =  $param{level_l};
-    my $hlev  =  $param{level_h};
-
     print  "; WayID = $param{wayid}\n"      if  exists $param{wayid};
     print  "; RelID = $param{relid}\n"      if  exists $param{relid};
     print  "; $param{comment}\n"            if  exists $param{comment};
@@ -2694,7 +2707,6 @@ sub AddPolygon {
     }
 
     print "[END]\n\n\n";
-
 }
 
 
