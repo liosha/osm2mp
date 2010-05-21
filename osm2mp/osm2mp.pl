@@ -2584,11 +2584,11 @@ sub AddPolygon {
     my $llev  =  $param{level_l};
     my $hlev  =  $param{level_h};
 
-    if ( ($hlev) = $hlev =~ /^\*(.*)/ ) {
+    if ( my ($llist) = $hlev =~ /^\*(.*)/ ) {
         my $square = sum map { Math::Polygon::Calc::polygon_area( @$_ ) 
                                 * cos( [centroid( @{$param{areas}->[0]} )]->[0] / 180 * 3.14159 )
                                 * (40000/360)**2 } @{$param{areas}};
-        $hlev = $llev + last_index { $square >= $_ } split q{,}, $hlev;
+        $hlev = $llev + last_index { $square >= $_ } split q{,}, $llist;
         return if $hlev < $llev;
         print "; square = $square  -> $hlev\n";
     }
