@@ -2579,6 +2579,7 @@ sub AddPolygon {
     my %tag   = exists $param{tags} ? %{$param{tags}} : ();
 
     return      unless  exists $param{areas}; 
+    return      unless  @{$param{areas}}; 
     return      unless  exists $param{type};
 
 
@@ -2605,9 +2606,11 @@ sub AddPolygon {
         return  if all { defined && $_==0 } @inside;
     }
 
+    
     $param{holes} = []      unless $param{holes};
     my @plist = grep { scalar @$_ > 3 } ( @{$param{areas}}, @{$param{holes}} );
 
+    # TODO: filter bad holes
 
     #   clip
     if ( $bounds  &&  any { !defined } @inside ) {
