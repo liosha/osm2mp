@@ -15,9 +15,15 @@ my $lat_cell = 0.1;        # in degrees
 my $lon_cell = 0.2;
 
 
-my $MAXNODES    = 750_000_000;      # see current OSM values
-my $MAXWAYS     =  60_000_000;
-my $MAXRELS     =   1_000_000;
+my $MAXNODES    = 0;    # 750_000_000;      # see current OSM values
+my $MAXWAYS     = 0;    # 70_000_000;
+my $MAXRELS     = 0;    #  1_000_000;
+
+my %maxcount = ( 
+    node        => \$MAXNODES,
+    way         => \$MAXWAYS,
+    relation    => \$MAXRELS,
+);
 
 
 my $relations       = 1;
@@ -119,6 +125,8 @@ while ( my $line = <IN> ) {
         ($id, $lat, $lon) = $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/;
         print $ncache "$id $lat $lon\n";
 
+        $MAXNODES = $id     if $id > $MAXNODES;
+
         if ( @areas_init ) {
             my $area = first { $lat<=$_->{maxlat} && $lat>=$_->{minlat} && $lon<=$_->{maxlon} && $lon>=$_->{minlon} } @areas_init;
             $area->{count} ++   if $area;
@@ -142,12 +150,14 @@ while ( my $line = <IN> ) {
     }
 
     if ( !$cur_obj && ( ($id) = $line =~ /<way.* id=["']([^"']+)["']/ ) ) {
+        $MAXWAYS = $id      if $id > $MAXWAYS;
         $cur_obj = 'way';
         @chain = ();
         next;
     }
 
     if ( $cur_obj eq 'way'  &&  ( my ($nd) = $line =~ /<nd ref=["']([^"']+)["']/ ) ) {
+        $MAXNODES = $nd     if $nd > $MAXNODES;
         push @chain, $nd;
         next;
     }
@@ -159,12 +169,14 @@ while ( my $line = <IN> ) {
     }
 
     if ( !$cur_obj && ( ($id) = $line =~ /<relation.* id=["']([^"']+)["']/ ) ) {
+        $MAXRELS = $id      if $id > $MAXRELS;
         $cur_obj = 'relation';
         %members = ( node => [], way => [], relation => [] );
         next;
     }
 
     if ( $cur_obj eq 'relation'  &&  ( my ($type, $ref) = $line =~ /<member type=["']([^"']+)["'].* ref=["']([^"']+)["']/ ) ) {
+        ${$maxcount{$type}} = $ref  if $ref > ${$maxcount{$type}};
         push @{$members{$type}}, $ref;
         next;
     }
@@ -183,6 +195,9 @@ close $rcache;
 
 
 printf STDERR "%d nodes -> %d cells\n", $area_init->{count}, sum map { scalar keys %$_ } values %grid;
+print  STDERR "Maximum node id:              $MAXNODES\n";
+print  STDERR "Maximum way id:               $MAXWAYS\n";
+print  STDERR "Maximum relation id:          $MAXRELS\n";
 
 my $maxcell = max map { max values %$_ } values %grid;
 die "Use --maxnodes larger than $maxcell or decrease cell size"
@@ -311,9 +326,9 @@ while ( @total_tiles ) {
     print STDERR "Reserving memory...           ";
     while ( @total_tiles ) {
         eval {
-            $total_tiles[0]->{nodes} = Bit::Vector->new($MAXNODES);
-            $total_tiles[0]->{ways}  = Bit::Vector->new($MAXWAYS);
-            $total_tiles[0]->{rels}  = Bit::Vector->new($MAXRELS);
+            $total_tiles[0]->{nodes} = Bit::Vector->new($MAXNODES+1);
+            $total_tiles[0]->{ways}  = Bit::Vector->new($MAXWAYS+1);
+            $total_tiles[0]->{rels}  = Bit::Vector->new($MAXRELS+1);
         };
 
         last if $@;
