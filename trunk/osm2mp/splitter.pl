@@ -11,20 +11,9 @@ use Getopt::Long;
 use Data::Dump qw{ dd };
 
 
-my $lat_cell = 0.1;        # in degrees
+##  Initial settings
+my $lat_cell = 0.1;     # in degrees
 my $lon_cell = 0.2;
-
-
-my $MAXNODES    = 0;    # 750_000_000;      # see current OSM values
-my $MAXWAYS     = 0;    # 70_000_000;
-my $MAXRELS     = 0;    #  1_000_000;
-
-my %maxcount = ( 
-    node        => \$MAXNODES,
-    way         => \$MAXWAYS,
-    relation    => \$MAXRELS,
-);
-
 
 my $relations       = 1;
 my $mapid           = 65430001;
@@ -59,6 +48,17 @@ if (!$filename) {
     print "\n";
     exit;
 }
+
+
+my $MAXNODES    = 0;
+my $MAXWAYS     = 0;
+my $MAXRELS     = 0;
+
+my %maxcount = ( 
+    node        => \$MAXNODES,
+    way         => \$MAXWAYS,
+    relation    => \$MAXRELS,
+);
 
 my $ncfile = "$filename.nodes";
 my $wcfile = "$filename.ways";
@@ -105,9 +105,6 @@ binmode IN;
 
 my %grid;
 
-my $nodeid_min = $MAXNODES;
-my $nodeid_max = 0;
-
 open my $ncache, '>', $ncfile;
 open my $wcache, '>', $wcfile;
 open my $rcache, '>', $rcfile;
@@ -143,9 +140,6 @@ while ( my $line = <IN> ) {
         $area_init->{maxlon} = $lon      if $lon > $area_init->{maxlon};
         $area_init->{count} ++;
         
-        $nodeid_max = $id       if $id > $nodeid_max;
-        $nodeid_min = $id       if $id < $nodeid_min;
-
         next;
     }
 
