@@ -899,16 +899,19 @@ while ( my $line = <IN> ) {
             $poiinfo{add_region}    = 1;
         }
         elsif ( $poimode eq 'transport' ) {
-            $poiinfo{add_stops}  = 1;
+            $poiinfo{add_stops}     = 1;
         }
         elsif ( $poimode eq 'contacts'  ||  !$poimode ) {
             $poiinfo{add_contacts}  = 1;
         }
         elsif ( $poimode eq 'marine_buoy' ) {
-            $poiinfo{add_buoy}    = 1;
+            $poiinfo{add_buoy}      = 1;
         }
         elsif ( $poimode eq 'marine_light' ) {
-            $poiinfo{add_light}    = 1;
+            $poiinfo{add_light}     = 1;
+        }
+        elsif ( $poimode eq 'ele' ) {
+            $poiinfo{add_elevation} = 1;
         }
 
         AddPOI ( \%poiinfo );
@@ -2372,6 +2375,10 @@ sub AddPOI {
     print  "Type=$type\n";
 
     my $label = name_from_list( 'label', $param{tags});
+
+    if ( exists $param{add_elevation} && exists $tag{'ele'} ) {
+        $label .= '~[0x1f]' . $tag{'ele'};
+    }
 
     if ( $transportstops && exists $param{add_stops} ) {
         my @stops;
