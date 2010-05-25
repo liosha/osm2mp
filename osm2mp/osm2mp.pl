@@ -2876,3 +2876,49 @@ sub merge_ampoly {
 
     return \%res;
 }
+
+
+sub merge_polygon_chains {
+    
+    my @c1 = @{$_[0]};
+    my @c2 = @{$_[1]};
+
+    my %seg = map { join( q{:}, sort ( $c1[$_], $c1[$_+1] ) ) => $_ } ( 0 .. $#c1 - 1 );
+
+    for my $j ( 0 .. scalar $#c2 - 1 ) {
+        my $seg = join( q{:}, sort ( $c2[$j], $c2[$j+1] ) );
+        if ( exists $seg{$seg} ) {
+            my $i = $seg{$seg};
+
+            pop @c1;
+            @c1 = @c1[ $i+1 .. $#c1, 0 .. $i ]      if  $i < $#c1;
+            @c1 = reverse @c1                       if  $c1[0] ne $c2[$j];
+
+            # merge
+            splice @c2, $j, 2, @c1;
+            pop @c2;
+
+            # remove jitters
+            $i = 0;
+            JITTER:
+            while ( $i <= $#c2 ) {
+                if ( $c2[$i] eq $c2[($i+1) % scalar @c2] ) {
+                    splice @c2, $i, 1;
+                    $i--    if $i > 0;
+                    redo JITTER;
+                }
+                if ( $c2[$i] eq $c2[($i+2) % scalar @c2] ) {
+                    splice @c2, ($i+1) % scalar @c2, 1;
+                    $i--    if $i > $#c2;
+                    splice @c2, $i, 1;
+                    $i--    if $i > 0;
+                    redo JITTER;
+                }
+                $i++;
+            }
+            push @c2, $c2[0];
+            return \@c2;
+        }
+    }
+    return undef;
+}
