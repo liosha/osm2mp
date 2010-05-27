@@ -220,7 +220,7 @@ while ( my ($type,$list_ref) = each %ring ) {
     }
 }
 
-unless ( @{ $result{outer} } ) {
+unless ( exists $result{outer} ) {
     print STDERR "Invalid data: no outer rings\n";
     exit;
 }
