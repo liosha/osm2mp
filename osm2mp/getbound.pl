@@ -1,12 +1,18 @@
 #!/usr/bin/perl -w
 
 use strict;
+
 use LWP::UserAgent;
+use Getopt::Long;
+use XML::Simple;
+use List::MoreUtils qw{ first_index };
+use IO::Uncompress::Gunzip qw{ gunzip $GunzipError };
 
 
-my $bdir = '_bounds/';
+use Data::Dump 'dd';
+
+
 my $api  = 'http://www.openstreetmap.org/api/0.6';
-my $nul  = 'nul';
 
 
 my %rename = (
@@ -95,34 +101,151 @@ my %rename = (
 );
 
 
+my $filename;
+my $outfile;
+
+GetOptions (
+    'file=s'    => \$filename,
+    'o=s'       => \$outfile,    
+);
+
+unless ( @ARGV ) {
+    print "Usage:  getbound.pl [-o <file>] <relation_id>\n\n";
+    exit;
+}
 
 
-die     unless @ARGV;
+my $osmdata;
 
 my $name =  $ARGV[0];
 my $rel  =  exists $rename{$name}  ?  $rename{$name}  :  $name;
 
-my $ua = LWP::UserAgent->new;
-$ua->timeout( 60 );
-my $req = HTTP::Request->new( GET => "$api/relation/$rel/full" );
-my $res;
 
-for my $attempt ( 1 .. 5 ) {
-    $res = $ua->request($req);
-    last if $res->is_success;
+if ( $filename ) {
+    open my $file, '<', $filename;
+    read $file, $osmdata, 10_000_000;
+}
+else {
+
+    print STDERR "Downloading RelID=$rel..";
+
+    my $ua = LWP::UserAgent->new;
+    $ua->default_header('Accept-Encoding' => 'gzip');
+    $ua->timeout( 60 );
+    my $req = HTTP::Request->new( GET => "$api/relation/$rel/full" );
+    my $res;
+
+    for my $attempt ( 1 .. 10 ) {
+        print STDERR q{.};
+        $res = $ua->request($req);
+        last if $res->is_success;
+    }
+
+    unless ( $res->is_success ) {
+        print STDERR "Failed\n";
+        exit;
+    }
+
+    print STDERR "  Ok\n";
+    gunzip \($res->content) => \$osmdata;
 }
 
-exit    unless $res->is_success;
 
-open  OSM, '>', "$rel.osm";
-binmode OSM;
-print OSM  $res->content;
-close OSM;
+my $osm = XMLin( $osmdata, 
+            ForceArray  => 1,
+            KeyAttr     => [ 'id', 'k' ],
+          );
 
 
-`boundaries.pl -in=$rel.osm -poly -csv=$nul -html=$nul -polybase=reg`;
-unlink "$rel.osm";
-if ( -f "reg.$rel.poly" ) {
-    unlink "$bdir$name.poly"     if -f "$bdir$name.poly";
-    rename "reg.$rel.poly", "$bdir$name.poly";
+my %role = (
+    ''          => 'outer',
+    'outer'     => 'outer',
+    'exclave'   => 'outer',
+    'inner'     => 'inner',
+    'enclave'   => 'inner',
+);
+
+my %ring = ( 'inner' => [], 'outer' => [] );
+my %result;
+
+
+for my $member ( @{ $osm->{relation}->{$rel}->{member} } ) {
+    next unless $member->{type} eq 'way';
+    next unless exists $role{ $member->{role} };
+    
+    unless ( exists $osm->{way}->{$member->{ref}} ) {
+        print STDERR "Incomplete data: way $member->{ref} is missing\n";
+        next;
+    }
+
+    push @{ $ring{$role{$member->{role}}} },  [ map { $_->{ref} } @{$osm->{way}->{$member->{ref}}->{nd}} ];
+
 }
+
+while ( my ($type,$list_ref) = each %ring ) {
+    while ( @$list_ref ) {
+        my @chain = @{ shift @$list_ref };
+        
+        if ( $chain[0] eq $chain[-1] ) {
+            push @{$result{$type}}, [@chain];
+            next;
+        }
+
+        my $pos = first_index { $chain[0] eq $_->[0] } @$list_ref;
+        if ( $pos > -1 ) {
+            shift @chain;
+            $list_ref->[$pos] = [ (reverse @chain), @{$list_ref->[$pos]} ];
+            next;
+        }
+        $pos = first_index { $chain[0] eq $_->[-1] } @$list_ref;
+        if ( $pos > -1 ) {
+            shift @chain;
+            $list_ref->[$pos] = [ @{$list_ref->[$pos]}, @chain ];
+            next;
+        }
+        $pos = first_index { $chain[-1] eq $_->[0] } @$list_ref;
+        if ( $pos > -1 ) {
+            pop @chain;
+            $list_ref->[$pos] = [ @chain, @{$list_ref->[$pos]} ];
+            next;
+        }
+        $pos = first_index { $chain[-1] eq $_->[-1] } @$list_ref;
+        if ( $pos > -1 ) {
+            pop @chain;
+            $list_ref->[$pos] = [ @{$list_ref->[$pos]}, reverse @chain ];
+            next;
+        }
+        print STDERR "Invalid data: ring is not closed\n";
+        exit;
+    }
+}
+
+unless ( @{ $result{outer} } ) {
+    print STDERR "Invalid data: no outer rings\n";
+    exit;
+}
+
+
+if ( $outfile ) {
+    open OUT, '>', $outfile;
+} 
+else {
+    *OUT = *STDOUT;
+}
+
+print OUT "Relation $rel\n\n";
+
+my $num = 1;
+for my $type ( 'outer', 'inner' ) {
+    next unless exists $result{$type};
+
+    for my $ring ( sort { scalar @$b <=> scalar @$a } @{$result{$type}} ) {
+        print OUT ( $type eq 'inner' ? q{-} : q{}) . $num++ . "\n";
+        for my $point ( @$ring ) {
+            printf OUT "   %-11s  %-11s\n", @{$osm->{node}->{$point}}{'lon','lat'};
+        }
+        print OUT "END\n\n";
+    }
+}
+
+print OUT "END\n";
