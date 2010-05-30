@@ -763,6 +763,7 @@ print "\n\n\n; ### Multipolygons\n\n";
 if ( $addressing && exists $config{address} ) {
     while ( my ( $mpid, $mp ) = each %ampoly ) {
         my $ampoly = merge_ampoly( $mpid );
+        next unless exists $ampoly->{outer};
         process_config( $config{address}, {
                 type    => 'Rel',
                 id      => $mpid,
