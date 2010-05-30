@@ -16,7 +16,26 @@ my $api  = 'http://www.openstreetmap.org/api/0.6';
 
 
 my %rename = (
-    # gis-lab
+    # cloudmade
+    armenia         =>  364066,
+    azerbaijan      =>  364110,
+    egypt           =>  192761,
+    georgia         =>  28699,
+
+    # geofabrik
+    latvia          =>  72594,
+    lithuania       =>  72596,
+    moldova         =>  58974,
+    ukraine         =>  60199,
+    
+    # gis-lab contries
+    kazakhstan      =>  214665,
+    kyrgyzstan      =>  178009,
+    tajikistan      =>  214626,
+    turkmenistan    =>  223026,
+    uzbekistan      =>  196240,
+
+    # gis-lab Russia
     adygeya         =>  253256,
     altay           =>  145194,
     altayskiy       =>  144764,
@@ -160,6 +179,7 @@ my $osm = XMLin( $osmdata,
 my %role = (
     ''          => 'outer',
     'outer'     => 'outer',
+    'border'    => 'outer',
     'exclave'   => 'outer',
     'inner'     => 'inner',
     'enclave'   => 'inner',
