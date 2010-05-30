@@ -1163,7 +1163,7 @@ while ( my $line = <IN> ) {
                     push @ref, convert_string( $waytag{'int_ref'} ) if exists $waytag{'int_ref'};
                     
                     if ( @ref ) {
-                        my $ref = join q{,}, sort( uniq( map { s/[\s\-]+//g; $_ } @ref ) );
+                        my $ref = join q{,}, sort( uniq( map { s/[\s\-]+//g; split /[,;]/, $_ } @ref ) );
                         $name = '~[0x05]' . $ref . ( $name ? q{ } . $name : q{});
                     }
                 }
