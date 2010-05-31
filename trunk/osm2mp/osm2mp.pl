@@ -272,27 +272,6 @@ for my $cfgfile ( @$config ) {
 
 
 
-my %poitype;
-
-open CFG, $cfgpoi;
-while (<CFG>) {
-    next   if (!$_) || /^\s*[\#\;]/;
-    chomp;
-    my $prio = 0;
-    my ($k, $v, $type, $llev, $hlev, $mode) = split /\s+/;
-    if ($type) {
-        if ($type =~ /(.+),(\d+)/) {
-            $type = $1;
-            $prio = $2;
-        }
-        $llev = 0   unless defined $llev;
-        $hlev = 0   unless defined $hlev;
-        $poitype{"$k=$v"} = [ $type, $llev, $hlev, $mode, $prio ];
-    }
-}
-close CFG;
-
-
 
 my %polytype;
 
@@ -859,6 +838,8 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<\/node/ ) {
 
+        next unless scalar %nodetag;
+
         ##  Barriers
         if ( $routing  &&  $barriers  &&  $nodetag{'barrier'} ) {
             AddBarrier({ nodeid => $nodeid,  tags => \%nodetag });
@@ -875,47 +856,13 @@ while ( my $line = <IN> ) {
         }
 
         ##  POI
-        my $poi = reduce { $poitype{$a}->[4] > $poitype{$b}->[4]  ?  $a : $b }
-                        grep { exists $poitype{$_} }
-                        map {"$_=$nodetag{$_}"}  keys %nodetag;
-        next  unless  $poi;
-        next  unless  !$bounds || is_inside_bounds( $node{$nodeid} );
+         
+        process_config( $config{nodes}, {
+                type    => 'Node',
+                id      => $nodeid,
+                tag     => { %nodetag },
+            } );
 
-        next  if  $nodetag{'layer'} < -1;   # temporary!
-
-        $countpoi ++;
-        my ($type, $llev, $hlev, $poimode) = @{$poitype{$poi}};
-
-        my %poiinfo = (
-                nodeid      => $nodeid,
-                comment     => $poi,
-                type        => $type,
-                level_l     => $llev,
-                level_h     => $hlev,
-                tags        => \%nodetag,
-            );
-
-        if ( $poimode eq 'city' ) {
-            $poiinfo{City}          = 'Y';
-            $poiinfo{add_region}    = 1;
-        }
-        elsif ( $poimode eq 'transport' ) {
-            $poiinfo{add_stops}     = 1;
-        }
-        elsif ( $poimode eq 'contacts'  ||  !$poimode ) {
-            $poiinfo{add_contacts}  = 1;
-        }
-        elsif ( $poimode eq 'marine_buoy' ) {
-            $poiinfo{add_buoy}      = 1;
-        }
-        elsif ( $poimode eq 'marine_light' ) {
-            $poiinfo{add_light}     = 1;
-        }
-        elsif ( $poimode eq 'ele' ) {
-            $poiinfo{add_elevation} = 1;
-        }
-
-        AddPOI ( \%poiinfo );
     }
 
     last  if  $line =~ /<way/;
@@ -2360,7 +2307,7 @@ sub AddPOI {
     return      unless  exists $param{type};
 
     my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
-    my $hlev  =  exists $param{level_h} ? $param{level_h} : 1;
+    my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
 
     print  "; NodeID = $param{nodeid}\n"    if  exists $param{nodeid};
     print  "; $param{comment}\n"            if  exists $param{comment};
@@ -2795,6 +2742,48 @@ sub execute_action {
             };
 
         }
+    }
+
+    ##  Write POI
+    if ( $param{action} eq 'write_poi' ) {
+        my %tag = %{ $obj->{tag} };
+
+        return  unless  !$bounds || is_inside_bounds( $node{$obj->{id}} );
+        return  if  exists $tag{'layer'} && $tag{'layer'} < -1;
+
+        $countpoi ++;
+
+        my %poiinfo = (
+                nodeid      => $obj->{id},
+                type        => $action->{type},
+                tags        => \%tag,
+            );
+
+        $poiinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
+        $poiinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
+
+
+        if ( exists $action->{'city'} ) {
+            $poiinfo{City}          = 'Y';
+            $poiinfo{add_region}    = 1;
+        }
+        if ( exists $action->{'transport'} ) {
+            $poiinfo{add_stops}     = 1;
+        }
+        if ( exists $action->{'contacts'} ) {
+            $poiinfo{add_contacts}  = 1;
+        }
+        if ( exists $action->{'marine_buoy'} ) {
+            $poiinfo{add_buoy}      = 1;
+        }
+        if ( exists $action->{'marine_light'} ) {
+            $poiinfo{add_light}     = 1;
+        }
+        if ( exists $action->{'ele'} ) {
+            $poiinfo{add_elevation} = 1;
+        }
+
+        AddPOI ( \%poiinfo );
     }
 }
 
