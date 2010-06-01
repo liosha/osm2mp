@@ -86,14 +86,7 @@
       contacts: yes
 
 - condition:
-    - tourism = hotel
-  action:
-    - action: write_poi
-      type: 0x2B01
-      contacts: yes
-
-- condition:
-    - tourism = motel
+    - tourism = hotel|motel
   action:
     - action: write_poi
       type: 0x2B01
@@ -107,14 +100,7 @@
       contacts: yes
 
 - condition:
-    - tourism = camp_site
-  action:
-    - action: write_poi
-      type: 0x2B03
-      contacts: yes
-
-- condition:
-    - tourism = caravan_site
+    - tourism = camp_site|caravan_site
   action:
     - action: write_poi
       type: 0x2B03
@@ -136,28 +122,14 @@
 # Attractions
 
 - condition:
-    - tourism = attraction
+    - tourism = attraction|viewpoint
   action:
     - action: write_poi
       type: 0x2C00
       contacts: yes
 
 - condition:
-    - tourism = viewpoint
-  action:
-    - action: write_poi
-      type: 0x2C00
-      contacts: yes
-
-- condition:
-    - leisure = theme_park
-  action:
-    - action: write_poi
-      type: 0x2C01
-      contacts: yes
-
-- condition:
-    - leisure = water_park
+    - leisure = theme_park|water_park
   action:
     - action: write_poi
       type: 0x2C01
@@ -171,35 +143,7 @@
       contacts: yes
 
 - condition:
-    - historic = archaeological_site
-  action:
-    - action: write_poi
-      type: 0x2C02
-      contacts: yes
-
-- condition:
-    - historic = battlefield
-  action:
-    - action: write_poi
-      type: 0x2C02
-      contacts: yes
-
-- condition:
-    - historic = castle
-  action:
-    - action: write_poi
-      type: 0x2C02
-      contacts: yes
-
-- condition:
-    - historic = museum
-  action:
-    - action: write_poi
-      type: 0x2C02
-      contacts: yes
-
-- condition:
-    - historic = ruins
+    - historic = archaeological_site|battlefield|castle|museum|ruins
   action:
     - action: write_poi
       type: 0x2C02
@@ -213,28 +157,14 @@
       contacts: yes
 
 - condition:
-    - historic = memorial
+    - historic = memorial|monument
   action:
     - action: write_poi
       type: 0x2C04
       contacts: yes
 
 - condition:
-    - historic = monument
-  action:
-    - action: write_poi
-      type: 0x2C04
-      contacts: yes
-
-- condition:
-    - leisure = garden
-  action:
-    - action: write_poi
-      type: 0x2C06
-      contacts: yes
-
-- condition:
-    - leisure = park
+    - leisure = garden|park
   action:
     - action: write_poi
       type: 0x2C06
