@@ -53,7 +53,6 @@ my $version = '0.82b';
 
 my $config          = [ 'garmin.yml' ];
 
-my $cfgpoi          = 'poi.cfg';
 my $cfgpoly         = 'poly.cfg';
 
 my $mapid           = '88888888';
@@ -147,7 +146,6 @@ my %yesno = (
 GetOptions (
     'config=s@'         => \$config,
 
-    'cfgpoi=s'          => \$cfgpoi,
     'cfgpoly=s'         => \$cfgpoly,
 
     'mapid=s'           => \$mapid,
@@ -263,14 +261,27 @@ usage() unless (@ARGV);
 ####    Reading configs
 
 my %config;
-for my $cfgfile ( @$config ) {
+print STDERR "Loading configuration...  ";
+
+while ( my $cfgfile = shift @$config ) {
     my %cfgpart = YAML::LoadFile $cfgfile;
-    %config = ( %config, %cfgpart );
+    while ( my ( $key, $item ) = each %cfgpart ) {
+        if ( $key eq 'load' ) {
+            push @$config, @$item;
+        }
+        elsif ( $key eq 'yesno' ) {
+            %yesno = %{ $item };
+        }
+        elsif ( $key eq 'nodes' || $key eq 'ways' ) {
+            push @{$config{nodes}}, @$item;
+        }
+        else {
+            %config = ( %config, $key => $item );
+        }
+    }
 }
 
-%yesno = %{ $config{yesno} }    if exists $config{yesno};
-
-
+print STDERR "Ok\n\n";
 
 
 my %polytype;
@@ -2139,9 +2150,6 @@ Possible options [defaults]:
  --config <file>           configuration file   [$config]
  --mapid <id>              map id               [$mapid]
  --mapname <name>          map name             [$mapname]
-
- --cfgpoi <file>           poi config /to remove/   [$cfgpoi]
- --cfgpoly <file>          way config /to remove/   [$cfgpoly]
 
  --codepage <num>          codepage number                   [$codepage]
  --upcase                  convert all labels to upper case  [$onoff[$upcase]]
