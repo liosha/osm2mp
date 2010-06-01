@@ -2695,7 +2695,7 @@ sub condition_matches {
         return ( $neg eq q{!} ) ^
             ( exists $obj->{tag}->{$key}  
             && ( $val eq q{*} 
-                || any { $_ eq $val } split( /;/, $obj->{tag}->{$key} ) ) );
+                || any { $_ =~ /$val/ } split( /;/, $obj->{tag}->{$key} ) ) );
     }
 }
 
