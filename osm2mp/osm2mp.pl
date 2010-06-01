@@ -2319,6 +2319,10 @@ sub AddPOI {
 
     print  "; NodeID = $param{nodeid}\n"    if  exists $param{nodeid};
     print  "; $param{comment}\n"            if  exists $param{comment};
+    while ( my ( $key, $val ) = each %tag ) {
+        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
+        print "; $key = $tag{$key}\n";
+    }
 
     my ($type, $type2) = split q{:}, $param{type};
 
@@ -2698,7 +2702,7 @@ sub condition_matches {
 
 sub execute_action {
 
-    my ($action, $obj) = @_;
+    my ($action, $obj, $condition) = @_;
 
     my %param = %{ $action };
 
@@ -2813,7 +2817,7 @@ sub process_config {
  
         ACTION:
         for my $cfg_action ( @{ $cfg_item->{action} } ) {
-            execute_action( $cfg_action, $obj );
+            execute_action( $cfg_action, $obj, $cfg_item->{condition} );
         }
 
         # return;

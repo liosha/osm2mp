@@ -4,6 +4,301 @@
 --- nodes
 ---
 
+##  Settlements
+
+- condition:
+    - place = city
+  action:
+    - action: write_poi
+      type: 0x0200
+      level_h: 4
+      city: yes
+
+- condition:
+    - place = town
+  action:
+    - action: write_poi
+      type: 0x0800
+      level_h: 3
+      city: yes
+
+- condition:
+    - place = village
+  action:
+    - action: write_poi
+      type: 0x0B00
+      level_h: 2
+      city: yes
+
+- condition:
+    - place = hamlet
+  action:
+    - action: write_poi
+      type: 0x0C00
+      level_h: 2
+      city: yes
+
+
+
+
+##  Searchable POI
+
+
+# Food & Drink
+
+- condition:
+    - amenity = restaurant
+  action:
+    - action: write_poi
+      type: 0x2A00
+      contacts: yes
+
+- condition:
+    - amenity = fast_food
+  action:
+    - action: write_poi
+      type: 0x2A07
+      contacts: yes
+
+- condition:
+    - amenity = cafe
+  action:
+    - action: write_poi
+      type: 0x2A0E
+      contacts: yes
+
+- condition:
+    - shop = bakery
+  action:
+    - action: write_poi
+      type: 0x2A0E
+      contacts: yes
+
+
+
+# Lodging
+
+- condition:
+    - tourism = guest_house
+  action:
+    - action: write_poi
+      type: 0x2B00
+      contacts: yes
+
+- condition:
+    - tourism = hotel
+  action:
+    - action: write_poi
+      type: 0x2B01
+      contacts: yes
+
+- condition:
+    - tourism = motel
+  action:
+    - action: write_poi
+      type: 0x2B01
+      contacts: yes
+
+- condition:
+    - tourism = hostel
+  action:
+    - action: write_poi
+      type: 0x2B02
+      contacts: yes
+
+- condition:
+    - tourism = camp_site
+  action:
+    - action: write_poi
+      type: 0x2B03
+      contacts: yes
+
+- condition:
+    - tourism = caravan_site
+  action:
+    - action: write_poi
+      type: 0x2B03
+      contacts: yes
+
+
+
+# Fuel
+
+- condition:
+    - amenity = fuel
+  action:
+    - action: write_poi
+      type: 0x2F01
+      contacts: yes
+
+
+
+# Attractions
+
+- condition:
+    - tourism = attraction
+  action:
+    - action: write_poi
+      type: 0x2C00
+      contacts: yes
+
+- condition:
+    - tourism = viewpoint
+  action:
+    - action: write_poi
+      type: 0x2C00
+      contacts: yes
+
+- condition:
+    - leisure = theme_park
+  action:
+    - action: write_poi
+      type: 0x2C01
+      contacts: yes
+
+- condition:
+    - leisure = water_park
+  action:
+    - action: write_poi
+      type: 0x2C01
+      contacts: yes
+
+- condition:
+    - tourism = theme_park
+  action:
+    - action: write_poi
+      type: 0x2C01
+      contacts: yes
+
+- condition:
+    - historic = archaeological_site
+  action:
+    - action: write_poi
+      type: 0x2C02
+      contacts: yes
+
+- condition:
+    - historic = battlefield
+  action:
+    - action: write_poi
+      type: 0x2C02
+      contacts: yes
+
+- condition:
+    - historic = castle
+  action:
+    - action: write_poi
+      type: 0x2C02
+      contacts: yes
+
+- condition:
+    - historic = museum
+  action:
+    - action: write_poi
+      type: 0x2C02
+      contacts: yes
+
+- condition:
+    - historic = ruins
+  action:
+    - action: write_poi
+      type: 0x2C02
+      contacts: yes
+
+- condition:
+    - tourism = museum
+  action:
+    - action: write_poi
+      type: 0x2C02
+      contacts: yes
+
+- condition:
+    - historic = memorial
+  action:
+    - action: write_poi
+      type: 0x2C04
+      contacts: yes
+
+- condition:
+    - historic = monument
+  action:
+    - action: write_poi
+      type: 0x2C04
+      contacts: yes
+
+- condition:
+    - leisure = garden
+  action:
+    - action: write_poi
+      type: 0x2C06
+      contacts: yes
+
+- condition:
+    - leisure = park
+  action:
+    - action: write_poi
+      type: 0x2C06
+      contacts: yes
+
+- condition:
+    - tourism = zoo
+  action:
+    - action: write_poi
+      type: 0x2C07
+      contacts: yes
+
+- condition:
+    - leisure = stadium
+  action:
+    - action: write_poi
+      type: 0x2C08
+      contacts: yes
+
+
+
+# Recreation
+
+
+
+
+
+
+# Entertainment
+
+- condition:
+    - amenity = library
+  action:
+    - action: write_poi
+      type: 0x2C03
+- condition:
+    - amenity = college
+  action:
+    - action: write_poi
+      type: 0x2C05
+- condition:
+    - amenity = kindergarten
+  action:
+    - action: write_poi
+      type: 0x2C05
+- condition:
+    - amenity = school
+  action:
+    - action: write_poi
+      type: 0x2C05
+- condition:
+    - amenity = university
+  action:
+    - action: write_poi
+      type: 0x2C05
+- condition:
+    - amenity = place_of_worship
+  action:
+    - action: write_poi
+      type: 0x2C0B
+
+
+
+
 - condition:
     - aeroway = aerodrome
   action:
@@ -37,11 +332,6 @@
     - action: write_poi
       type: 0x2F08
 - condition:
-    - amenity = cafe
-  action:
-    - action: write_poi
-      type: 0x2A0E
-- condition:
     - amenity = car_rental
   action:
     - action: write_poi
@@ -56,11 +346,6 @@
   action:
     - action: write_poi
       type: 0x2D03
-- condition:
-    - amenity = college
-  action:
-    - action: write_poi
-      type: 0x2C05
 - condition:
     - amenity = courthouse
   action:
@@ -82,20 +367,10 @@
     - action: write_poi
       type: 0x6414
 - condition:
-    - amenity = fast_food
-  action:
-    - action: write_poi
-      type: 0x2A07
-- condition:
     - amenity = fire_station
   action:
     - action: write_poi
       type: 0x3008
-- condition:
-    - amenity = fuel
-  action:
-    - action: write_poi
-      type: 0x2F01
 - condition:
     - amenity = grave_yard
   action:
@@ -106,16 +381,6 @@
   action:
     - action: write_poi
       type: 0x3002
-- condition:
-    - amenity = kindergarten
-  action:
-    - action: write_poi
-      type: 0x2C05
-- condition:
-    - amenity = library
-  action:
-    - action: write_poi
-      type: 0x2C03
 - condition:
     - amenity = nightclub
   action:
@@ -131,11 +396,6 @@
   action:
     - action: write_poi
       type: 0x2E05
-- condition:
-    - amenity = place_of_worship
-  action:
-    - action: write_poi
-      type: 0x2C0B
 - condition:
     - amenity = police
   action:
@@ -156,16 +416,6 @@
   action:
     - action: write_poi
       type: 0x3003
-- condition:
-    - amenity = restaurant
-  action:
-    - action: write_poi
-      type: 0x2A00
-- condition:
-    - amenity = school
-  action:
-    - action: write_poi
-      type: 0x2C05
 - condition:
     - amenity = shelter
   action:
@@ -191,11 +441,6 @@
   action:
     - action: write_poi
       type: 0x6408
-- condition:
-    - amenity = university
-  action:
-    - action: write_poi
-      type: 0x2C05
 - condition:
     - barrier = bollard
   action:
@@ -228,41 +473,6 @@
     - action: write_poi
       type: 0x011510
 - condition:
-    - historic = archaeological_site
-  action:
-    - action: write_poi
-      type: 0x2C02
-- condition:
-    - historic = battlefield
-  action:
-    - action: write_poi
-      type: 0x2C02
-- condition:
-    - historic = castle
-  action:
-    - action: write_poi
-      type: 0x2C02
-- condition:
-    - historic = memorial
-  action:
-    - action: write_poi
-      type: 0x2C04
-- condition:
-    - historic = monument
-  action:
-    - action: write_poi
-      type: 0x2C04
-- condition:
-    - historic = museum
-  action:
-    - action: write_poi
-      type: 0x2C02
-- condition:
-    - historic = ruins
-  action:
-    - action: write_poi
-      type: 0x2C02
-- condition:
     - landuse = cemetery
   action:
     - action: write_poi
@@ -273,41 +483,15 @@
     - action: write_poi
       type: 0x6100
 - condition:
-    - leisure = garden
-  action:
-    - action: write_poi
-      type: 0x2C06
-- condition:
     - leisure = ice_rink
   action:
     - action: write_poi
       type: 0x2D08
 - condition:
-    - leisure = park
-  action:
-    - action: write_poi
-      type: 0x2C06
-- condition:
     - leisure = sports_centre
   action:
     - action: write_poi
       type: 0x2D0A
-- condition:
-    - leisure = stadium
-  action:
-    - action: write_poi
-      type: 0x2C08
-      level_h: 2
-- condition:
-    - leisure = theme_park
-  action:
-    - action: write_poi
-      type: 0x2C01
-- condition:
-    - leisure = water_park
-  action:
-    - action: write_poi
-      type: 0x2C01
 - condition:
     - man_made = power_hydro
   action:
@@ -396,34 +580,6 @@
     - action: write_poi
       type: 0x660A
 - condition:
-    - place = city
-  action:
-    - action: write_poi
-      type: 0x0200
-      level_h: 4
-      city: yes
-- condition:
-    - place = town
-  action:
-    - action: write_poi
-      type: 0x0800
-      level_h: 3
-      city: yes
-- condition:
-    - place = village
-  action:
-    - action: write_poi
-      type: 0x0B00
-      level_h: 2
-      city: yes
-- condition:
-    - place = hamlet
-  action:
-    - action: write_poi
-      type: 0x0C00
-      level_h: 2
-      city: yes
-- condition:
     - place = airport
   action:
     - action: write_poi
@@ -500,11 +656,6 @@
   action:
     - action: write_poi
       type: 0x2F17
-- condition:
-    - shop = bakery
-  action:
-    - action: write_poi
-      type: 0x2A0E
 - condition:
     - shop = bicycle
   action:
@@ -599,7 +750,7 @@
     - shop = hardware
   action:
     - action: write_poi
-      type: 0x2E06
+      type: 0x2E0A
 - condition:
     - shop = kiosk
   action:
@@ -665,62 +816,6 @@
   action:
     - action: write_poi
       type: 0x2D09
-- condition:
-    - tourism = attraction
-  action:
-    - action: write_poi
-      type: 0x2C00
-      level_h: 2
-- condition:
-    - tourism = camp_site
-  action:
-    - action: write_poi
-      type: 0x2B03
-- condition:
-    - tourism = caravan_site
-  action:
-    - action: write_poi
-      type: 0x2B03
-- condition:
-    - tourism = guest_house
-  action:
-    - action: write_poi
-      type: 0x2B00
-- condition:
-    - tourism = hostel
-  action:
-    - action: write_poi
-      type: 0x2B00
-- condition:
-    - tourism = hotel
-  action:
-    - action: write_poi
-      type: 0x2B01
-- condition:
-    - tourism = motel
-  action:
-    - action: write_poi
-      type: 0x2B01
-- condition:
-    - tourism = museum
-  action:
-    - action: write_poi
-      type: 0x2C02
-- condition:
-    - tourism = theme_park
-  action:
-    - action: write_poi
-      type: 0x2C01
-- condition:
-    - tourism = viewpoint
-  action:
-    - action: write_poi
-      type: 0x2C00
-- condition:
-    - tourism = zoo
-  action:
-    - action: write_poi
-      type: 0x2C07
 - condition:
     - traffic_calming = yes
   action:
