@@ -53,6 +53,42 @@
 
 
 ################################
+##  Tags for comment
+################################
+
+
+--- comment
+---
+
+aerialway:      1
+aeroway:        1
+admin_level:    1
+amenity:        1
+barrier:        1
+boundary:       1
+building:       1
+highway:        1
+historic:       1
+junction:       1
+landuse:        1
+leisure:        1
+man_made:       1
+military:       1
+natural:        1
+place:          1
+power:          1
+railway:        1
+service:        1
+route:          1
+shop:           1
+sport:          1
+tourism:        1
+tracktype:      1
+waterway:       1
+  
+
+
+################################
 ##  Common types
 ################################
 
