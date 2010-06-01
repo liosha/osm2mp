@@ -2816,7 +2816,7 @@ sub process_config {
             execute_action( $cfg_action, $obj );
         }
 
-        return;
+        # return;
     }
 }
 
