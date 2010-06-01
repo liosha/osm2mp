@@ -5,19 +5,12 @@
 ---
 
 - condition:
-    - shop = car
-    - service = parts
-  action:
-    - action: write_poi
-      type: 0x2F07xx
-
-
-- condition:
     - aeroway = aerodrome
   action:
     - action: write_poi
       type: 0x5900
       level_h: 2
+
 - condition:
     - amenity = atm
   action:

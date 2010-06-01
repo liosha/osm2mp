@@ -2679,8 +2679,11 @@ sub condition_matches {
     
     my ($condition, $obj) = @_;
 
-    if ( my ($key, $val) =  $condition =~ /(\w+)\s*=\s*(.+)/ ) {
-        return 1    if  exists $obj->{tag}->{$key}  &&  $obj->{tag}->{$key} eq $val;
+    if ( my ($key, $neg, $val) =  $condition =~ /(\w+)\s*(!)?=\s*(.+)/ ) {
+        return ( $neg eq q{!} ) ^
+            ( exists $obj->{tag}->{$key}  
+            && ( $val eq q{*} 
+                || any { $_ eq $val } split( /;/, $obj->{tag}->{$key} ) ) );
     }
 }
 
