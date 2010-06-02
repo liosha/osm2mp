@@ -2767,7 +2767,9 @@ sub execute_action {
     if ( $param{action} eq 'write_poi' ) {
         my %tag = %{ $obj->{tag} };
 
-        return  unless  !$bounds || is_inside_bounds( $node{$obj->{id}} );
+        return  unless  !$bounds 
+            || $obj->{type} eq 'Node' && is_inside_bounds( $node{$obj->{id}} )
+            || exists $obj->{latlon} && is_inside_bounds( $obj->{latlon} );
         return  if  exists $tag{'layer'} && $tag{'layer'} < -1;
 
         $countpoi ++;
