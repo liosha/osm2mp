@@ -488,7 +488,7 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<tag/ ) {
         my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        $reltag{$key} = $val;
+        $reltag{$key} = $val    unless exists $config{skip_tag}->{$key};
         next;
     }
 
@@ -720,7 +720,7 @@ while ( my $line = <IN> ) {
     }
 
     if ( $line =~ /<tag.* k=["']([^"']+)["'].* v=["']([^"']+)["']/ ) {
-        $waytag{$1} = $2;
+        $waytag{$1} = $2        unless exists $config{skip_tag}->{$1};
         next;
     }
 
@@ -852,7 +852,7 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<tag/ ) {
         my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        $nodetag{$key}   =  $val;
+        $nodetag{$key}   =  $val        unless exists $config{skip_tag}->{$key};
         next;
     }
 
@@ -943,7 +943,7 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<tag/ ) {
         my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        $waytag{$key} = $val;
+        $waytag{$key} = $val        unless exists $config{skip_tag}->{$key};
         next;
     }
 
