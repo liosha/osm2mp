@@ -49,7 +49,7 @@ use Data::Dump 'dd';
 
 ####    Settings
 
-my $version = '0.82b';
+my $version = '0.90.-1';
 
 my $config          = [ 'garmin.yml' ];
 
@@ -273,7 +273,15 @@ while ( my $cfgfile = shift @$config ) {
             %yesno = %{ $item };
         }
         elsif ( $key eq 'nodes' || $key eq 'ways' ) {
-            push @{$config{nodes}}, @$item;
+            for my $rule ( @$item ) {
+                if ( exists $rule->{id} 
+                        &&  (my $index = first_index { exists $_->{id} && $_->{id} eq $rule->{id} } @{$config{nodes}}) >= 0 ) {
+                    $config{nodes}->[$index] = $rule;
+                }
+                else {
+                    push @{$config{nodes}}, $rule;
+                }
+            }
         }
         else {
             %config = ( %config, $key => $item );
@@ -282,6 +290,7 @@ while ( my $cfgfile = shift @$config ) {
 }
 
 print STDERR "Ok\n\n";
+
 
 
 my %polytype;
