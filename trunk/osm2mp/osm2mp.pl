@@ -275,11 +275,11 @@ while ( my $cfgfile = shift @$config ) {
         elsif ( $key eq 'nodes' || $key eq 'ways' ) {
             for my $rule ( @$item ) {
                 if ( exists $rule->{id} 
-                        &&  (my $index = first_index { exists $_->{id} && $_->{id} eq $rule->{id} } @{$config{nodes}}) >= 0 ) {
-                    $config{nodes}->[$index] = $rule;
+                        &&  (my $index = first_index { exists $_->{id} && $_->{id} eq $rule->{id} } @{$config{$key}}) >= 0 ) {
+                    $config{$key}->[$index] = $rule;
                 }
                 else {
-                    push @{$config{nodes}}, $rule;
+                    push @{$config{$key}}, $rule;
                 }
             }
         }
@@ -2326,7 +2326,6 @@ sub AddPOI {
     my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
     my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
 
-    print  "; NodeID = $param{nodeid}\n"    if  exists $param{nodeid};
     print  "; $param{comment}\n"            if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
@@ -2608,23 +2607,12 @@ sub AddPolygon {
 
     ## POI
     if ( $makepoi ) {
-        for my $poi ( map  { "$_=$tag{$_}" }  keys %tag ) {
-            next unless exists $polytype{$poi};
-            my ($mode, undef, undef, undef, undef, $rp) = @{$polytype{$poi}};
-            next unless $mode eq 'p' && $rp;
-
-            my ($poitype, $pll, $phl) = split q{,}, $rp;
-
-            AddPOI ({
-                    latlon       => ( join q{,}, centroid( @{$plist[0]} ) ),
-                    comment      => "for area $poi " . ( $param{relid} ? "RelID=$param{relid}" : "WayID=$param{wayid}" ),
-                    type         => $poitype,
-                    tags         => \%tag,
-                    level_l      => $pll,
-                    level_h      => $phl,
-                    add_contacts => 1,
-                });
-        }
+        process_config( $config{nodes}, {
+                type    => $param{relid} ? "Rel" : "Way",
+                id      => $param{relid} ? $param{relid} : $param{wayid},
+                latlon  => ( join q{,}, centroid( @{$plist[0]} ) ),
+                tag     => \%tag,
+            } );
     }
 
     return    if  $param{type} eq 'undef';
@@ -2699,6 +2687,13 @@ sub AddPolygon {
 sub condition_matches {
     
     my ($condition, $obj) = @_;
+
+    if ( my ( $type ) = $condition =~ 'only_(\w+)' ) {
+        return (uc $obj->{type}) eq (uc $type);
+    }
+    if ( my ( $type ) = $condition =~ 'no_(\w+)' ) {
+        return (uc $obj->{type}) ne (uc $type);
+    }
 
     if ( my ($key, $neg, $val) =  $condition =~ /(\w+)\s*(!)?=\s*(.+)/ ) {
         return ( $neg eq q{!} ) ^
@@ -2778,10 +2773,13 @@ sub execute_action {
         $countpoi ++;
 
         my %poiinfo = (
-                nodeid      => $obj->{id},
                 type        => $action->{type},
                 tags        => \%tag,
             );
+
+        $poiinfo{comment} = "$obj->{type}ID = $obj->{id}";
+        $poiinfo{nodeid}  = $obj->{id}      if $obj->{type} eq 'Node';
+        $poiinfo{latlon}  = $obj->{latlon}  if exists $obj->{latlon};
 
         $poiinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
         $poiinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
