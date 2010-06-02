@@ -1,5 +1,5 @@
 
-####    Test config!
+####    Common points
 
 --- nodes
 ---
@@ -188,295 +188,519 @@
 
 # Recreation
 
+- condition:
+    - sport = golf
+  action:
+    - action: write_poi
+      contacts: yes
+      type: 0x2D05
 
+- condition:
+    - sport = skiing
+  action:
+    - action: write_poi
+      type: 0x2D06
+      contacts: yes
 
+- condition:
+    - sport = bowls
+  action:
+    - action: write_poi
+      type: 0x2D07
+      contacts: yes
+
+- condition:
+    - leisure = ice_rink
+  action:
+    - action: write_poi
+      type: 0x2D08
+      contacts: yes
+
+- condition:
+    - sport = skating
+  action:
+    - action: write_poi
+      type: 0x2D08
+      contacts: yes
+
+- condition:
+    - sport = swimming
+  action:
+    - action: write_poi
+      type: 0x2D09
+      contacts: yes
+
+- condition:
+    - leisure = sports_centre
+  action:
+    - action: write_poi
+      type: 0x2D0A
+      contacts: yes
 
 
 
 # Entertainment
 
 - condition:
-    - amenity = library
+    - amenity = theatre
   action:
     - action: write_poi
-      type: 0x2C03
-- condition:
-    - amenity = college
-  action:
-    - action: write_poi
-      type: 0x2C05
-- condition:
-    - amenity = kindergarten
-  action:
-    - action: write_poi
-      type: 0x2C05
-- condition:
-    - amenity = school
-  action:
-    - action: write_poi
-      type: 0x2C05
-- condition:
-    - amenity = university
-  action:
-    - action: write_poi
-      type: 0x2C05
-- condition:
-    - amenity = place_of_worship
-  action:
-    - action: write_poi
-      type: 0x2C0B
-
-
-
+      type: 0x2D01
+      contacts: yes
 
 - condition:
-    - aeroway = aerodrome
-  action:
-    - action: write_poi
-      type: 0x5900
-      level_h: 2
-
-- condition:
-    - amenity = atm
-  action:
-    - action: write_poi
-      type: 0x2F06
-- condition:
-    - amenity = bank
-  action:
-    - action: write_poi
-      type: 0x2F06
-- condition:
-    - amenity = bar
+    - amenity = bar|biergarten|nightclub|pub
   action:
     - action: write_poi
       type: 0x2D02
-- condition:
-    - amenity = biergarten
-  action:
-    - action: write_poi
-      type: 0x2D02
-- condition:
-    - amenity = bus_station
-  action:
-    - action: write_poi
-      type: 0x2F08
-- condition:
-    - amenity = car_rental
-  action:
-    - action: write_poi
-      type: 0x2F02
-- condition:
-    - amenity = car_wash
-  action:
-    - action: write_poi
-      type: 0x2F0E
+      contacts: yes
+
 - condition:
     - amenity = cinema
   action:
     - action: write_poi
       type: 0x2D03
+      contacts: yes
+
+
+
+# Shopping
+
 - condition:
-    - amenity = courthouse
+    - shop = dry_cleaning|laundry|toys
   action:
     - action: write_poi
-      type: 0x3004
+      type: 0x2F00
+      contacts: yes
+
 - condition:
-    - amenity = dentist
+    - shop = department_store
   action:
     - action: write_poi
-      type: 0x3002
+      type: 0x2E01
+      contacts: yes
+
 - condition:
-    - amenity = doctors
+    - shop = butcher|grocery|supermarket
   action:
     - action: write_poi
-      type: 0x3002
+      type: 0x2E02
+      contacts: yes
+
 - condition:
-    - amenity = drinking_water
+    - shop = mall
   action:
     - action: write_poi
-      type: 0x6414
-- condition:
-    - amenity = fire_station
-  action:
-    - action: write_poi
-      type: 0x3008
-- condition:
-    - amenity = grave_yard
-  action:
-    - action: write_poi
-      type: 0x6403
-- condition:
-    - amenity = hospital
-  action:
-    - action: write_poi
-      type: 0x3002
-- condition:
-    - amenity = nightclub
-  action:
-    - action: write_poi
-      type: 0x2D02
-- condition:
-    - amenity = parking
-  action:
-    - action: write_poi
-      type: 0x2F0B
+      type: 0x2E04
+      contacts: yes
+
 - condition:
     - amenity = pharmacy
   action:
     - action: write_poi
       type: 0x2E05
+      contacts: yes
+
+- condition:
+    - shop = chemist
+  action:
+    - action: write_poi
+      type: 0x2E05
+      contacts: yes
+
+- condition:
+    - shop = convenience|kiosk
+  action:
+    - action: write_poi
+      type: 0x2E06
+      contacts: yes
+
+- condition:
+    - shop = clothes|shoes
+  action:
+    - action: write_poi
+      type: 0x2E07
+      contacts: yes
+
+- condition:
+    - shop = doityourself|garden_centre
+  action:
+    - action: write_poi
+      type: 0x2E08
+      contacts: yes
+
+- condition:
+    - shop = furniture
+  action:
+    - action: write_poi
+      type: 0x2E09
+      contacts: yes
+
+- condition:
+    - shop = books|electronics|electrogoods|electrotools|hardware|outdoor|stationery
+  action:
+    - action: write_poi
+      type: 0x2E0A
+      contacts: yes
+
+- condition:
+    - shop = computer
+  action:
+    - action: write_poi
+      type: 0x2E0B
+      contacts: yes
+
+
+
+# Auto Services
+
+- condition:
+    - amenity = car_rental
+  action:
+    - action: write_poi
+      type: 0x2F02
+      contacts: yes
+
+- condition:
+    - shop = car_repair
+  action:
+    - action: write_poi
+      type: 0x2F03
+      contacts: yes
+
+- condition:
+    - shop = car
+    - service = repair|tyres
+  action:
+    - action: write_poi
+      type: 0x2F03
+      contacts: yes
+
+- condition:
+    - shop = car
+    - service != *
+  action:
+    - action: write_poi
+      type: 0x2F07
+      contacts: yes
+
+- condition:
+    - shop = car
+    - service = dealer|parts
+  action:
+    - action: write_poi
+      type: 0x2F07
+      contacts: yes
+
+- condition:
+    - amenity = parking
+  action:
+    - action: write_poi
+      type: 0x2F0B
+      contacts: yes
+
+- condition:
+    - amenity = car_wash
+  action:
+    - action: write_poi
+      type: 0x2F0E
+      contacts: yes
+
+
+
+# Transportation
+
+- condition:
+    - place = airport
+  action:
+    - action: write_poi
+      type: 0x2F04
+      level_h: 2
+      contacts: yes
+
+- condition:
+    - aeroway = aerodrome
+  action:
+    - action: write_poi
+      type: 0x2F04
+      level_h: 1
+      contacts: yes
+
+- condition:
+    - amenity = bus_station|bus_stop
+  action:
+    - action: write_poi
+      type: 0x2F08
+      transport: yes
+      contacts: yes
+
+- condition:
+    - railway = tram_stop
+  action:
+    - action: write_poi
+      type: 0x2F08
+      contacts: yes
+
+- id:   railway_station
+  condition:
+    - railway = halt|station
+    - station != subway
+  action:
+    - action: write_poi
+      type: 0x2F17
+      contacts: yes
+
+- id:   subway_station
+  condition:
+    - railway = subway_entrance
+  action:
+    - action: write_poi
+      type: 0x2F17
+      contacts: yes
+
+- id:   aerialway_station
+  condition:
+    - aerialway = station
+  action:
+    - action: write_poi
+      type: 0x2F17
+      contacts: yes
+
+
+
+# Community
+
+- condition:
+    - amenity = library
+  action:
+    - action: write_poi
+      type: 0x2C03
+      contacts: yes
+
+- condition:
+    - amenity = college|kindergarten|school|university
+  action:
+    - action: write_poi
+      type: 0x2C05
+      contacts: yes
+
+- condition:
+    - amenity = place_of_worship
+  action:
+    - action: write_poi
+      type: 0x2C0B
+      contacts: yes
+
 - condition:
     - amenity = police
   action:
     - action: write_poi
       type: 0x3001
+      contacts: yes
+
 - condition:
-    - amenity = post_office
-  action:
-    - action: write_poi
-      type: 0x2F05
-- condition:
-    - amenity = pub
-  action:
-    - action: write_poi
-      type: 0x2D02
-- condition:
-    - amenity = public_building
+    - amenity = public_building|townhall
   action:
     - action: write_poi
       type: 0x3003
+      contacts: yes
+
 - condition:
-    - amenity = shelter
+    - amenity = courthouse
   action:
     - action: write_poi
-      type: 0x6100
-- condition:
-    - amenity = theatre
-  action:
-    - action: write_poi
-      type: 0x2D01
-- condition:
-    - amenity = toilets
-  action:
-    - action: write_poi
-      type: 0x2F10:0x11501
-- condition:
-    - amenity = townhall
-  action:
-    - action: write_poi
-      type: 0x3003
-- condition:
-    - amenity = veterinary
-  action:
-    - action: write_poi
-      type: 0x6408
-- condition:
-    - barrier = bollard
-  action:
-    - action: write_poi
-      type: 0x011513
-- condition:
-    - barrier = lift_gate
-  action:
-    - action: write_poi
-      type: 0x011514
+      type: 0x3004
+      contacts: yes
+
 - condition:
     - barrier = border_control
   action:
     - action: write_poi
       type: 0x3006
+      contacts: yes
+
 - condition:
-    - highway = bus_stop
+    - amenity = fire_station
   action:
     - action: write_poi
-      type: 0x2F08
-      transport: yes
+      type: 0x3008
+      contacts: yes
+
 - condition:
-    - highway = crossing
+    - amenity = post_office
   action:
     - action: write_poi
-      type: 0x011512
+      type: 0x2F05
+      contacts: yes
+
 - condition:
-    - highway = traffic_signals
+    - amenity = atm|bank
   action:
     - action: write_poi
-      type: 0x011510
+      type: 0x2F06
+      contacts: yes
+
+
+
+# Others
+
+- id:   toilets
+  condition:
+    - amenity = toilets
+  action:
+    - action: write_poi
+      type: 0x2F10
+      contacts: yes
+
+
+
+# Hospital
+
+- condition:
+    - amenity = dentist|doctors|hospital
+  action:
+    - action: write_poi
+      type: 0x3002
+      contacts: yes
+
+
+
+# Manmade features
+
+- condition:
+    - railway = viaduct
+  action:
+    - action: write_poi
+      type: 0x6401
+      contacts: yes
+
+- condition:
+    - amenity = grave_yard
+  action:
+    - action: write_poi
+      type: 0x6403
+      contacts: yes
+
 - condition:
     - landuse = cemetery
   action:
     - action: write_poi
       type: 0x6403
+      contacts: yes
+
 - condition:
-    - landuse = residential
+    - railway = crossing|level_crossing
   action:
     - action: write_poi
-      type: 0x6100
-- condition:
-    - leisure = ice_rink
-  action:
-    - action: write_poi
-      type: 0x2D08
-- condition:
-    - leisure = sports_centre
-  action:
-    - action: write_poi
-      type: 0x2D0A
+      type: 0x6406
+      contacts: yes
+
 - condition:
     - man_made = power_hydro
   action:
     - action: write_poi
       type: 0x6407
+      contacts: yes
+
 - condition:
-    - man_made = survey_point
+    - amenity = veterinary
+  action:
+    - action: write_poi
+      type: 0x6408
+      contacts: yes
+
+- condition:
+    - man_made = survey_point|tower|water_tower
   action:
     - action: write_poi
       type: 0x6411
+      contacts: yes
+
 - condition:
-    - man_made = tower
+    - amenity = drinking_water
   action:
     - action: write_poi
-      type: 0x6411
-- condition:
-    - man_made = water_tower
-  action:
-    - action: write_poi
-      type: 0x6411
-- condition:
-    - military = barracks
-  action:
-    - action: write_poi
-      type: 0x640B
-- condition:
-    - military = range
-  action:
-    - action: write_poi
-      type: 0x640B
-- condition:
-    - natural = arch
-  action:
-    - action: write_poi
-      type: 0x6601
+      type: 0x6414
+      contacts: yes
+
+
+
+# Water features
+
 - condition:
     - natural = bay
   action:
     - action: write_poi
       type: 0x6503
-- condition:
-    - natural = beach
-  action:
-    - action: write_poi
-      type: 0x6604
-- condition:
-    - natural = cave_entrance
-  action:
-    - action: write_poi
-      type: 0x6601
+      contacts: yes
+
 - condition:
     - natural = glacier
   action:
     - action: write_poi
       type: 0x650A
+      contacts: yes
+
+- condition:
+    - place = island
+  action:
+    - action: write_poi
+      type: 0x650C
+      contacts: yes
+
+- condition:
+    - natural = water
+  action:
+    - action: write_poi
+      type: 0x650D
+      contacts: yes
+
+- condition:
+    - natural = spring
+  action:
+    - action: write_poi
+      type: 0x6511
+      contacts: yes
+
+
+
+# Land features
+
+- condition:
+    - natural = arch|cave_entrance
+  action:
+    - action: write_poi
+      type: 0x6601
+      contacts: yes
+
+- condition:
+    - natural = beach
+  action:
+    - action: write_poi
+      type: 0x6604
+      contacts: yes
+
+- condition:
+    - natural = wood
+  action:
+    - action: write_poi
+      type: 0x660A
+      contacts: yes
+
+- condition:
+    - natural = plain
+  action:
+    - action: write_poi
+      type: 0x6610
+      contacts: yes
+
+- condition:
+    - natural = rock
+  action:
+    - action: write_poi
+      type: 0x6614
+      contacts: yes
+
 - condition:
     - natural = peak
   action:
@@ -484,454 +708,30 @@
       type: 0x6616
       level_h: 1
       ele: yes
+      contacts: yes
+
+
+
+##  The rest
+
 - condition:
-    - natural = plain
+    - amenity = shelter
   action:
     - action: write_poi
-      type: 0x6610
+      type: 0x6100
+
 - condition:
-    - natural = rock
+    - landuse = residential
   action:
     - action: write_poi
-      type: 0x6614
+      type: 0x6100
+
 - condition:
-    - natural = spring
-  action:
-    - action: write_poi
-      type: 0x6511
-- condition:
-    - natural = water
-  action:
-    - action: write_poi
-      type: 0x650D
-- condition:
-    - natural = wood
-  action:
-    - action: write_poi
-      type: 0x660A
-- condition:
-    - place = airport
-  action:
-    - action: write_poi
-      type: 0x2F04
-      level_h: 2
-- condition:
-    - place = island
-  action:
-    - action: write_poi
-      type: 0x650C
-      level_h: 2
-- condition:
-    - place = locality
+    - place = suburb|locality
   action:
     - action: write_poi
       type: 0x2800
-      level_h: 2
-- condition:
-    - place = suburb
-  action:
-    - action: write_poi
-      type: 0x1F00
       level_h: 1
-- condition:
-    - railway = crossing
-  action:
-    - action: write_poi
-      type: 0x6406
-- condition:
-    - railway = halt
-  action:
-    - action: write_poi
-      type: 0x2F17:0x11601
-      level_h: 1
-      contacts: yes
-- condition:
-    - railway = level_crossing
-  action:
-    - action: write_poi
-      type: 0x6406
-- condition:
-    - railway = station
-  action:
-    - action: write_poi
-      type: 0x2F17:0x11601
-      level_h: 1
-      contacts: yes
-- condition:
-    - railway = subway_entrance
-  action:
-    - action: write_poi
-      type: 0x2F17:0x11600
-      level_h: 1
-      contacts: yes
-- condition:
-    - railway = subway_entrance
-  action:
-    - action: write_poi
-      type: 0x2F17:0x11600
-      level_h: 1
-      contacts: yes
-- condition:
-    - railway = tram_stop
-  action:
-    - action: write_poi
-      type: 0x2F08
-- condition:
-    - railway = viaduct
-  action:
-    - action: write_poi
-      type: 0x6401
-- condition:
-    - aerialway = station
-  action:
-    - action: write_poi
-      type: 0x2F17
-- condition:
-    - shop = bicycle
-  action:
-    - action: write_poi
-      type: 0x2F00
-- condition:
-    - shop = books
-  action:
-    - action: write_poi
-      type: 0x2E0A
-- condition:
-    - shop = butcher
-  action:
-    - action: write_poi
-      type: 0x2E02
-- condition:
-    - shop = car
-  action:
-    - action: write_poi
-      type: 0x2F07
-- condition:
-    - shop = car_repair
-  action:
-    - action: write_poi
-      type: 0x2F03
-- condition:
-    - shop = chemist
-  action:
-    - action: write_poi
-      type: 0x2E02
-- condition:
-    - shop = clothes
-  action:
-    - action: write_poi
-      type: 0x2E07
-- condition:
-    - shop = convenience
-  action:
-    - action: write_poi
-      type: 0x2E02
-- condition:
-    - shop = computer
-  action:
-    - action: write_poi
-      type: 0x2E0B
-- condition:
-    - shop = department_store
-  action:
-    - action: write_poi
-      type: 0x2E01
-- condition:
-    - shop = doityourself
-  action:
-    - action: write_poi
-      type: 0x2E08
-- condition:
-    - shop = dry_cleaning
-  action:
-    - action: write_poi
-      type: 0x2F00
-- condition:
-    - shop = electronics
-  action:
-    - action: write_poi
-      type: 0x2E0A
-- condition:
-    - shop = electrogoods
-  action:
-    - action: write_poi
-      type: 0x2E0A
-- condition:
-    - shop = electrotools
-  action:
-    - action: write_poi
-      type: 0x2E0A
-- condition:
-    - shop = furniture
-  action:
-    - action: write_poi
-      type: 0x2E09
-- condition:
-    - shop = garden_centre
-  action:
-    - action: write_poi
-      type: 0x2E08
-- condition:
-    - shop = grocery
-  action:
-    - action: write_poi
-      type: 0x2E02
-- condition:
-    - shop = hardware
-  action:
-    - action: write_poi
-      type: 0x2E0A
-- condition:
-    - shop = kiosk
-  action:
-    - action: write_poi
-      type: 0x2E02
-- condition:
-    - shop = laundry
-  action:
-    - action: write_poi
-      type: 0x2F00
-- condition:
-    - shop = mall
-  action:
-    - action: write_poi
-      type: 0x2E04
-- condition:
-    - shop = outdoor
-  action:
-    - action: write_poi
-      type: 0x2E0A
-- condition:
-    - shop = shoes
-  action:
-    - action: write_poi
-      type: 0x2E07
-- condition:
-    - shop = stationery
-  action:
-    - action: write_poi
-      type: 0x2E0A
-- condition:
-    - shop = supermarket
-  action:
-    - action: write_poi
-      type: 0x2E02
-- condition:
-    - shop = toys
-  action:
-    - action: write_poi
-      type: 0x2E00
-- condition:
-    - sport = bowls
-  action:
-    - action: write_poi
-      type: 0x2D07
-- condition:
-    - sport = golf
-  action:
-    - action: write_poi
-      type: 0x2D05
-- condition:
-    - sport = skating
-  action:
-    - action: write_poi
-      type: 0x2D08
-- condition:
-    - sport = skiing
-  action:
-    - action: write_poi
-      type: 0x2D06
-- condition:
-    - sport = swimming
-  action:
-    - action: write_poi
-      type: 0x2D09
-- condition:
-    - traffic_calming = yes
-  action:
-    - action: write_poi
-      type: 0x011511
-- condition:
-    - traffic_calming = bump
-  action:
-    - action: write_poi
-      type: 0x011511
-- condition:
-    - traffic_calming = cushion
-  action:
-    - action: write_poi
-      type: 0x011511
-- condition:
-    - traffic_calming = hump
-  action:
-    - action: write_poi
-      type: 0x011511
-- condition:
-    - traffic_calming = table
-  action:
-    - action: write_poi
-      type: 0x011511
-- condition:
-    - seamark = buoy
-  action:
-    - action: write_poi
-      type: 0x010200
-      marine_buoy: yes
-- condition:
-    - seamark = beacon
-  action:
-    - action: write_poi
-      type: 0x010206
-      marine_buoy: yes
-- condition:
-    - buoy = lateral_port
-  action:
-    - action: write_poi
-      type: 0x010209
-      marine_buoy: yes
-- condition:
-    - buoy = lateral_starboard
-  action:
-    - action: write_poi
-      type: 0x01020A
-      marine_buoy: yes
-- condition:
-    - buoy = lateral_preferred_channel_port
-  action:
-    - action: write_poi
-      type: 0x010209
-      marine_buoy: yes
-- condition:
-    - buoy = lateral_preferred_channel_starboard
-  action:
-    - action: write_poi
-      type: 0x01020A
-      marine_buoy: yes
-- condition:
-    - buoy = safe_water
-  action:
-    - action: write_poi
-      type: 0x01020C
-      marine_buoy: yes
-- condition:
-    - buoy = cardinal_north
-  action:
-    - action: write_poi
-      type: 0x010202
-      marine_buoy: yes
-- condition:
-    - buoy = cardinal_south
-  action:
-    - action: write_poi
-      type: 0x010203
-      marine_buoy: yes
-- condition:
-    - buoy = cardinal_east
-  action:
-    - action: write_poi
-      type: 0x010204
-      marine_buoy: yes
-- condition:
-    - buoy = cardinal_west
-  action:
-    - action: write_poi
-      type: 0x010205
-      marine_buoy: yes
-- condition:
-    - buoy = isolated_danger
-  action:
-    - action: write_poi
-      type: 0x010208
-      marine_buoy: yes
-- condition:
-    - buoy = special_purpose
-  action:
-    - action: write_poi
-      type: 0x01020B
-      marine_buoy: yes
-- condition:
-    - beacon = lateral_port_preferred
-  action:
-    - action: write_poi
-      type: 0x010213
-      marine_buoy: yes
-- condition:
-    - beacon = lateral_starboad_preferred
-  action:
-    - action: write_poi
-      type: 0x010214
-      marine_buoy: yes
-- condition:
-    - buoy:shape = spar
-  action:
-    - action: write_poi
-      type: 0x010206
-      marine_buoy: yes
-- condition:
-    - buoy:shape = conical
-  action:
-    - action: write_poi
-      type: 0x010209
-      marine_buoy: yes
-- condition:
-    - buoy:shape = can
-  action:
-    - action: write_poi
-      type: 0x01020A
-      marine_buoy: yes
-- condition:
-    - seamark:buoy:shape = spar
-  action:
-    - action: write_poi
-      type: 0x010206
-      marine_buoy: yes
-- condition:
-    - seamark:buoy:shape = conical
-  action:
-    - action: write_poi
-      type: 0x010209
-      marine_buoy: yes
-- condition:
-    - seamark:buoy:shape = can
-  action:
-    - action: write_poi
-      type: 0x01020A
-      marine_buoy: yes
-- condition:
-    - seamark = lighthouse
-  action:
-    - action: write_poi
-      type: 0x010100
-      level_h: 1
-      marine_light: yes
-- condition:
-    - seamark = landmark
-  action:
-    - action: write_poi
-      type: 0x010100
-      level_h: 1
-      marine_light: yes
-- condition:
-    - whitewater = put_in
-  action:
-    - action: write_poi
-      type: 0x01161C
-      level_h: 1
-- condition:
-    - whitewater = egress
-  action:
-    - action: write_poi
-      type: 0x01161D
-      level_h: 1
-- condition:
-    - whitewater = put_in;egress
-  action:
-    - action: write_poi
-      type: 0x01161E
-      level_h: 1
-- condition:
-    - whitewater = weir
-  action:
-    - action: write_poi
-      type: 0x01161F
-      level_h: 1
+
+
+
