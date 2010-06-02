@@ -8,6 +8,7 @@
 
 - condition:
     - place = city
+    - only_node
   action:
     - action: write_poi
       type: 0x0200
@@ -16,6 +17,7 @@
 
 - condition:
     - place = town
+    - only_node
   action:
     - action: write_poi
       type: 0x0800
@@ -24,6 +26,7 @@
 
 - condition:
     - place = village
+    - only_node
   action:
     - action: write_poi
       type: 0x0B00
@@ -32,6 +35,7 @@
 
 - condition:
     - place = hamlet
+    - only_node
   action:
     - action: write_poi
       type: 0x0C00
