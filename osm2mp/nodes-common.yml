@@ -90,7 +90,7 @@
       contacts: yes
 
 - condition:
-    - amenity = fast_food
+    - amenity = fast_food|food_court
   action:
     - action: write_poi
       type: 0x2A07
@@ -433,7 +433,7 @@
 # Auto Services
 
 - condition:
-    - amenity = car_rental
+    - amenity = car_rental|car_sharing
   action:
     - action: write_poi
       type: 0x2F02
@@ -598,6 +598,13 @@
       contacts: yes
 
 - condition:
+    - amenity = embassy
+  action:
+    - action: write_poi
+      type: 0x3007
+      contacts: yes
+
+- condition:
     - amenity = fire_station
   action:
     - action: write_poi
@@ -612,7 +619,7 @@
       contacts: yes
 
 - condition:
-    - amenity = atm|bank
+    - amenity = atm|bank|bureau_de_change
   action:
     - action: write_poi
       type: 0x2F06
@@ -650,56 +657,48 @@
   action:
     - action: write_poi
       type: 0x6401
-      contacts: yes
 
 - condition:
     - amenity = grave_yard
   action:
     - action: write_poi
       type: 0x6403
-      contacts: yes
 
 - condition:
     - landuse = cemetery
   action:
     - action: write_poi
       type: 0x6403
-      contacts: yes
 
 - condition:
     - railway = crossing|level_crossing
   action:
     - action: write_poi
       type: 0x6406
-      contacts: yes
 
 - condition:
     - man_made = power_hydro
   action:
     - action: write_poi
       type: 0x6407
-      contacts: yes
 
 - condition:
     - amenity = veterinary
   action:
     - action: write_poi
       type: 0x6408
-      contacts: yes
 
 - condition:
     - man_made = survey_point|tower|water_tower
   action:
     - action: write_poi
       type: 0x6411
-      contacts: yes
 
 - condition:
     - amenity = drinking_water
   action:
     - action: write_poi
       type: 0x6414
-      contacts: yes
 
 
 
@@ -710,35 +709,30 @@
   action:
     - action: write_poi
       type: 0x6503
-      contacts: yes
 
 - condition:
     - natural = glacier
   action:
     - action: write_poi
       type: 0x650A
-      contacts: yes
 
 - condition:
     - place = island
   action:
     - action: write_poi
       type: 0x650C
-      contacts: yes
 
 - condition:
     - natural = water
   action:
     - action: write_poi
       type: 0x650D
-      contacts: yes
 
 - condition:
     - natural = spring
   action:
     - action: write_poi
       type: 0x6511
-      contacts: yes
 
 
 
@@ -749,35 +743,30 @@
   action:
     - action: write_poi
       type: 0x6601
-      contacts: yes
 
 - condition:
     - natural = beach
   action:
     - action: write_poi
       type: 0x6604
-      contacts: yes
 
 - condition:
     - natural = wood
   action:
     - action: write_poi
       type: 0x660A
-      contacts: yes
 
 - condition:
     - natural = plain
   action:
     - action: write_poi
       type: 0x6610
-      contacts: yes
 
 - condition:
     - natural = rock
   action:
     - action: write_poi
       type: 0x6614
-      contacts: yes
 
 - condition:
     - natural = peak
@@ -786,7 +775,6 @@
       type: 0x6616
       level_h: 1
       ele: yes
-      contacts: yes
 
 
 
