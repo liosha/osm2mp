@@ -475,6 +475,7 @@
 
 - condition:
     - amenity = parking
+    - access != private
   action:
     - action: write_poi
       type: 0x2F0B
