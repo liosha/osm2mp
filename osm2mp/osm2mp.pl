@@ -2688,6 +2688,9 @@ sub condition_matches {
     
     my ($condition, $obj) = @_;
 
+    if ( $condition eq 'named' ) {
+        return name_from_list( 'label', $obj->{tag} );
+    }
     if ( my ( $type ) = $condition =~ 'only_(\w+)' ) {
         return (uc $obj->{type}) eq (uc $type);
     }
@@ -2699,7 +2702,7 @@ sub condition_matches {
         return ( $neg eq q{!} ) ^
             ( exists $obj->{tag}->{$key}  
             && ( $val eq q{*} 
-                || any { $_ =~ /$val/ } split( /;/, $obj->{tag}->{$key} ) ) );
+                || any { $_ =~ /^$val$/ } split( /;/, $obj->{tag}->{$key} ) ) );
     }
 }
 
