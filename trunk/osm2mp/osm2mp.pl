@@ -2258,7 +2258,7 @@ sub centroid {
     }
 
 #    return ($slat/$ssq , $slon/$ssq);
-    return ($slon/$ssq , $slat/$ssq);
+    return $ssq == 0 ? (@{$_[0]}) : ($slon/$ssq , $slat/$ssq);
 }
 
 
