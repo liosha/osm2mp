@@ -243,6 +243,7 @@
 
 - condition:
     - leisure = garden|park
+    - named
   action:
     - action: write_poi
       type: 0x2C06
@@ -718,12 +719,15 @@
 
 - condition:
     - place = island
+    - named
   action:
     - action: write_poi
       type: 0x650C
 
 - condition:
     - natural = water
+    - waterway != riverbank
+    - named
   action:
     - action: write_poi
       type: 0x650D
@@ -752,6 +756,7 @@
 
 - condition:
     - natural = wood
+    - named
   action:
     - action: write_poi
       type: 0x660A
