@@ -52,9 +52,41 @@
 
 - condition:
     - amenity = restaurant
+    - cuisine != asian|barbecue|chinese|italian|pizza|mexican|seafood|french|german
   action:
     - action: write_poi
       type: 0x2A00
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = asian
+  action:
+    - action: write_poi
+      type: 0x2A02
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = barbecue
+  action:
+    - action: write_poi
+      type: 0x2A03
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = chinese
+  action:
+    - action: write_poi
+      type: 0x2A04
+      contacts: yes
+
+- condition:
+    - shop = bakery
+  action:
+    - action: write_poi
+      type: 0x2A05
       contacts: yes
 
 - condition:
@@ -65,6 +97,38 @@
       contacts: yes
 
 - condition:
+    - amenity = restaurant
+    - cuisine = italian
+  action:
+    - action: write_poi
+      type: 0x2A08
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = mexican
+  action:
+    - action: write_poi
+      type: 0x2A09
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = pizza
+  action:
+    - action: write_poi
+      type: 0x2A0A
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = seafood
+  action:
+    - action: write_poi
+      type: 0x2A0B
+      contacts: yes
+
+- condition:
     - amenity = cafe
   action:
     - action: write_poi
@@ -72,11 +136,21 @@
       contacts: yes
 
 - condition:
-    - shop = bakery
+    - amenity = restaurant
+    - cuisine = french
   action:
     - action: write_poi
-      type: 0x2A0E
+      type: 0x2A0F
       contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = german
+  action:
+    - action: write_poi
+      type: 0x2A10
+      contacts: yes
+
 
 
 
