@@ -60,7 +60,7 @@ while ( my $line = readline $in ) {
             my ( $s, $r ) = @$short;
             next SUFF unless
                 my ( undef, $prefix, undef, undef, undef, $postfix )
-                    = $line =~ /=((.*\S)?\s+)?$s((\s+|\s*\.\s*)(\S.*))?$/i;
+                    = $line =~ /=((.*\S)?\s+)?$s((\s+|\s*\.\s*)(.*))?$/i;
             $line = "$prefix $postfix";
 
             $line =~ s/(\d+-?.?[йяе])(\s+(.*))/$2 $1/;
