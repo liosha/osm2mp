@@ -2395,8 +2395,9 @@ sub AddPOI {
             print "StreetDesc=$street\n";
         }
 
-        printf "Zip=%s\n",          convert_string($tag{'addr:postcode'})   if  $tag{'addr:postcode'};
-        printf "Phone=%s\n",        convert_string($tag{'phone'})           if  $tag{'phone'};
+        printf "Zip=%s\n",          convert_string($tag{'addr:postcode'})   if exists $tag{'addr:postcode'};
+        printf "Phone=%s\n",        convert_string($tag{'phone'})           if exists $tag{'phone'};
+        printf "WebPage=%s\n",      convert_string($tag{'url'})             if exists $tag{'url'};
     }
 
     # marine data
