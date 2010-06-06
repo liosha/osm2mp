@@ -86,7 +86,7 @@ my $bbox;
 my $bpolyfile;
 my $osmbbox         = 0;
 my $background      = 1;
-my $lessgpc         = 0;
+my $lessgpc         = 1;
 
 my $shorelines      = 0;
 my $hugesea         = 70000;

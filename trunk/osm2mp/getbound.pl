@@ -17,18 +17,40 @@ my $api  = 'http://www.openstreetmap.org/api/0.6';
 
 my %rename = (
     # cloudmade
+    afghanistan     =>  303427,
+    albania         =>  53292,
     armenia         =>  364066,
     azerbaijan      =>  364110,
     egypt           =>  192761,
     georgia         =>  28699,
+    honduras        =>  287670,
+    israel          =>  214865,
+    jordan          =>  184818,
+    mongolia        =>  161033,
+    oman            =>  305138,
+    saudi_arabia    =>  307584,
+    united_arab_emirates    =>  307763,
+    yemen           =>  305092,
 
     # geofabrik
+    'bosnia-herzegovina'    =>  214908,
+    bulgaria        =>  186382,
+    croatia         =>  214885,
+    greece          =>  192307,
+    hungary         =>  21335,
+    kosovo          =>  53295,
     latvia          =>  72594,
     lithuania       =>  72596,
+    macedonia       =>  53293,
     moldova         =>  58974,
+    montenegro      =>  53296,
+    romania         =>  90689,
+    serbia          =>  53294,
+    slovenia        =>  218657,
     ukraine         =>  60199,
     
     # gis-lab contries
+    belarus         =>  59065,
     kazakhstan      =>  214665,
     kyrgyzstan      =>  178009,
     tajikistan      =>  214626,
