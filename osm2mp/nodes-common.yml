@@ -9,10 +9,33 @@
 - condition:
     - place = city
     - only_node
+    - capital = yes
+    - admin_level = 1|2
+  action:
+    - action: write_poi
+      type: 0x0100
+      level_h: 4
+      city: yes
+
+- condition:
+    - place = city
+    - only_node
+    - capital = yes
+    - admin_level = 3|4
   action:
     - action: write_poi
       type: 0x0200
       level_h: 4
+      city: yes
+
+- condition:
+    - place = city
+    - only_node
+    - admin_level != 1|2|3|4
+  action:
+    - action: write_poi
+      type: 0x0400
+      level_h: 3
       city: yes
 
 - condition:
@@ -796,6 +819,7 @@
 
 - condition:
     - landuse = residential
+    - only_node
   action:
     - action: write_poi
       type: 0x6100
