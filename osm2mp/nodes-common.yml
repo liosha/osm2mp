@@ -4,6 +4,7 @@
 --- nodes
 ---
 
+
 ##  Settlements
 
 - condition:
@@ -686,6 +687,12 @@
       type: 0x6401
 
 - condition:
+    - bridge = yes
+  action:
+    - action: write_poi
+      type: 0x6401
+
+- condition:
     - amenity = grave_yard
   action:
     - action: write_poi
@@ -720,6 +727,12 @@
   action:
     - action: write_poi
       type: 0x6411
+
+- condition:
+    - tunnel = yes
+  action:
+    - action: write_poi
+      type: 0x6413
 
 - condition:
     - amenity = drinking_water
