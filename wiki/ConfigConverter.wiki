@@ -1,0 +1,50 @@
+Scripts for converting configs to new format
+
+== POI ==
+
+{{{
+use YAML;
+
+open CFG, "poi.cfg";
+while (<CFG>) {
+    next   if (!$_) || /^\s*[\#\;]/;
+    chomp;
+    my $prio = 0;
+    my ($k, $v, $type, $llev, $hlev, $mode) = split /\s+/;
+
+    if ($type) {
+        if ($type =~ /(.+),(\d+)/) {
+            $type = $1;
+            $prio = $2;
+        }
+        #$poitype{"$k=$v"} = [ $type, $llev, $hlev, $mode, $prio ];
+
+        my %action = (
+                '1action'       =>  'write_poi',
+                '2type'         =>  $type,
+                
+            );
+        $action{'3level_l'} = $llev     if $llev > 0;
+        $action{'4level_h'} = $hlev     if $hlev > 0;
+        $action{"$mode"}   = 'yes'      if $mode;
+
+        push @poitype, {
+                '1condition'    =>  [ "$k = $v" ],
+                '2action'       =>  [ { %action } ],
+            }
+    }
+}
+close CFG;
+
+my $cfg = YAML::Dump( 'nodes', \@poitype );
+$cfg =~ s/\b[1-9](\w)/$1/g;
+
+open CFG, '>', 'node-common.cfg';
+print CFG $cfg;
+close CFG;
+}}}
+----
+
+== Poly ==
+
+asap
