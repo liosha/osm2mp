@@ -37,7 +37,7 @@ use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 use Math::Polygon::Tree;
 use Tree::R;
 
-use List::Util qw{ first reduce sum };
+use List::Util qw{ first reduce sum min max };
 use List::MoreUtils qw{ all none any first_index last_index uniq };
 
 # debug
@@ -775,22 +775,31 @@ if ( $addressing && exists $config{address} ) {
 # draw that should be drawn
 my $countpolygons = 0;
 while ( my ( $mpid, $mp ) = each %ampoly ) {
-    
+
     next unless @{ $mp->{outer} };
-    
+
     my %tags = %{ $mp->{tags} };
-    my ($otype, $oid) = ( $mpid =~ /^w(.+)/ ? ('Way', $1) : ('Rel', $mpid) );
-    
+    my $ampoly = merge_ampoly( $mpid );
+
+    ## POI
+    if ( $makepoi  &&  exists $ampoly->{outer}  &&  @{$ampoly->{outer}}) {
+        process_config( $config{nodes}, {
+                type    => "Rel",
+                id      => $mpid,
+                latlon  => ( join q{,}, centroid( map { [ split q{,}, $node{$_} ] } @{ $ampoly->{outer}->[0] } ) ),
+                tag     => \%tags,
+            } );
+    }
+
+    ## Polygon
     my $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
                 grep { exists $polytype{$_} && $polytype{$_}->[0] eq 'p' }
                 map { "$_=" . $mp->{tags}->{$_} }  keys %{$mp->{tags}};
-    
+
     next  unless $poly;
-    
+
     my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
 
-    my $ampoly = merge_ampoly( $mpid );
-    
     my @alist;
     for my $area ( @{ $ampoly->{outer} } ) {
         push @alist, [ map { [reverse split q{,}, $node{$_}] } @$area ];
@@ -813,12 +822,12 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
         level_l => $llev,
         poi     => $rp,    
     });
+
 }
 
 printf STDERR "%d polygons written\n", $countpolygons;
 printf STDERR "                          %d cities and %d suburbs loaded\n", scalar keys %city, scalar keys %suburb
     if $addressing;
-
 
 
 
@@ -876,11 +885,10 @@ while ( my $line = <IN> ) {
         }
 
         ##  POI
-         
         process_config( $config{nodes}, {
                 type    => 'Node',
                 id      => $nodeid,
-                tag     => { %nodetag },
+                tag     => \%nodetag,
             } );
 
     }
@@ -956,6 +964,17 @@ while ( my $line = <IN> ) {
         @chainlist = (0)            unless $bounds;
         push @chainlist, $#chain    unless ($#chainlist % 2);
 
+
+        ## POI
+        if ( $makepoi ) {
+            process_config( $config{nodes}, {
+                    type    => "Way",
+                    id      => $wayid,
+                    latlon  => ( join q{,}, centroid( map { [ split q{,}, $node{$_} ] } @chain ) ),
+                    tag     => \%waytag,
+                } );
+        }
+        
         ##  this way is coastline - load it
         if (  $shorelines  ) {
             $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
@@ -2246,8 +2265,8 @@ sub centroid {
     my $ssq  = 0;
 
     for my $i ( 1 .. $#_-1 ) {
-        my $tlat = ( $_[0]->[0] + $_[$i]->[0] + $_[$i+1]->[0] ) / 3;
-        my $tlon = ( $_[0]->[1] + $_[$i]->[1] + $_[$i+1]->[1] ) / 3;
+        my $tlon = ( $_[0]->[0] + $_[$i]->[0] + $_[$i+1]->[0] ) / 3;
+        my $tlat = ( $_[0]->[1] + $_[$i]->[1] + $_[$i+1]->[1] ) / 3;
 
         my $tsq = ( ( $_[$i]  ->[0] - $_[0]->[0] ) * ( $_[$i+1]->[1] - $_[0]->[1] ) 
                   - ( $_[$i+1]->[0] - $_[0]->[0] ) * ( $_[$i]  ->[1] - $_[0]->[1] ) );
@@ -2257,8 +2276,12 @@ sub centroid {
         $ssq  += $tsq;
     }
 
-#    return ($slat/$ssq , $slon/$ssq);
-    return $ssq == 0 ? (@{$_[0]}) : ($slon/$ssq , $slat/$ssq);
+    if ( $ssq == 0 ) {
+        return ( 
+            ((min map { $_->[0] } @_) + (max map { $_->[0] } @_)) / 2,
+            ((min map { $_->[1] } @_) + (max map { $_->[1] } @_)) / 2 );
+    }
+    return ( $slon/$ssq , $slat/$ssq );
 }
 
 
@@ -2565,7 +2588,7 @@ sub AddPolygon {
 
     if ( my ($llist) = $hlev =~ /^\*(.*)/ ) {
         my $square = sum map { Math::Polygon::Calc::polygon_area( @$_ ) 
-                                * cos( [centroid( @{$param{areas}->[0]} )]->[0] / 180 * 3.14159 )
+                                * cos( [centroid( @{$param{areas}->[0]} )]->[1] / 180 * 3.14159 )
                                 * (40000/360)**2 } @{$param{areas}};
         $hlev = $llev + last_index { $square >= $_ } split q{,}, $llist;
         return if $hlev < $llev;
@@ -2604,18 +2627,6 @@ sub AddPolygon {
     }
 
     return    unless @plist;
-
-
-    ## POI
-    if ( $makepoi ) {
-        process_config( $config{nodes}, {
-                type    => $param{relid} ? "Rel" : "Way",
-                id      => $param{relid} ? $param{relid} : $param{wayid},
-                latlon  => ( join q{,}, centroid( @{$plist[0]} ) ),
-                tag     => \%tag,
-            } );
-    }
-
     return    if  $param{type} eq 'undef';
 
 
