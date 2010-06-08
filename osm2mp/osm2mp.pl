@@ -488,7 +488,7 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<tag/ ) {
         my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        $reltag{$key} = $val    unless exists $config{skip_tag}->{$key};
+        $reltag{$key} = $val    unless exists $config{skip_tags}->{$key};
         next;
     }
 
@@ -720,7 +720,7 @@ while ( my $line = <IN> ) {
     }
 
     if ( $line =~ /<tag.* k=["']([^"']+)["'].* v=["']([^"']+)["']/ ) {
-        $waytag{$1} = $2        unless exists $config{skip_tag}->{$1};
+        $waytag{$1} = $2        unless exists $config{skip_tags}->{$1};
         next;
     }
 
@@ -861,7 +861,7 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<tag/ ) {
         my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        $nodetag{$key}   =  $val        unless exists $config{skip_tag}->{$key};
+        $nodetag{$key}   =  $val        unless exists $config{skip_tags}->{$key};
         next;
     }
 
@@ -951,7 +951,7 @@ while ( my $line = <IN> ) {
 
     if ( $line =~ /<tag/ ) {
         my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        $waytag{$key} = $val        unless exists $config{skip_tag}->{$key};
+        $waytag{$key} = $val        unless exists $config{skip_tags}->{$key};
         next;
     }
 
@@ -1382,16 +1382,18 @@ if ( $shorelines ) {
         }
     }
 
+    my @lakesort = sort { scalar @{$coast{$b}} <=> scalar @{$coast{$a}} } keys %lake;
 
     ##  adding sea background
     if ( $waterback && $bounds && !$boundcross ) {
         $lake{'background'} = $boundtree;
+        splice @lakesort, 0, 0, 'background';
     }
-    
+
     ##  writing
     my $countislands = 0;
 
-    for my $sea ( sort { scalar @{$coast{$b}} <=> scalar @{$coast{$a}} } keys %lake ) {
+    for my $sea ( @lakesort ) {
         print  "; sea $sea\n";
         print  "[POLYGON]\n";
         print  "Type=$config{types}->{sea}->{type}\n";
