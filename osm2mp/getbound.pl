@@ -14,7 +14,9 @@ use Data::Dump 'dd';
 
 
 my $api  = 'http://www.openstreetmap.org/api/0.6';
+
 my $onering = 0;
+my $noinner = 0;
 
 
 my %rename = (
@@ -151,6 +153,7 @@ GetOptions (
     'file=s'    => \$filename,
     'o=s'       => \$outfile,
     'onering!'  => \$onering,
+    'noinner!'  => \$noinner,
 );
 
 unless ( @ARGV ) {
@@ -271,23 +274,58 @@ unless ( exists $result{outer} ) {
 }
 
 
-sub metric {
-    my ( $x1, $y1 ) = @{$osm->{node}->{ shift @_ }}{'lon','lat'};
-    my ( $x2, $y2 ) = @{$osm->{node}->{ shift @_ }}{'lon','lat'};
-    return ($x2-$x1)**2 + ($y2-$y1)**2;
-}
+##  Merge rings
+
 
 if ( $onering ) {
     my @ring = @{ shift @{$result{outer}} };
-    
-    while ( scalar @{$result{outer}} ) {
-        my @add = @{ shift @{$result{outer}} };
+
+    for my $type ( 'outer', 'inner' ) {
+        next unless exists $result{$type};
+        next if $noinner && $type eq 'inner';
+
+        while ( scalar @{$result{$type}} ) {
+
+            # find close[st] points
+            my @ring_center = centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @ring );
+            
+            if ( $type eq 'outer' ) {
+                $result{$type} = [ sort { 
+                        metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$a )] ) <=>
+                        metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$b )] )
+                    } @{$result{$type}} ];
+            }
+            elsif ( $type eq 'inner' ) {
+                $result{$type} = [ sort { 
+                        metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$b )] ) <=>
+                        metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$a )] )
+                    } @{$result{$type}} ];
+            }
+
+            my @add = @{ shift @{$result{$type}} };
+            my @add_center = centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @add );
+
+            my ( $index_r, $dist ) = ( 0, metric( \@add_center, $ring[0] ) );
+            for my $i ( 1 .. $#ring ) {
+                my $tdist = metric( \@add_center, $ring[$i] );
+                next unless $tdist < $dist;
+                ( $index_r, $dist ) = ( $i, $tdist );
+            }
         
+            ( my $index_a, $dist ) = ( 0, metric( $ring[$index_r], $add[0] ) );
+            for my $i ( 1 .. $#add ) {
+                my $tdist = metric( $ring[$index_r], $add[$i] );
+                next unless $tdist < $dist;
+                ( $index_a, $dist ) = ( $i, $tdist );
+            }
+
+            # merge
+            splice @ring, $index_r, 0, ( $ring[$index_r], @add[ $index_a .. $#add-1 ], @add[ 0 .. $index_a-1 ], $add[$index_a] );
+        }
     }
 
     $result{outer} = [ \@ring ];
 }
-
 
 
 
@@ -320,6 +358,17 @@ print OUT "END\n";
 
 
 
+
+sub metric {
+    my ( $x1, $y1 ) = ref $_[0]
+        ? @{ shift @_ }
+        : @{ $osm->{node}->{ shift @_ } }{'lon','lat'};
+    my ( $x2, $y2 ) = ref $_[0]
+        ? @{ shift @_ }
+        : @{ $osm->{node}->{ shift @_ } }{'lon','lat'};
+
+    return ($x2-$x1)**2 + ($y2-$y1)**2;
+}
 
 sub centroid {
 
