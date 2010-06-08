@@ -289,18 +289,20 @@ if ( $onering ) {
             # find close[st] points
             my @ring_center = centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @ring );
             
-            if ( $type eq 'outer' ) {
-                $result{$type} = [ sort { 
-                        metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$a )] ) <=>
-                        metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$b )] )
-                    } @{$result{$type}} ];
+            if ( $type eq 'inner' ) {
+                my ( $index_i, $dist ) = ( 0, metric( \@ring_center, $ring[0] ) );
+                for my $i ( 1 .. $#ring ) {
+                    my $tdist = metric( \@ring_center, $ring[$i] );
+                    next unless $tdist < $dist;
+                    ( $index_i, $dist ) = ( $i, $tdist );
+                }
+                @ring_center = @{ $osm->{node}->{ $ring[$index_i] } }{'lon','lat'};
             }
-            elsif ( $type eq 'inner' ) {
-                $result{$type} = [ sort { 
-                        metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$b )] ) <=>
-                        metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$a )] )
-                    } @{$result{$type}} ];
-            }
+
+            $result{$type} = [ sort { 
+                    metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$a )] ) <=>
+                    metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$b )] )
+                } @{$result{$type}} ];
 
             my @add = @{ shift @{$result{$type}} };
             my @add_center = centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @add );
