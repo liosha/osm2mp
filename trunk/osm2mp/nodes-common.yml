@@ -621,7 +621,7 @@
       contacts: yes
 
 - condition:
-    - amenity = public_building|townhall
+    - amenity = townhall
   action:
     - action: write_poi
       type: 0x3003
@@ -667,6 +667,13 @@
   action:
     - action: write_poi
       type: 0x2F06
+      contacts: yes
+
+- condition:
+    - amenity = public_building
+  action:
+    - action: write_poi
+      type: 0x2F15
       contacts: yes
 
 
@@ -838,6 +845,24 @@
 
 
 
+##  Labels
+
+- condition:
+    - place = locality
+  action:
+    - action: write_poi
+      type: 0x2800
+      level_h: 1
+
+- condition:
+    - place = suburb
+  action:
+    - action: write_poi
+      type: 0x1F00
+      level_h: 1
+
+
+
 ##  The rest
 
 - condition:
@@ -849,16 +874,10 @@
 - condition:
     - landuse = residential
     - only_node
+    - amenity != shelter
   action:
     - action: write_poi
       type: 0x6100
-
-- condition:
-    - place = suburb|locality
-  action:
-    - action: write_poi
-      type: 0x2800
-      level_h: 1
 
 
 

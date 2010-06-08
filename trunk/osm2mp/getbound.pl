@@ -5,6 +5,7 @@ use strict;
 use LWP::UserAgent;
 use Getopt::Long;
 use XML::Simple;
+use List::Util qw{ min max sum };
 use List::MoreUtils qw{ first_index };
 use IO::Uncompress::Gunzip qw{ gunzip $GunzipError };
 
@@ -13,6 +14,7 @@ use Data::Dump 'dd';
 
 
 my $api  = 'http://www.openstreetmap.org/api/0.6';
+my $onering = 0;
 
 
 my %rename = (
@@ -147,7 +149,8 @@ my $outfile;
 
 GetOptions (
     'file=s'    => \$filename,
-    'o=s'       => \$outfile,    
+    'o=s'       => \$outfile,
+    'onering!'  => \$onering,
 );
 
 unless ( @ARGV ) {
@@ -268,6 +271,29 @@ unless ( exists $result{outer} ) {
 }
 
 
+sub metric {
+    my ( $x1, $y1 ) = @{$osm->{node}->{ shift @_ }}{'lon','lat'};
+    my ( $x2, $y2 ) = @{$osm->{node}->{ shift @_ }}{'lon','lat'};
+    return ($x2-$x1)**2 + ($y2-$y1)**2;
+}
+
+if ( $onering ) {
+    my @ring = @{ shift @{$result{outer}} };
+    
+    while ( scalar @{$result{outer}} ) {
+        my @add = @{ shift @{$result{outer}} };
+        
+    }
+
+    $result{outer} = [ \@ring ];
+}
+
+
+
+
+
+##  Output
+
 if ( $outfile ) {
     open OUT, '>', $outfile;
 } 
@@ -291,3 +317,32 @@ for my $type ( 'outer', 'inner' ) {
 }
 
 print OUT "END\n";
+
+
+
+
+sub centroid {
+
+    my $slat = 0;
+    my $slon = 0;
+    my $ssq  = 0;
+
+    for my $i ( 1 .. $#_-1 ) {
+        my $tlon = ( $_[0]->[0] + $_[$i]->[0] + $_[$i+1]->[0] ) / 3;
+        my $tlat = ( $_[0]->[1] + $_[$i]->[1] + $_[$i+1]->[1] ) / 3;
+
+        my $tsq = ( ( $_[$i]  ->[0] - $_[0]->[0] ) * ( $_[$i+1]->[1] - $_[0]->[1] ) 
+                  - ( $_[$i+1]->[0] - $_[0]->[0] ) * ( $_[$i]  ->[1] - $_[0]->[1] ) );
+        
+        $slat += $tlat * $tsq;
+        $slon += $tlon * $tsq;
+        $ssq  += $tsq;
+    }
+
+    if ( $ssq == 0 ) {
+        return ( 
+            ((min map { $_->[0] } @_) + (max map { $_->[0] } @_)) / 2,
+            ((min map { $_->[1] } @_) + (max map { $_->[1] } @_)) / 2 );
+    }
+    return ( $slon/$ssq , $slat/$ssq );
+}
