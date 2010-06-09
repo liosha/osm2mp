@@ -330,14 +330,14 @@
 
 - condition:
     - leisure = ice_rink
-    - sport != skating
+    - sport != skating|hockey
   action:
     - action: write_poi
       type: 0x2D08
       contacts: yes
 
 - condition:
-    - sport = skating
+    - sport = skating|hockey
   action:
     - action: write_poi
       type: 0x2D08
@@ -459,6 +459,14 @@
 
 - condition:
     - shop = books|electronics|electrogoods|electrotools|hardware|outdoor|stationery
+  action:
+    - action: write_poi
+      type: 0x2E0A
+      contacts: yes
+
+- condition:
+    - amenity = marketplace
+    - named
   action:
     - action: write_poi
       type: 0x2E0A
@@ -642,7 +650,7 @@
       contacts: yes
 
 - condition:
-    - amenity = embassy
+    - amenity = embassy|public_building
   action:
     - action: write_poi
       type: 0x3007
@@ -669,12 +677,6 @@
       type: 0x2F06
       contacts: yes
 
-- condition:
-    - amenity = public_building
-  action:
-    - action: write_poi
-      type: 0x2F15
-      contacts: yes
 
 
 
@@ -711,6 +713,7 @@
 
 - condition:
     - bridge = yes
+    - highway != \w+_link
   action:
     - action: write_poi
       type: 0x6401
@@ -753,6 +756,8 @@
 
 - condition:
     - tunnel = yes
+    - highway = *
+    - highway != service|footway
   action:
     - action: write_poi
       type: 0x6413

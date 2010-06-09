@@ -369,7 +369,7 @@ sub metric {
         ? @{ shift @_ }
         : @{ $osm->{node}->{ shift @_ } }{'lon','lat'};
 
-    return ($x2-$x1)**2 + ($y2-$y1)**2;
+    return (($x2-$x1)*cos( ($y2+$y1)/2/180*3.14159 ))**2 + ($y2-$y1)**2;
 }
 
 sub centroid {
