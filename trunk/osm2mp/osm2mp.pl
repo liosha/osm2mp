@@ -2712,7 +2712,7 @@ sub condition_matches {
         return (uc $obj->{type}) ne (uc $type);
     }
 
-    if ( my ($key, $neg, $val) =  $condition =~ /(\w+)\s*(!)?=\s*(.+)/ ) {
+    if ( my ($key, $neg, $val) =  $condition =~ /(\S+)\s*(!)?=\s*(.+)/ ) {
         return ( $neg eq q{!} ) ^
             ( exists $obj->{tag}->{$key}  
             && ( $val eq q{*} 
