@@ -713,7 +713,7 @@
 
 - condition:
     - bridge = yes
-    - highway != \w+_link
+    - highway != steps|\w+_link
   action:
     - action: write_poi
       type: 0x6401
@@ -756,8 +756,7 @@
 
 - condition:
     - tunnel = yes
-    - highway = *
-    - highway != service|footway
+    - highway != service|footway|steps|residential
   action:
     - action: write_poi
       type: 0x6413
@@ -853,17 +852,37 @@
 ##  Labels
 
 - condition:
-    - place = locality
+    - boundary = administrative
+    - admin_level = 4
+    - only_rel
   action:
     - action: write_poi
-      type: 0x2800
-      level_h: 1
+      type: 0x1500
+      level_l: 4
+      level_h: 4
+
+- condition:
+    - boundary = administrative
+    - admin_level = 6
+    - only_rel
+  action:
+    - action: write_poi
+      type: 0x1E00
+      level_l: 3
+      level_h: 4
 
 - condition:
     - place = suburb
   action:
     - action: write_poi
       type: 0x1F00
+      level_h: 1
+
+- condition:
+    - place = locality
+  action:
+    - action: write_poi
+      type: 0x2800
       level_h: 1
 
 
