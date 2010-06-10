@@ -402,7 +402,7 @@
       contacts: yes
 
 - condition:
-    - shop = butcher|grocery|supermarket
+    - shop = butcher|grocery|supermarket|alcohol
   action:
     - action: write_poi
       type: 0x2E02

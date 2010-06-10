@@ -1,0 +1,63 @@
+--- ways
+---
+
+
+# Railways - avoiding garmin zoomlevel bug
+
+- id: railway
+  condition:
+    - railway = rail
+    - service != siding|spur|yard
+  action:
+    - action: write_line
+      type: 0x14
+    - action: write_line
+      type: 0x010f13
+      level_l: 1
+      level_h: 3
+
+- id: service_railway
+  condition:
+    - railway = rail
+    - service = siding|spur|yard
+  action:
+    - action: write_line
+      type: 0x14
+    - action: write_line
+      type: 0x010f13
+      level_l: 1
+      level_h: 1
+
+- id: light_railway
+  condition:
+    - railway = narrow_gauge|light_rail
+  action:
+    - action: write_line
+      type: 0x14
+    - action: write_line
+      type: 0x010f13
+      level_l: 1
+      level_h: 1
+
+- condition:
+    - railway = tram
+  action:
+    - action: write_line
+      type: 0x010f14
+
+
+
+# Custom lines
+
+- condition:
+    - aerialway = cable_car|chair_lift|drag_lift|gondola|mixed_lift
+  action:
+    - action: write_line
+      type: 0x010f15
+      level_h: 1
+
+- condition:
+    - barrier = fence|hedge|wall
+  action:
+    - action: write_line
+      type: 0x010f12

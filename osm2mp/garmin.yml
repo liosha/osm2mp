@@ -9,6 +9,10 @@
 - nodes-garmin-custom.yml
 - nodes-garmin-marine.yml
 
+- ways-lines-common.yml
+- ways-lines-garmin-custom.yml
+
+
 
 ################################
 ##  MP header
@@ -73,6 +77,7 @@ created_by:         1
 --- comment
 ---
 
+access:             1
 aerialway:          1
 aeroway:            1
 admin_level:        1
@@ -93,8 +98,8 @@ natural:            1
 place:              1
 power:              1
 railway:            1
-service:            1
 route:              1
+service:            1
 shop:               1
 sport:              1
 tourism:            1

@@ -1,0 +1,128 @@
+--- ways
+---
+
+
+# Railways
+- id: railway
+  condition:
+    - railway = rail
+    - service != siding|spur|yard
+  action:
+    - action: write_line
+      type: 0x14
+      level_h: 3
+
+- id: service_railway
+  condition:
+    - railway = rail
+    - service = siding|spur|yard
+  action:
+    - action: write_line
+      type: 0x14
+      level_h: 1
+
+- id: light_railway
+  condition:
+    - railway = narrow_gauge|light_rail
+  action:
+    - action: write_line
+      type: 0x14
+      level_h: 1
+
+
+
+# Water
+
+- condition:
+    - natural = coastline
+  action:
+    - action: load_coastline
+    - action: write_line
+      type: 0x15
+      level_h: 4
+
+- condition:
+    - waterway = stream
+  action:
+    - action: write_line
+      type: 0x18
+      level_h: 1
+
+- condition:
+    - waterway = canal
+  action:
+    - action: write_line
+      type: 0x1f
+      level_h: 2
+
+- condition:
+    - waterway = river
+  action:
+    - action: write_line
+      type: 0x1f
+      level_h: 3
+
+
+
+# Boundaries
+
+- condition:
+    - boundary = administrative
+    - admin_level = 2
+    - only_way
+  action:
+    - action: write_line
+      type: 0x1e
+      level_h: 4
+
+- condition:
+    - boundary = administrative
+    - admin_level = 4
+    - only_way
+  action:
+    - action: write_line
+      type: 0x1c
+      level_l: 2
+      level_h: 4
+
+- condition:
+    - boundary = administrative
+    - admin_level = 6
+    - only_way
+  action:
+    - action: write_line
+      type: 0x1d
+      level_l: 2
+      level_h: 3
+
+
+
+# The rest
+
+- condition:
+    - aeroway = runway
+  action:
+    - action: write_line
+      type: 0x27
+      level_h: 2
+
+- condition:
+    - aeroway = taxiway
+  action:
+    - action: write_line
+      type: 0x2c
+      level_h: 1
+
+- condition:
+    - man_made = pipeline
+  action:
+    - action: write_line
+      type: 0x28
+      level_h: 2
+
+- condition:
+    - power = line
+  action:
+    - action: write_line
+      type: 0x29
+      level_h: 2
