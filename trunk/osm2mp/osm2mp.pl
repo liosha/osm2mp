@@ -2423,6 +2423,7 @@ sub AddPOI {
         printf "Zip=%s\n",          convert_string($tag{'addr:postcode'})   if exists $tag{'addr:postcode'};
         printf "Phone=%s\n",        convert_string($tag{'phone'})           if exists $tag{'phone'};
         printf "WebPage=%s\n",      convert_string($tag{'url'})             if exists $tag{'url'};
+        printf "WebPage=%s\n",      convert_string($tag{'website'})         if exists $tag{'website'};
     }
 
     # marine data
