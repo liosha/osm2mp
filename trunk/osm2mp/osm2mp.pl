@@ -964,8 +964,28 @@ while ( my $line = <IN> ) {
         @chainlist = (0)            unless $bounds;
         push @chainlist, $#chain    unless ($#chainlist % 2);
 
+        if ( scalar @chain < 2 ) {
+            print "; ERROR: WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
+            next;
+        }
 
-        ## POI
+        next unless scalar keys %waytag;
+        next unless scalar @chainlist;
+
+        my @list = @chainlist;
+        my @clist = ();
+        push @clist, [ (shift @list), (shift @list) ]  while @list;
+
+        ## Way config
+        process_config( $config{ways}, {
+                type    => "Way",
+                id      => $wayid,
+                chain   => \@chain,
+                clist   => \@clist,
+                tag     => \%waytag,
+            } );
+
+        ## POI config
         if ( $makepoi ) {
             process_config( $config{nodes}, {
                     type    => "Way",
@@ -974,26 +994,10 @@ while ( my $line = <IN> ) {
                     tag     => \%waytag,
                 } );
         }
+
+
+        #### Old-style processing - to remove
         
-        ##  this way is coastline - load it
-        if (  $shorelines  ) {
-            $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
-                        grep { exists $polytype{$_} && $polytype{$_}->[0] eq 's' }
-                        map {"$_=$waytag{$_}"}  keys %waytag;
-
-            if ( $poly ) {
-                if ( scalar @chain < 2 ) {
-                    print "; ERROR: Line WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
-                } 
-                else {
-                    for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
-                        $coast{$chain[$chainlist[$i]]} = [ @chain[ $chainlist[$i]..$chainlist[$i+1] ] ];
-                    }
-                }
-            }
-        }
-
-
         ##  this way is map polygon - clip it and dump
 
         $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
@@ -1042,39 +1046,16 @@ while ( my $line = <IN> ) {
         ##  this way is some line
 
         $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
-                    grep { exists $polytype{$_}  &&  $polytype{$_}->[0] ~~ [ qw{ l r s } ] }
+                    grep { exists $polytype{$_}  &&  $polytype{$_}->[0] ~~ [ qw{ r } ] }
                     map {"$_=$waytag{$_}"}  keys %waytag;
 
         if ( $poly ) {
-            if ( scalar @chain < 2 ) {
-                print "; ERROR: Line WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
-                next;   #!!
-            }
 
             my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
 
             # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
             my @rp = split q{,}, $rp;
             @rp[4..11] = CalcAccessRules( \%waytag, [ @rp[4..11] ] );
-
-            ##  simple line - dump it
-            if ( $mode eq 'l'  ||  $mode eq 's'  || ( !$routing && $mode eq 'r' )
-                    ||  ( defined $transport_mode && $rp[ 4 + $transport_mode ] ) ) {
-
-                for ( my $i = 0;  $i < $#chainlist+1;  $i += 2 ) {
-                    $countlines ++;
-
-                    AddLine({
-                        wayid       => $wayid,
-                        comment     => $poly,
-                        type        => $type,
-                        level_l     => $llev,
-                        level_h     => $hlev,
-                        name        => $name,
-                        chain       => [ @node{@chain[$chainlist[$i]..$chainlist[$i+1]]} ],
-                    });
-                }
-            }
 
             ##   road - load
             if ( $mode eq 'r'  &&  $routing 
@@ -2323,19 +2304,25 @@ sub AddLine {
 
     my %tag   = exists $param{tags} ? %{$param{tags}} : ();
 
+    my $label = name_from_list( 'label', \%tag );
+
     return      unless  exists $param{chain}; 
     return      unless  exists $param{type};
 
     my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
     my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
 
-    print  "; WayID = $param{wayid}\n"      if  exists $param{wayid};;
     print  "; $param{comment}\n"            if  exists $param{comment};
+    while ( my ( $key, $val ) = each %tag ) {
+        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
+        print "; $key = $tag{$key}\n";
+    }
 
     print  "[POLYLINE]\n";
     printf "Type=%s\n",         $param{type};
     printf "EndLevel=%d\n",     $hlev           if $hlev > $llev;
     printf "Label=%s\n",        $param{name}    if exists $param{name}; 
+    printf "Label=$label\n"                     unless exists $param{name} || $label eq q{};
     printf "Data%d=(%s)\n",     $llev, join( q{),(}, @{ $param{chain} } );
     print  "[END]\n\n\n";
 }
@@ -2795,15 +2782,14 @@ sub execute_action {
         my %poiinfo = (
                 type        => $action->{type},
                 tags        => \%tag,
+                comment     => "$obj->{type}ID = $obj->{id}",
             );
 
-        $poiinfo{comment} = "$obj->{type}ID = $obj->{id}";
         $poiinfo{nodeid}  = $obj->{id}      if $obj->{type} eq 'Node';
         $poiinfo{latlon}  = $obj->{latlon}  if exists $obj->{latlon};
 
         $poiinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
         $poiinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
-
 
         if ( exists $action->{'city'} ) {
             $poiinfo{City}          = 'Y';
@@ -2826,6 +2812,35 @@ sub execute_action {
         }
 
         AddPOI ( \%poiinfo );
+    }
+
+    ##  Load coastline
+    if ( $param{action} eq 'load_coastline' && $shorelines ) {
+        for my $part ( @{ $obj->{clist} } ) {
+            my ($start, $finish) = @$part;
+            $coast{$obj->{chain}->[$start]} = [ @{$obj->{chain}}[ $start .. $finish ] ];
+        }
+    }
+
+    ##  Write line
+    if ( $param{action} eq 'write_line' || $param{action} eq 'load_road' && !$routing ) {
+
+        my %lineinfo = (
+                type        => $action->{type},
+                tags        => $obj->{tag},
+                comment     => "$obj->{type}ID = $obj->{id}",
+            );
+
+        $lineinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
+        $lineinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
+
+        for my $part ( @{ $obj->{clist} } ) {
+            $countlines ++;
+            my ($start, $finish) = @$part;
+
+            $lineinfo{chain} = [ @node{ @{$obj->{chain}}[ $start .. $finish ] } ];
+            AddLine( \%lineinfo );
+        }
     }
 }
 
