@@ -1362,7 +1362,7 @@ if ( $shorelines ) {
 #            print  "[POLYLINE]\n";
 #            print  "Type=$config{types}->{coastline}->{type}\n";
 #            print  "EndLevel=$config{types}->{coastline}->{endlevel}\n";
-#            printf "Data0=(%s)\n",          join (q{), (}, @node{ @$chain_ref });
+#            printf "Data0=(%s)\n",          join (q{),(}, @node{ @$chain_ref });
 #            print  "[END]\n\n\n";
 
             next;
@@ -1399,7 +1399,7 @@ if ( $shorelines ) {
         print  "Type=$config{types}->{sea}->{type}\n";
         print  "EndLevel=$config{types}->{sea}->{endlevel}\n";
 
-        printf "Data0=(%s)\n",  join( q{), (},  
+        printf "Data0=(%s)\n",  join( q{),(},  
             $sea eq 'background'  
                 ?  map { join q{,}, reverse @{$_} } @bound
                 :  @node{@{$coast{$sea}}}
@@ -1408,7 +1408,7 @@ if ( $shorelines ) {
         for my $island  ( keys %island ) {
             if ( $lake{$sea}->contains( [ reverse split q{,}, $node{$island} ] ) ) {
                 $countislands ++;
-                printf "Data0=(%s)\n",  join( q{), (}, @node{@{$coast{$island}}} );
+                printf "Data0=(%s)\n",  join( q{),(}, @node{@{$coast{$island}}} );
                 delete $island{$island};
             }
         }
@@ -1828,7 +1828,7 @@ if ( $routing ) {
         print  "StreetDesc=$name\n"             if  $name  &&  $navitel;
         print  "DirIndicator=1\n"               if  $rp =~ /^.,.,1/;
 
-        printf "Data%d=(%s)\n",     $llev, join( q{), (}, @node{@{$road->{chain}}} );
+        printf "Data%d=(%s)\n",     $llev, join( q{),(}, @node{@{$road->{chain}}} );
         printf "RoadID=%d\n",       $roadid{$roadid};
         printf "RouteParams=%s\n",  $rp;
         
@@ -1884,7 +1884,7 @@ if ( $bounds && $background  &&  exists $config{types}->{background} ) {
     print  "[POLYGON]\n";
     print  "Type=$config{types}->{background}->{type}\n";
     print  "EndLevel=$config{types}->{background}->{endlevel}\n";
-    printf "Data0=(%s)\n",      join( q{), (},  map { join q{,}, reverse @{$_} } @bound );
+    printf "Data0=(%s)\n",      join( q{),(},  map { join q{,}, reverse @{$_} } @bound );
     print  "[END]\n\n\n";
 
 }
@@ -2336,7 +2336,7 @@ sub AddLine {
     printf "Type=%s\n",         $param{type};
     printf "EndLevel=%d\n",     $hlev           if $hlev > $llev;
     printf "Label=%s\n",        $param{name}    if exists $param{name}; 
-    printf "Data%d=(%s)\n",     $llev, join( q{), (}, @{ $param{chain} } );
+    printf "Data%d=(%s)\n",     $llev, join( q{),(}, @{ $param{chain} } );
     print  "[END]\n\n\n";
 }
 
@@ -2677,7 +2677,7 @@ sub AddPolygon {
     }
 
     for my $polygon ( @plist ) {
-        printf "Data%d=(%s)\n", $llev, join( q{), (}, map {join( q{,}, reverse @{$_} )} @{$polygon} )
+        printf "Data%d=(%s)\n", $llev, join( q{),(}, map {join( q{,}, reverse @{$_} )} @{$polygon} )
             if scalar @{$polygon} > 2;
     }
 
