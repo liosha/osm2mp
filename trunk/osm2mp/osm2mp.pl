@@ -2301,10 +2301,7 @@ sub FindSuburb {
 sub AddLine {
 
     my %param = %{$_[0]};
-
     my %tag   = exists $param{tags} ? %{$param{tags}} : ();
-
-    my $label = name_from_list( 'label', \%tag );
 
     return      unless  exists $param{chain}; 
     return      unless  exists $param{type};
@@ -2321,9 +2318,13 @@ sub AddLine {
     print  "[POLYLINE]\n";
     printf "Type=%s\n",         $param{type};
     printf "EndLevel=%d\n",     $hlev           if $hlev > $llev;
-    printf "Label=%s\n",        $param{name}    if exists $param{name}; 
-    printf "Label=$label\n"                     unless exists $param{name} || $label eq q{};
+    printf "Label=$param{name}\n"   if !exists $param{Label} && $param{name} ne q{};
     printf "Data%d=(%s)\n",     $llev, join( q{),(}, @{ $param{chain} } );
+    for my $key ( keys %param ) {
+        next unless $key =~ /^_*[A-Z]/;
+        next if $param{$key} eq q{};
+        printf "$key=%s\n", convert_string($param{$key});
+    }
     print  "[END]\n\n\n";
 }
 
@@ -2344,22 +2345,16 @@ sub AddPOI {
         print "; $key = $tag{$key}\n";
     }
 
-    my ($type, $type2) = split q{:}, $param{type};
-
     my $data;
     $data = "($node{$param{nodeid}})"    if  exists $param{nodeid};
-    $data = "($param{latlon})"           if  exists $param{latlon};    
+    $data = "($param{latlon})"           if  exists $param{latlon};
+    return unless $data;
 
-    print  "[POI]\n";
+    my $label = exists $param{name} ? $param{name} : q{};
     
-    print  "Type=$type\n";
-
-    my $label = name_from_list( 'label', $param{tags});
-
     if ( exists $param{add_elevation} && exists $tag{'ele'} ) {
         $label .= '~[0x1f]' . $tag{'ele'};
     }
-
     if ( $transportstops && exists $param{add_stops} ) {
         my @stops;
         @stops = ( @{ $trstop{$param{nodeid}} } )    
@@ -2368,8 +2363,9 @@ sub AddPOI {
         $label .= q{ (} . convert_string( join q{,}, uniq( sort { $a <=> $b or $a cmp $b } @stops ) ) . q{)}   if @stops; 
     }
 
+    print  "[POI]\n";
+    print  "Type=$param{type}\n";
     printf "Label=%s\n", $label     if $label && !exists( $param{Label} ); 
-
     printf "Data%d=$data\n", $llev;
     print  "EndLevel=$hlev\n"       if  $hlev > $llev;
 
@@ -2496,23 +2492,13 @@ sub AddPOI {
         }
     }
 
-
     # other parameters - capital first letter!
-    for my $key ( grep { /^[A-Z]/ } keys %param ) {
+    for my $key ( grep { /^_*[A-Z]/ } keys %param ) {
         next    if  $param{$key} eq q{};
         printf "$key=%s\n", convert_string($param{$key});
     }
 
     print  "[END]\n\n";
-
-    if ( $type2 ) {
-        print  "[POI]\n";
-        print  "Type=$type2\n";
-        print  "Label=$label\n";
-        printf "Data%d=$data\n", $llev;
-        print  "EndLevel=$hlev\n"       if  $hlev > $llev;
-        print  "[END]\n\n";
-    }
 }
 
 
@@ -2715,11 +2701,15 @@ sub execute_action {
 
     my %param = %{ $action };
 
+    $param{name} = '%label'     unless exists $param{name};
     for my $key ( keys %param ) {
         $param{$key} =~ s/%(\w+)/ name_from_list( $1, $obj->{tag} ) /ge;
     }
+    
     $param{region} .= q{, }. convert_string($obj->{tag}->{'addr:district'})
         if exists $param{region} && exists $obj->{tag}->{'addr:district'};
+
+    my %objinfo = map { $_ => $param{$_} } grep { /^[A-Z]/ } keys %param;
 
     ##  Load area as city
     if ( $param{type} eq 'load_city' ) {
@@ -2779,39 +2769,39 @@ sub execute_action {
 
         $countpoi ++;
 
-        my %poiinfo = (
+        %objinfo = ( %objinfo, (
                 type        => $action->{type},
+                name        => $param{name},
                 tags        => \%tag,
                 comment     => "$obj->{type}ID = $obj->{id}",
-            );
+            ));
 
-        $poiinfo{nodeid}  = $obj->{id}      if $obj->{type} eq 'Node';
-        $poiinfo{latlon}  = $obj->{latlon}  if exists $obj->{latlon};
-
-        $poiinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
-        $poiinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
+        $objinfo{nodeid}  = $obj->{id}      if $obj->{type} eq 'Node';
+        $objinfo{latlon}  = $obj->{latlon}  if exists $obj->{latlon};
+        $objinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
+        $objinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
 
         if ( exists $action->{'city'} ) {
-            $poiinfo{City}          = 'Y';
-            $poiinfo{add_region}    = 1;
+            $objinfo{City}          = 'Y';
+            $objinfo{add_region}    = 1;
         }
         if ( exists $action->{'transport'} ) {
-            $poiinfo{add_stops}     = 1;
+            $objinfo{add_stops}     = 1;
         }
         if ( exists $action->{'contacts'} ) {
-            $poiinfo{add_contacts}  = 1;
+            $objinfo{add_contacts}  = 1;
         }
         if ( exists $action->{'marine_buoy'} ) {
-            $poiinfo{add_buoy}      = 1;
+            $objinfo{add_buoy}      = 1;
         }
         if ( exists $action->{'marine_light'} ) {
-            $poiinfo{add_light}     = 1;
+            $objinfo{add_light}     = 1;
         }
         if ( exists $action->{'ele'} ) {
-            $poiinfo{add_elevation} = 1;
+            $objinfo{add_elevation} = 1;
         }
 
-        AddPOI ( \%poiinfo );
+        AddPOI ( \%objinfo );
     }
 
     ##  Load coastline
@@ -2825,21 +2815,22 @@ sub execute_action {
     ##  Write line
     if ( $param{action} eq 'write_line' || $param{action} eq 'load_road' && !$routing ) {
 
-        my %lineinfo = (
+        %objinfo = ( %objinfo, (
                 type        => $action->{type},
+                name        => $param{name},
                 tags        => $obj->{tag},
                 comment     => "$obj->{type}ID = $obj->{id}",
-            );
+            ));
 
-        $lineinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
-        $lineinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
+        $objinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
+        $objinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
 
         for my $part ( @{ $obj->{clist} } ) {
             $countlines ++;
             my ($start, $finish) = @$part;
 
-            $lineinfo{chain} = [ @node{ @{$obj->{chain}}[ $start .. $finish ] } ];
-            AddLine( \%lineinfo );
+            $objinfo{chain} = [ @node{ @{$obj->{chain}}[ $start .. $finish ] } ];
+            AddLine( \%objinfo );
         }
     }
 }

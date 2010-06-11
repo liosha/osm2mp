@@ -61,3 +61,12 @@
   action:
     - action: write_line
       type: 0x010f12
+      Label:
+
+- condition:
+    - fenced = yes
+  action:
+    - action: write_line
+      type: 0x010f12
+      Label:
+
