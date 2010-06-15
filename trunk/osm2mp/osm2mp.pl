@@ -2000,7 +2000,8 @@ print "\n; ### That's all, folks!\n\n";
 
 sub convert_string {            # String
 
-    my $str = decode('utf8', $_[0]);
+    my $str = shift @_;
+    $str = decode('utf8', $str) unless @_;
     return $str     unless $str;
 
     
@@ -2495,7 +2496,7 @@ sub AddPOI {
     # other parameters - capital first letter!
     for my $key ( grep { /^_*[A-Z]/ } keys %param ) {
         next    if  $param{$key} eq q{};
-        printf "$key=%s\n", convert_string($param{$key});
+        printf "$key=%s\n", convert_string($param{$key}, 1);
     }
 
     print  "[END]\n\n";
@@ -2676,8 +2677,8 @@ sub condition_matches {
     
     my ($condition, $obj) = @_;
 
-    if ( $condition eq 'named' ) {
-        return name_from_list( 'label', $obj->{tag} );
+    if ( my ($neg) = $condition =~ /(~?)\s*named/ ) {
+        return( $neg xor name_from_list( 'label', $obj->{tag} ));
     }
     if ( my ( $type ) = $condition =~ 'only_(\w+)' ) {
         return (uc $obj->{type}) eq (uc $type);
@@ -2686,11 +2687,11 @@ sub condition_matches {
         return (uc $obj->{type}) ne (uc $type);
     }
 
-    if ( my ($key, $neg, $val) =  $condition =~ /(\S+)\s*(!)?=\s*(.+)/ ) {
-        return ( $neg eq q{!} ) ^
+    if ( my ($key, $neg, $val) =  $condition =~ /(\S+)\s*(!?)=\s*(.+)/ ) {
+        return( $neg xor
             ( exists $obj->{tag}->{$key}  
             && ( $val eq q{*} 
-                || any { $_ =~ /^($val)$/ } split( /;/, $obj->{tag}->{$key} ) ) );
+                || any { $_ =~ /^($val)$/ } split( /;/, $obj->{tag}->{$key} ) ) ) );
     }
 }
 
