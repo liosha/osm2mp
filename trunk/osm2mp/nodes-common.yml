@@ -868,7 +868,7 @@
     - action: write_poi
       type: 0x1E00
       level_l: 3
-      level_h: 4
+      level_h: 3
 
 - condition:
     - place = suburb
