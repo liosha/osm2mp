@@ -1,0 +1,16 @@
+--- ways
+---
+
+- condition:
+    - landuse = farmland
+  action:
+    - action: write_polygon
+      type: 0x010f00
+      level_h: 2
+
+- condition:
+    - landuse = construction|greenfield
+  action:
+    - action: write_polygon
+      type: 0x010f01
+      level_h: 1

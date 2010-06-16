@@ -866,7 +866,7 @@
     - only_rel
   action:
     - action: write_poi
-      type: 0x1E00
+      type: 0x1500
       level_l: 3
       level_h: 3
 
