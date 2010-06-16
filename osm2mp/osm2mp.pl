@@ -109,6 +109,7 @@ my $transport_mode  = undef;
 my %name_list = (
     label       => [ qw{ name loc_name addr:housenumber operator } ],
     house       => [ qw{ addr:housenumber addr:housename } ],
+    entrance    => [ qw{ name ref } ],
     place       => [ qw{ place_name name } ],
     street      => [ qw{ addr:street name } ],
     region      => [ qw{ addr:region is_in:region addr:state is_in:state } ],
@@ -864,7 +865,7 @@ while ( my $line = <IN> ) {
 
         ##  Building entrances
         if ( $navitel  &&  exists $nodetag{'building'}  &&  $nodetag{'building'} eq 'entrance' ) {
-            $entrance{$nodeid} = name_from_list( 'label', \%nodetag);
+            $entrance{$nodeid} = name_from_list( 'entrance', \%nodetag);
         }
 
         ##  POI
