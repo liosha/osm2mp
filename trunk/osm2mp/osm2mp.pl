@@ -762,7 +762,7 @@ print "\n\n\n; ### Multipolygons\n\n";
 if ( $addressing && exists $config{address} ) {
     while ( my ( $mpid, $mp ) = each %ampoly ) {
         my $ampoly = merge_ampoly( $mpid );
-        next unless exists $ampoly->{outer};
+        next unless exists $ampoly->{outer} && @{ $ampoly->{outer} };
         process_config( $config{address}, {
                 type    => 'Rel',
                 id      => $mpid,
@@ -776,30 +776,20 @@ if ( $addressing && exists $config{address} ) {
 my $countpolygons = 0;
 while ( my ( $mpid, $mp ) = each %ampoly ) {
 
-    next unless @{ $mp->{outer} };
-
-    my %tags = %{ $mp->{tags} };
     my $ampoly = merge_ampoly( $mpid );
+    next unless exists $ampoly->{outer} && @{ $ampoly->{outer} };
 
     ## POI
-    if ( $makepoi  &&  exists $ampoly->{outer}  &&  @{$ampoly->{outer}}) {
+    if ( $makepoi ) {
         process_config( $config{nodes}, {
                 type    => "Rel",
                 id      => $mpid,
+                tag     => $mp->{tags},
                 latlon  => ( join q{,}, centroid( map { [ split q{,}, $node{$_} ] } @{ $ampoly->{outer}->[0] } ) ),
-                tag     => \%tags,
             } );
     }
 
     ## Polygon
-    my $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
-                grep { exists $polytype{$_} && $polytype{$_}->[0] eq 'p' }
-                map { "$_=" . $mp->{tags}->{$_} }  keys %{$mp->{tags}};
-
-    next  unless $poly;
-
-    my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
-
     my @alist;
     for my $area ( @{ $ampoly->{outer} } ) {
         push @alist, [ map { [reverse split q{,}, $node{$_}] } @$area ];
@@ -808,21 +798,14 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
     for my $area ( @{ $ampoly->{inner} } ) {
         push @hlist, [ map { [reverse split q{,}, $node{$_}] } @$area ];
     }
-    
-    $countpolygons ++;
-    AddPolygon({
-        areas   => \@alist,
-        holes   => \@hlist,
-        tags    => $mp->{tags},
-        relid   => $mpid,
-        comment => $poly,
-        type    => $type,
-        name    => name_from_list( 'label', $mp->{tags} ),
-        level_h => $hlev,
-        level_l => $llev,
-        poi     => $rp,    
-    });
 
+    process_config( $config{ways}, {
+            type    => "Rel",
+            id      => $mpid,
+            tag     => $mp->{tags},
+            areas   => \@alist,
+            holes   => \@hlist,
+        } );
 }
 
 printf STDERR "%d polygons written\n", $countpolygons;
@@ -912,8 +895,8 @@ print STDERR "Processing ways...        ";
 
 print "\n\n\n; ### Lines and polygons\n\n";
 
-my $countlines    = 0;
-my $countpolygons = 0;
+my $countlines  = 0;
+$countpolygons  = 0;
 
 my $city;
 my @chainlist;
@@ -998,52 +981,7 @@ while ( my $line = <IN> ) {
 
         #### Old-style processing - to remove
         
-        ##  this way is map polygon - clip it and dump
-
-        $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
-                    grep { exists $polytype{$_} && $polytype{$_}->[0] eq 'p' }
-                    map {"$_=$waytag{$_}"}  keys %waytag;
-
-        if ( $poly ) {
-            
-            if ( scalar @chain <= 3 ) {
-                printf "; %s: Area WayID=$wayid has too few nodes near ($node{$chain[0]})\n",
-                    ( $poly =~ /admin_level/ ? 'WARNING' : 'ERROR' );
-            }
-            elsif ( $chain[0] ne $chain[-1] ) {
-                printf "; %s: Area WayID=$wayid is not closed at ($node{$chain[0]})\n",
-                    ( $poly =~ /admin_level/ ? 'WARNING' : 'ERROR' );
-            }
-            elsif ( !$bounds  ||  scalar @chainlist ) {
-
-                my ($mode, $type, $prio, $llev, $hlev, $rp) = @{$polytype{$poly}};
-
-                my @plist = ();
-                if ( $mpoly{$wayid} ) {
-                    printf "; multipolygon with %d holes\n", scalar @{$mpoly{$wayid}};
-                    for my $hole ( grep { exists $waychain{$_} } @{$mpoly{$wayid}} ) {
-                        push @plist, [ map { [reverse split q{,}, $node{$_}] } @{$waychain{$hole}} ];
-                    }
-                }
-
-                AddPolygon({
-                    areas       => [ [ map { [reverse split q{,}, $node{$_}] } @chain ] ],
-                    holes       => \@plist,
-                    tags        => \%waytag,
-                    wayid       => $wayid,
-                    comment     => $poly,
-                    type        => $type,
-                    name        => $name,
-                    level_h     => $hlev,
-                    level_l     => $llev,
-                    poi         => $rp,
-                    entrance    => [ map { [ $node{$_}, $entrance{$_} ] } grep { exists $entrance{$_} } @chain ],
-                });
-            }
-        }
-
-
-        ##  this way is some line
+        ##  this way is road
 
         $poly = reduce { $polytype{$a}->[2] > $polytype{$b}->[2]  ?  $a : $b }
                     grep { exists $polytype{$_}  &&  $polytype{$_}->[0] ~~ [ qw{ r } ] }
@@ -1375,27 +1313,24 @@ if ( $shorelines ) {
     my $countislands = 0;
 
     for my $sea ( @lakesort ) {
-        print  "; sea $sea\n";
-        print  "[POLYGON]\n";
-        print  "Type=$config{types}->{sea}->{type}\n";
-        print  "EndLevel=$config{types}->{sea}->{endlevel}\n";
-
-        printf "Data0=(%s)\n",  join( q{),(},  
-            $sea eq 'background'  
-                ?  map { join q{,}, reverse @{$_} } @bound
-                :  @node{@{$coast{$sea}}}
+        my %objinfo = ( 
+                type    => $config{types}->{sea}->{type},
+                level_h => $config{types}->{sea}->{endlevel},
+                comment => "sea $sea",
+                areas   => $sea eq 'background'
+                    ?  [ \@bound ]
+                    :  [[ map { [ reverse split q{,} ] } @node{@{$coast{$sea}}} ]],
             );
-        
+
         for my $island  ( keys %island ) {
             if ( $lake{$sea}->contains( [ reverse split q{,}, $node{$island} ] ) ) {
                 $countislands ++;
-                printf "Data0=(%s)\n",  join( q{),(}, @node{@{$coast{$island}}} );
+                push @{$objinfo{holes}}, [ map { [ reverse split q{,} ] } @node{@{$coast{$island}}} ];
                 delete $island{$island};
             }
         }
-        
-        print  "[END]\n\n\n";
 
+        AddPolygon( \%objinfo );
     }
 
     printf STDERR "%d lakes, %d islands\n", scalar keys %lake, $countislands;
@@ -1862,12 +1797,12 @@ if ( $routing ) {
 if ( $bounds && $background  &&  exists $config{types}->{background} ) {
 
     print "\n\n\n; ### Background\n\n";
-    print  "[POLYGON]\n";
-    print  "Type=$config{types}->{background}->{type}\n";
-    print  "EndLevel=$config{types}->{background}->{endlevel}\n";
-    printf "Data0=(%s)\n",      join( q{),(},  map { join q{,}, reverse @{$_} } @bound );
-    print  "[END]\n\n\n";
 
+    AddPolygon({
+            type    => $config{types}->{background}->{type},
+            level_h => $config{types}->{background}->{endlevel},
+            areas   => [ \@bound ],
+        });
 }
 
 
@@ -2271,8 +2206,6 @@ sub centroid {
 
 
 
-####    Exported functions
-
 sub FindCity {
     return unless keys %city;
     my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $node{$_} ? $node{$_} : $_ ) ] } @_;
@@ -2366,7 +2299,7 @@ sub AddPOI {
 
     print  "[POI]\n";
     print  "Type=$param{type}\n";
-    printf "Label=%s\n", $label     if $label && !exists( $param{Label} ); 
+    printf "Label=%s\n", $label     if $label ne q{} && !exists( $param{Label} ); 
     printf "Data%d=$data\n", $llev;
     print  "EndLevel=$hlev\n"       if  $hlev > $llev;
 
@@ -2554,22 +2487,22 @@ sub AddPolygon {
 
     my %tag   = exists $param{tags} ? %{$param{tags}} : ();
 
-    return      unless  exists $param{areas}; 
-    return      unless  @{$param{areas}}; 
-    return      unless  exists $param{type};
+    return  unless  exists $param{areas}; 
+    return  unless  @{$param{areas}}; 
+    return  unless  exists $param{type};
 
 
     #   select endlevel
     my $llev  =  $param{level_l};
     my $hlev  =  $param{level_h};
 
-    if ( my ($llist) = $hlev =~ /^\*(.*)/ ) {
+    if ( ref $hlev ) {
         my $square = sum map { Math::Polygon::Calc::polygon_area( @$_ ) 
                                 * cos( [centroid( @{$param{areas}->[0]} )]->[1] / 180 * 3.14159 )
                                 * (40000/360)**2 } @{$param{areas}};
-        $hlev = $llev + last_index { $square >= $_ } split q{,}, $llist;
+        $hlev = $llev + last_index { $square >= $_ } @$hlev;
         return if $hlev < $llev;
-        print "; square = $square  -> $hlev\n";
+        $param{comment} .= "\n; area: $square km2 -> $hlev";
     }
 
 
@@ -2604,21 +2537,19 @@ sub AddPolygon {
     }
 
     return    unless @plist;
-    return    if  $param{type} eq 'undef';
 
-
-    ## polygon
-    print  "; WayID = $param{wayid}\n"      if  exists $param{wayid};
-    print  "; RelID = $param{relid}\n"      if  exists $param{relid};
     print  "; $param{comment}\n"            if  exists $param{comment};
+    while ( my ( $key, $val ) = each %tag ) {
+        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
+        print "; $key = $tag{$key}\n";
+    }
 
     $countpolygons ++;
 
     print  "[POLYGON]\n";
     printf "Type=%s\n",        $param{type};
     printf "EndLevel=%d\n",    $hlev    if  $hlev > $llev;
-    print  "Label=$param{name}\n"       if  $param{name};
-
+    printf "Label=$param{name}\n"   if !exists $param{Label} && $param{name} ne q{};
 
     ## Navitel
     if ( $navitel ) {
@@ -2662,6 +2593,12 @@ sub AddPolygon {
     }
     if ( $tag{'building:height'} ) {
         printf "Floors=%d\n",  3 * $tag{'building:height'};
+    }
+
+    for my $key ( keys %param ) {
+        next unless $key =~ /^_*[A-Z]/;
+        next if $param{$key} eq q{};
+        printf "$key=%s\n", convert_string($param{$key});
     }
 
     print "[END]\n\n\n";
@@ -2833,6 +2770,42 @@ sub execute_action {
             $objinfo{chain} = [ @node{ @{$obj->{chain}}[ $start .. $finish ] } ];
             AddLine( \%objinfo );
         }
+    }
+
+    ##  Write polygon
+    if ( $param{action} eq 'write_polygon' ) {
+
+        %objinfo = ( %objinfo, (
+                type        => $action->{type},
+                name        => $param{name},
+                tags        => $obj->{tag},
+                comment     => "$obj->{type}ID = $obj->{id}",
+            ));
+
+        $objinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
+        $objinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
+
+        $objinfo{areas} = $obj->{areas}     if exists $obj->{areas};
+        $objinfo{holes} = $obj->{holes}     if exists $obj->{holes};
+
+        if ( $obj->{type} eq 'Way' ) {
+            if ( $obj->{chain}->[0] ne $obj->{chain}->[-1] ) {
+                print "; ERROR: Area WayID=$obj->{id} is not closed at ($node{$obj->{chain}->[0]})\n";
+                return;
+            }
+
+            $objinfo{areas} = [ [ map { [reverse split q{,}, $node{$_}] } @{$obj->{chain}} ] ];
+            if ( $mpoly{$obj->{id}} ) {
+                $objinfo{comment} .= sprintf "\n; multipolygon with %d holes", scalar @{$mpoly{$obj->{id}}};
+                for my $hole ( grep { exists $waychain{$_} } @{$mpoly{$obj->{id}}} ) {
+                    push @{$objinfo{holes}}, [ map { [reverse split q{,}, $node{$_}] } @{$waychain{$hole}} ];
+                }
+            }
+
+            $objinfo{entrance} = [ map { [ $node{$_}, $entrance{$_} ] } grep { exists $entrance{$_} } @{$obj->{chain}} ];
+        }
+
+        AddPolygon( \%objinfo );
     }
 }
 

@@ -1,0 +1,236 @@
+--- ways
+---
+
+# Settlements
+
+- condition:
+    - place = city
+  action:
+    - action: write_polygon
+      type: 0x01
+      level_h: 4
+
+- condition:
+    - place = town
+  action:
+    - action: write_polygon
+      type: 0x02
+      level_h: 3
+
+- condition:
+    - place = village|hamlet
+  action:
+    - action: write_polygon
+      type: 0x03
+      level_h: 2
+
+
+# Man-made
+
+- condition:
+    - amenity = prison
+  action:
+    - action: write_polygon
+      type: 0x04
+      level_h: 1
+
+- condition:
+    - landuse = military
+  action:
+    - action: write_polygon
+      type: 0x04
+      level_h: 1
+
+- condition:
+    - amenity = parking
+  action:
+    - action: write_polygon
+      type: 0x05
+      level_h: 1
+
+- condition:
+    - landuse = garages
+  action:
+    - action: write_polygon
+      type: 0x06
+      level_h: 1
+
+- condition:
+    - amenity = parking_garage
+  action:
+    - action: write_polygon
+      type: 0x06
+      level_h: 1
+
+- condition:
+    - aeroway = terminal
+  action:
+    - action: write_polygon
+      type: 0x07
+
+- condition:
+    - landuse = commercial|retail
+  action:
+    - action: write_polygon
+      type: 0x08
+      level_h: 2
+
+- condition:
+    - shop = mall|supermarket
+    - landuse != commercial|retail
+  action:
+    - action: write_polygon
+      type: 0x08
+      level_h: 1
+
+- condition:
+    - amenity = college|kindergarten|school|university
+    - building != *
+  action:
+    - action: write_polygon
+      type: 0x0a
+      level_h: 1
+
+- condition:
+    - amenity = hospital
+    - building != *
+  action:
+    - action: write_polygon
+      type: 0x0b
+      level_h: 1
+
+- condition:
+    - landuse = industrial
+  action:
+    - action: write_polygon
+      type: 0x0c
+      level_h: 2
+
+- condition:
+    - building = *
+    - building != no
+  action:
+    - action: write_polygon
+      type: 0x13
+
+- condition:
+    - leisure = common|garden|park
+  action:
+    - action: write_polygon
+      type: 0x17
+      level_h: 1
+
+- condition:
+    - landuse = farm|grass|meadow
+  action:
+    - action: write_polygon
+      type: 0x18
+      level_h: 2
+
+- condition:
+    - natural = heath
+  action:
+    - action: write_polygon
+      type: 0x18
+      level_h: 2
+
+- condition:
+    - leisure = stadium|pitch
+  action:
+    - action: write_polygon
+      type: 0x19
+      level_h: 1
+
+- condition:
+    - sport = *
+    - leisure != *
+  action:
+    - action: write_polygon
+      type: 0x19
+
+- condition:
+    - landuse = cemetery
+  action:
+    - action: write_polygon
+      type: 0x1a
+      level_h: 1
+
+
+# Natural
+
+- condition:
+    - natural = water
+  action:
+    - action: write_polygon
+      type: 0x3f
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - landuse = basin|reservoir
+  action:
+    - action: write_polygon
+      type: 0x3f
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - waterway = riverbank
+  action:
+    - action: write_polygon
+      type: 0x47
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - leisure = ice_rink
+  action:
+    - action: write_polygon
+      type: 0x4d
+
+- condition:
+    - natural = glacier
+  action:
+    - action: write_polygon
+      type: 0x4d
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - landuse = allotments
+  action:
+    - action: write_polygon
+      type: 0x4e
+      level_h: 2
+
+- condition:
+    - natural = scrub
+  action:
+    - action: write_polygon
+      type: 0x4f
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - landuse = forest
+  action:
+    - action: write_polygon
+      type: 0x50
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - natural = wood
+  action:
+    - action: write_polygon
+      type: 0x50
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - natural = marsh|wetland
+  action:
+    - action: write_polygon
+      type: 0x51
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - natural = beach
+  action:
+    - action: write_polygon
+      type: 0x53
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
