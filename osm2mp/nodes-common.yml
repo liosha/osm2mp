@@ -564,6 +564,15 @@
       contacts: yes
 
 - condition:
+    - highway = bus_station|bus_stop
+    - amenity != bus_station|bus_stop
+  action:
+    - action: write_poi
+      type: 0x2F08
+      transport: yes
+      contacts: yes
+
+- condition:
     - railway = tram_stop
   action:
     - action: write_poi
