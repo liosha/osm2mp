@@ -43,7 +43,22 @@
 - condition:
     - place = city
     - only_node
+    - capital = yes
     - admin_level != 1|2|3|4
+  action:
+    - action: write_poi
+      type: 0x0400
+      level_h: 3
+      city: yes
+    - action: write_poi
+      type: 0x0800
+      level_l: 4
+      level_h: 4
+
+- condition:
+    - place = city
+    - only_node
+    - capital != yes
   action:
     - action: write_poi
       type: 0x0400
