@@ -104,6 +104,7 @@ my %rename = (
     magadan         =>  151228,
     mariyel         =>  115114,
     mordov          =>  72196,
+    moscow          =>  102269,
     mosobl          =>  51490,
     murmansk        =>  289998,
     nenec           =>  274048,
