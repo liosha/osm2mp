@@ -28,6 +28,18 @@
       level_l: 1
       level_h: 1
 
+- id: service_railway_err
+  condition:
+    - railway = rail
+    - service = siding|spur|yard
+  action:
+    - action: write_line
+      type: 0x14
+    - action: write_line
+      type: 0x010f13
+      level_l: 1
+      level_h: 1
+
 - id: light_railway
   condition:
     - railway = narrow_gauge|light_rail
