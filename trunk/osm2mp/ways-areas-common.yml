@@ -9,6 +9,7 @@
     - action: write_polygon
       type: 0x01
       level_h: 4
+      Label:
 
 - condition:
     - place = town

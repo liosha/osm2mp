@@ -44,6 +44,18 @@
 ##  Various custom points
 
 - condition:
+    - amenity = fountain
+  action:
+    - action: write_poi
+      type: 0x011502
+
+- condition:
+    - amenity = recycling|waste_basket|waste_disposal
+  action:
+    - action: write_poi
+      type: 0x011503
+
+- condition:
     - highway = traffic_signals
   action:
     - action: write_poi
@@ -72,6 +84,12 @@
   action:
     - action: write_poi
       type: 0x011514
+
+- condition:
+    - barrier = gate
+  action:
+    - action: write_poi
+      type: 0x011515
 
 
 ##  Whitewater

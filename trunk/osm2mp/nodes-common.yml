@@ -472,7 +472,7 @@
       contacts: yes
 
 - condition:
-    - shop = books|electronics|electrogoods|electrotools|hardware|outdoor|stationery
+    - shop = books|bicycle|electronics|electrogoods|electrotools|hardware|outdoor|stationery
   action:
     - action: write_poi
       type: 0x2E0A
@@ -754,7 +754,8 @@
       type: 0x6403
 
 - condition:
-    - railway = crossing|level_crossing
+    #- railway = crossing|level_crossing
+    - railway = level_crossing
   action:
     - action: write_poi
       type: 0x6406
@@ -799,6 +800,12 @@
   action:
     - action: write_poi
       type: 0x6503
+
+- condition:
+    - waterway = waterfall
+  action:
+    - action: write_poi
+      type: 0x6508
 
 - condition:
     - natural = glacier
