@@ -773,6 +773,12 @@
       type: 0x6408
 
 - condition:
+    - military = bunker
+  action:
+    - action: write_poi
+      type: 0x640B
+
+- condition:
     - man_made = survey_point|tower|water_tower
   action:
     - action: write_poi
