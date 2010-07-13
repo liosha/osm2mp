@@ -25,6 +25,7 @@ my %rename = (
     albania         =>  53292,
     armenia         =>  364066,
     azerbaijan      =>  364110,
+    cyprus          =>  307787,
     egypt           =>  192761,
     georgia         =>  28699,
     honduras        =>  287670,
@@ -33,6 +34,7 @@ my %rename = (
     mongolia        =>  161033,
     oman            =>  305138,
     saudi_arabia    =>  307584,
+    turkey          =>  174737,
     united_arab_emirates    =>  307763,
     yemen           =>  305092,
 
