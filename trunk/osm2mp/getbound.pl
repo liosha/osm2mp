@@ -27,6 +27,7 @@ my %rename = (
     azerbaijan      =>  364110,
     cyprus          =>  307787,
     egypt           =>  192761,
+    estonia         =>  79510,
     georgia         =>  28699,
     honduras        =>  287670,
     israel          =>  214865,
