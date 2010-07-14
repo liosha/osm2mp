@@ -182,7 +182,7 @@ else {
 
     my $ua = LWP::UserAgent->new;
     $ua->default_header('Accept-Encoding' => 'gzip');
-    $ua->timeout( 60 );
+    $ua->timeout( 300 );
     my $req = HTTP::Request->new( GET => "$api/relation/$rel/full" );
     my $res;
 
