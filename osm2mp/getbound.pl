@@ -14,6 +14,7 @@ use Data::Dump 'dd';
 
 
 my $api  = 'http://www.openstreetmap.org/api/0.6';
+my $proxy;
 
 my $onering = 0;
 my $noinner = 0;
@@ -158,10 +159,15 @@ GetOptions (
     'o=s'       => \$outfile,
     'onering!'  => \$onering,
     'noinner!'  => \$noinner,
+    'proxy=s'   => \$proxy,
 );
 
 unless ( @ARGV ) {
-    print "Usage:  getbound.pl [-o <file>] <relation_id>\n\n";
+    print "Usage:  getbound.pl [options] <relation_id>\n\n";
+    print "Available options:\n";
+    print "     -o <file>       - output filename (default: STDOUT)\n";
+    print "     -proxy <host>   - use proxy\n";
+    print "     -onering        - merge rings\n\n";
     exit;
 }
 
@@ -181,8 +187,10 @@ else {
     print STDERR "Downloading RelID=$rel..";
 
     my $ua = LWP::UserAgent->new;
+    $ua->proxy( 'http', $proxy ) if $proxy;
     $ua->default_header('Accept-Encoding' => 'gzip');
     $ua->timeout( 300 );
+
     my $req = HTTP::Request->new( GET => "$api/relation/$rel/full" );
     my $res;
 
