@@ -130,6 +130,7 @@ my %rename = (
     saratov         =>  72193,
     smol            =>  81996,
     stavrop         =>  108081,
+    stpeter         =>  337422,
     sverdl          =>  79379,
     tambov          =>  72180,
     tatar           =>  79374,
