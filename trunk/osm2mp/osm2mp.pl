@@ -1079,6 +1079,7 @@ while ( my $line = <IN> ) {
                     $road{"$wayid:$i"} = {
                         type    =>  $poly,
                         name    =>  $name,
+                        label2  =>  convert_string( $waytag{'addr:street'} ),
                         chain   =>  [ @chain[$chainlist[$i]..$chainlist[$i+1]] ],
                         city    =>  $city,
                         rp      =>  join( q{,}, @rp ),
@@ -1386,7 +1387,7 @@ if ( $routing ) {
             my @list = ();
             for my $r2 ( keys %{$rstart{$p1->[-1]}} ) {
                 if ( $r1 ne $r2  
-                  && [ @{$road{$r1}}{qw{type name city rp}} ] ~~ [ @{$road{$r2}}{qw{type name city rp}} ]
+                  && [ @{$road{$r1}}{qw{type name label2 city rp}} ] ~~ [ @{$road{$r2}}{qw{type name label2 city rp}} ]
                   && lcos( $p1->[-2], $p1->[-1], $road{$r2}->{chain}->[1] ) > $mergecos ) {
                     push @list, $r2;
                 }
@@ -1596,6 +1597,7 @@ if ( $routing ) {
                         chain   => [ @{$road->{chain}}[$breaks[$i] .. $breaks[$i+1]] ],
                         type    => $road{$roadid}->{type},
                         name    => $road{$roadid}->{name},
+                        label2  => $road{$roadid}->{label2},
                         city    => $road{$roadid}->{city},
                         rp      => $road{$roadid}->{rp},
                     };
@@ -1731,7 +1733,7 @@ if ( $routing ) {
     
     while ( my ($roadid, $road) = each %road ) {
 
-        my ($poly, $name, $rp) = ($road->{type}, $road->{name}, $road->{rp});
+        my ($poly, $name, $label2, $rp) = ($road->{type}, $road->{name}, $road->{label2}, $road->{rp});
         my ($mode, $type, $prio, $llev, $hlev)  =  @{$polytype{$poly}};
         
         $roadid{$roadid} = $roadcount++;
@@ -1742,6 +1744,7 @@ if ( $routing ) {
         printf "Type=%s\n",         $type;
         printf "EndLevel=%d\n",     $hlev       if  $hlev > $llev;
         print  "Label=$name\n"                  if  $name;
+        print  "Label2=$label2\n"               if  $label2;
         print  "StreetDesc=$name\n"             if  $name  &&  $navitel;
         print  "DirIndicator=1\n"               if  $rp =~ /^.,.,1/;
 
