@@ -89,7 +89,7 @@ my $background      = 1;
 my $lessgpc         = 1;
 
 my $shorelines      = 0;
-my $hugesea         = 70000;
+my $hugesea         = 0;
 my $waterback       = 0;
 my $marine          = 1;
 
@@ -1289,7 +1289,7 @@ if ( $shorelines ) {
         }
 
         # filter huge polygons to avoid cgpsmapper's crash
-        if ( scalar @$chain_ref > $hugesea ) {
+        if ( $hugesea && scalar @$chain_ref > $hugesea ) {
             printf "; WARNING: skipped too big coastline $loop (%d nodes)\n", scalar @$chain_ref;
             next;
         }
