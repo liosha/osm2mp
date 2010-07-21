@@ -29,6 +29,8 @@ my @short = (
     [ 'тракт()'                 =>  'тракт'  ],
     [ 'просек()'                =>  'просек' ],
     [ 'линия()'                 =>  'линия'  ],
+    [ 'кв(|арт|артал)'          =>  'кв.'  ],
+    [ 'м(к?рн?|икрорайон)'      =>  'мкр'  ],
 );
 
 
@@ -61,8 +63,8 @@ while ( my $line = readline $in ) {
     }
 
 
-    #   street name
-    if ( $object eq 'POLYLINE' && $line =~ /^Label=/i ) {
+    #   street names
+    if ( $object eq 'POLYLINE' && (my ($tag) = $line =~ /^(Label\d?|StreetDesc)=/i ) ) {
         
         $line = join q{ }, map { ucfirst } grep { $_ } split / /, $line;
         
@@ -84,7 +86,7 @@ while ( my $line = readline $in ) {
             $line =~ s/^ //;
             $line =~ s/ $//;
 
-            $line = "Label=" . $line . " " . $r . "\n";
+            $line = "$tag=" . $line . " " . $r . "\n";
             last SUFF;
         }
     }

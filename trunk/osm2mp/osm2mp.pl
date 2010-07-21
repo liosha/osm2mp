@@ -1743,8 +1743,8 @@ if ( $routing ) {
         print  "[POLYLINE]\n";
         printf "Type=%s\n",         $type;
         printf "EndLevel=%d\n",     $hlev       if  $hlev > $llev;
-        print  "Label=$name\n"                  if  $name;
-        print  "Label2=$label2\n"               if  $label2;
+        printf "Label=%s\n", ($name || $label2) if  $name || $label2;
+        print  "Label2=$label2\n"               if  $name && $label2;
         print  "StreetDesc=$name\n"             if  $name  &&  $navitel;
         print  "DirIndicator=1\n"               if  $rp =~ /^.,.,1/;
 
