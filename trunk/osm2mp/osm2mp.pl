@@ -1070,7 +1070,7 @@ while ( my $line = <IN> ) {
                     
                     if ( @ref ) {
                         my $ref = join q{,}, sort( uniq( map { s/[\s\-]+//g; split /[,;]/, $_ } @ref ) );
-                        $name = '~[0x05]' . $ref . ( $name ? q{ } . $name : q{});
+                        $name = '~[0x06]' . $ref . ( $name ? q{ } . $name : q{});
                     }
                 }
         
