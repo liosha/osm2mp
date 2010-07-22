@@ -2320,8 +2320,7 @@ sub AddPOI {
     # contact information: address, phone
     if ( $poicontacts  &&  $param{add_contacts} ) {
         my $city;
-        $city = $city{ FindCity( $param{nodeid} ) }     if  $param{nodeid};
-        $city = $city{ FindCity( $param{latlon} ) }     if  $param{latlon};
+        $city = $city{ FindCity( $param{nodeid} || $param{latlon} ) };
         if ( $city ) {
             print "CityName=$city->{name}\n";
             print "RegionName=$city->{region}\n"        if  $city->{region};
@@ -2336,7 +2335,7 @@ sub AddPOI {
 
         my $street = convert_string($tag{'addr:street'});
         if ( $street ) {
-            my $suburb = FindSuburb( $chain[0], $chain[-1] );
+            my $suburb = FindSuburb( $param{nodeid} || $param{latlon} );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
             print "StreetDesc=$street\n";
         }
@@ -2564,7 +2563,7 @@ sub AddPolygon {
         if ( $housenumber && $street ) {
     
             my $city = $city{ FindCity( $plist[0]->[0] ) };
-            my $suburb = FindSuburb( $chain[0], $chain[-1] );
+            my $suburb = FindSuburb( $plist[0]->[0] );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
 
             print  "HouseNumber=$housenumber\n";
