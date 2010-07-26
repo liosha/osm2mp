@@ -64,7 +64,9 @@ while ( my $line = readline $in ) {
 
 
     #   street names
-    if ( $object eq 'POLYLINE' && (my ($tag) = $line =~ /^(Label\d?|StreetDesc)=/i ) ) {
+    my $tag;
+    if ( $object eq 'POLYLINE' && ( ($tag) = $line =~ /^(Label\d?)=/i ) 
+            or ( ($tag) = $line =~ /^(StreetDesc)=/i ) ) {
         
         $line = join q{ }, map { ucfirst } grep { $_ } split / /, $line;
         
