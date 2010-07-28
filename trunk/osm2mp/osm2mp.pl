@@ -267,7 +267,7 @@ print STDERR "Loading configuration...  ";
 while ( my $cfgfile = shift @$config ) {
     my %cfgpart = YAML::LoadFile $cfgfile;
     while ( my ( $key, $item ) = each %cfgpart ) {
-        if ( $key eq 'load' ) {
+        if ( $key eq 'load' && ref $item ) {
             push @$config, @$item;
         }
         elsif ( $key eq 'yesno' ) {
