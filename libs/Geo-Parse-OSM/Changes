@@ -3,3 +3,7 @@ Revision history for Geo-Parse-OSM
 0.01    July 29 2010
         Initial release - simple continuous regexp parsing
 
+0.10    July 30 2010
+        Basic OO interface
+        File seek
+
