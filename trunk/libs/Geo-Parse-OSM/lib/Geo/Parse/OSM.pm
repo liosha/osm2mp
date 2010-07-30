@@ -4,9 +4,105 @@ use warnings;
 use strict;
 use Carp;
 
+our $VERSION = '0.10';
+
 use HTML::Entities;
 
-use Data::Dump 'dd';
+
+sub new {
+    my $class = shift;
+
+    my $self = {
+        file        => shift,
+        node        => undef,
+        way         => undef,
+        relation    => undef,
+    };
+
+    unless ( open $self->{handle}, '<:encoding(utf8)', $self->{file} ) {
+        carp "Can't open file: $self->{file}";
+    }
+
+    bless ($self, $class);
+    return $self;
+}
+
+
+sub parse {
+
+    my $self = shift;
+    my $callback = shift;
+
+    my %prop = @_;
+
+    my %object;
+    my $pos = tell $self->{handle};
+
+    LINE:
+    while ( my $line = readline $self->{handle} ) {
+
+        # start of object
+        if ( my ($obj) = $line =~ m{^\s*<(node|way|relation)} ) {
+
+            $self->{$obj} = $pos    unless defined $self->{$obj};
+            
+            next LINE if exists $prop{only} && $prop{only} ne $obj;
+
+            %object = ( type => $obj );
+            
+            # ALL attributes
+            my @res = $line =~ m{(\w+)=(?:"([^"]*)"|'([^']*)')}g;
+            while (@res) {
+                my ( $attr, $val1, $val2 ) = ( shift @res, shift @res, shift @res );
+                $object{$attr} = decode_entities( $val1 || $val2 );
+            }
+        }
+        # tag
+        elsif ( %object && ( my ($key, undef, $val) = $line =~ m{^\s*<tag.* k=["']([^"']+)["'].* v=(["'])(.+)\2} ) ) {
+            $object{tag}->{$key} = decode_entities( $val );
+        }
+        # node ref
+        elsif ( %object && ( my ($nref) = $line =~ m{^\s*<nd.* ref=["']([^"']+)["']} ) ) {
+            push @{$object{chain}}, $nref;
+        }
+        # relation member
+        elsif ( %object && ( my ($type, $mref, $role) = $line =~ /^\s*<member.* type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']*)["']/ ) ) {
+            push @{$object{members}}, { type => $type, ref => $mref, role => $role };
+        }
+
+        # end of object
+        if ( %object && ( my ($obj) = ( $line =~ m{^\s*</(node|way|relation)} or $line =~ m{^\s*<(node|way|relation).*/>} ) ) ) {
+            return if &$callback( \%object ) eq 'stop';
+            %object = ();
+        }
+
+    } continue { $pos = tell $self->{handle} }
+
+    for my $type ( qw{ node way relation } ) {
+        $self->{$type} = $pos    unless defined $self->{$type};
+    }
+}
+
+
+
+sub seek_to_nodes {
+    my $self = shift;
+    parse( $self, sub{ 'stop' }, only => 'node' )       unless defined $self->{node};
+    seek $self->{handle}, $self->{node}, 0;
+}
+
+sub seek_to_ways {
+    my $self = shift;
+    parse( $self, sub{ 'stop' }, only => 'way' )        unless defined $self->{way};
+    seek $self->{handle}, $self->{way}, 0;
+}
+
+sub seek_to_relations {
+    my $self = shift;
+    parse( $self, sub{ 'stop' }, only => 'relation' )   unless defined $self->{relation};
+    seek $self->{handle}, $self->{relation}, 0;
+}
+
 
 
 sub parse_file {
@@ -59,44 +155,62 @@ sub parse_file {
             &$callback( \%object );
             %object = ();
         }
-
     }
-
 }
 
 
 =head1 NAME
 
-Geo::Parse::OSM - Openstreetmap file parser
+Geo::Parse::OSM - OpenStreetMap file parser
 
 =head1 VERSION
 
-Version 0.01
-
-=cut
-
-our $VERSION = '0.01';
-
+Version 0.10
 
 =head1 SYNOPSIS
 
 
     use Geo::Parse::OSM;
-    use Data::Dumper;
 
-    Geo::Parse::OSM->parse_file( 'planet.osm', sub{ print Dumper $_[0] } );
+    my $osm = Geo::Parse::OSM->new( 'planet.osm' );
+    $osm->seek_to_relations;
+    $osm->parse( sub{ warn $_[0]->{id}  if  $_[0]->{user} eq 'Alice' } );
 
 
-=head1 EXPORT
+=head1 METHODS
 
-A list of functions that can be exported.  You can delete this section
-if you don't export anything, such as for a purely object-oriented module.
+=head2 new
 
-=head1 SUBROUTINES/METHODS
+Creates parser instance and opens file
+
+    my $osm = Geo::Parse::OSM->new( 'planet.osm' );
+
+=head2 parse
+
+Parses file and executes callback function for every object.
+Stops parsing if callback returns 'stop'
+
+    $osm->parse( sub{ warn $_[0]->{id} and return 'stop' } );
+
+It's possible to filter out unnecessary object types
+
+    $osm->parse( sub{ ... }, only => 'way' );
+
+=head2 seek_to_nodes
+=head2 seek_to_ways
+=head2 seek_to_relations
+
+Seeks to the start of objects of selected type
+
+    $osm->seek_to_ways;
+
+=head1 FUNCTIONS
 
 =head2 parse_file
 
-Parses contents of file and executes callback function for every object.
+Simple parser - parses contents of file and executes callback function for every object.
+
+    Geo::Parse::OSM->parse_file( 'planet.osm', sub{ print Dumper $_[0] } );
 
 
 =head1 AUTHOR
