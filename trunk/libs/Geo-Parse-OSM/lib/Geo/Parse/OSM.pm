@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 use HTML::Entities;
 
@@ -130,29 +130,29 @@ sub parse_file {
             }
             
             if ( $line =~ m{/>\s*$} ) {
-                &$callback( \%object );
+                return if &$callback( \%object ) eq 'stop';
                 %object = ();
             }
         }
 
         # tag
-        if ( my ($key, undef, $val) = $line =~ m{<tag.* k=["']([^"']+)["'].* v=(["'])(.+)\2} ) {
+        elsif ( my ($key, undef, $val) = $line =~ m{<tag.* k=["']([^"']+)["'].* v=(["'])(.+)\2} ) {
             $object{tag}->{$key} = decode_entities( $val );
         }
 
         # node ref
-        if ( my ($ref) = $line =~ m{<nd.* ref=["']([^"']+)["']} ) {
+        elsif ( my ($ref) = $line =~ m{<nd.* ref=["']([^"']+)["']} ) {
             push @{$object{chain}}, $ref;
         }
 
         # relation member
-        if ( my ($type, $ref, $role) = $line =~ /<member.* type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']*)["']/ ) {
+        elsif ( my ($type, $ref, $role) = $line =~ /<member.* type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']*)["']/ ) {
             push @{$object{members}}, { type => $type, ref => $ref, role => $role };
         }
 
         # end of object
-        if ( my ($obj) = $line =~ m{</(node|way|relation)} ) {
-            &$callback( \%object );
+        elsif ( my ($obj) = $line =~ m{</(node|way|relation)} ) {
+            return if &$callback( \%object ) eq 'stop';
             %object = ();
         }
     }
@@ -165,7 +165,7 @@ Geo::Parse::OSM - OpenStreetMap file parser
 
 =head1 VERSION
 
-Version 0.10
+Version 0.11
 
 =head1 SYNOPSIS
 
@@ -197,7 +197,9 @@ It's possible to filter out unnecessary object types
     $osm->parse( sub{ ... }, only => 'way' );
 
 =head2 seek_to_nodes
+
 =head2 seek_to_ways
+
 =head2 seek_to_relations
 
 Seeks to the start of objects of selected type
