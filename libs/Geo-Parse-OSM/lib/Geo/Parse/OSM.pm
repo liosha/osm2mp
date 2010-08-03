@@ -4,9 +4,11 @@ use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.11';
+our $VERSION = '0.20';
 
+use Encode;
 use HTML::Entities;
+use IO::Uncompress::AnyUncompress qw($AnyUncompressError);
 
 
 sub new {
@@ -19,9 +21,8 @@ sub new {
         relation    => undef,
     };
 
-    unless ( open $self->{handle}, '<:encoding(utf8)', $self->{file} ) {
-        carp "Can't open file: $self->{file}";
-    }
+    $self->{stream} = new IO::Uncompress::AnyUncompress $self->{file}
+        or croak "Error with $self->{file}: $AnyUncompressError";
 
     bless ($self, $class);
     return $self;
@@ -36,10 +37,18 @@ sub parse {
     my %prop = @_;
 
     my %object;
-    my $pos = tell $self->{handle};
+
+    if ( exists $self->{saved} ) {
+        my $res = &$callback( $self->{saved} );
+
+        delete $self->{saved}   unless $res eq 'stop' && $prop{save};
+        return  if  $res eq 'stop';
+    }
+
+    my $pos = tell $self->{stream};
 
     LINE:
-    while ( my $line = readline $self->{handle} ) {
+    while ( my $line = decode( 'utf8', $self->{stream}->getline() ) ) {
 
         # start of object
         if ( my ($obj) = $line =~ m{^\s*<(node|way|relation)} ) {
@@ -72,11 +81,16 @@ sub parse {
 
         # end of object
         if ( %object && ( my ($obj) = ( $line =~ m{^\s*</(node|way|relation)} or $line =~ m{^\s*<(node|way|relation).*/>} ) ) ) {
-            return if &$callback( \%object ) eq 'stop';
+            #return if &$callback( \%object ) eq 'stop';
+            my $res = &$callback( \%object );
+            if ( $res eq 'stop' ) {
+                $self->{saved} = \%object    if $prop{save};
+                return;
+            }
             %object = ();
         }
 
-    } continue { $pos = tell $self->{handle} }
+    } continue { $pos = tell $self->{stream} }
 
     for my $type ( qw{ node way relation } ) {
         $self->{$type} = $pos    unless defined $self->{$type};
@@ -87,20 +101,38 @@ sub parse {
 
 sub seek_to_nodes {
     my $self = shift;
-    parse( $self, sub{ 'stop' }, only => 'node' )       unless defined $self->{node};
-    seek $self->{handle}, $self->{node}, 0;
+    if ( defined $self->{node} ) {
+        $self->{stream} = new IO::Uncompress::AnyUncompress $self->{file}
+            if tell $self->{stream} > $self->{node};
+        seek $self->{stream}, $self->{node}, 0;
+    }
+    else {
+        parse( $self, sub{ 'stop' }, only => 'node', save => 1 );
+    }
 }
 
 sub seek_to_ways {
     my $self = shift;
-    parse( $self, sub{ 'stop' }, only => 'way' )        unless defined $self->{way};
-    seek $self->{handle}, $self->{way}, 0;
+    if ( defined $self->{way} ) {
+        $self->{stream} = new IO::Uncompress::AnyUncompress $self->{file}
+            if tell $self->{stream} > $self->{way};
+        seek $self->{stream}, $self->{way}, 0;
+    }
+    else {
+        parse( $self, sub{ 'stop' }, only => 'way', save => 1 );
+    }
 }
 
 sub seek_to_relations {
     my $self = shift;
-    parse( $self, sub{ 'stop' }, only => 'relation' )   unless defined $self->{relation};
-    seek $self->{handle}, $self->{relation}, 0;
+    if ( defined $self->{relation} ) {
+        $self->{stream} = new IO::Uncompress::AnyUncompress $self->{file}
+            if tell $self->{stream} > $self->{relation};
+        seek $self->{stream}, $self->{relation}, 0;
+    }
+    else {
+        parse( $self, sub{ 'stop' }, only => 'relation', save => 1 );
+    }
 }
 
 
@@ -109,53 +141,9 @@ sub parse_file {
     my $class = shift;
 
     my ( $file, $callback ) = @_;
-    my $handle;
 
-    unless ( open $handle, '<:encoding(utf8)', $file ) {
-        carp "Can't open file: $file";
-    }
-
-    my %object;
-    while ( my $line = readline $handle ) {
-
-        # start of object
-        if ( my ($obj) = $line =~ m{<(node|way|relation)} ) {
-            %object = ( type => $obj );
-            
-            # ALL attributes
-            my @res = $line =~ m{(\w+)=(?:"([^"]*)"|'([^']*)')}g;
-            while (@res) {
-                my ( $attr, $val1, $val2 ) = ( shift @res, shift @res, shift @res );
-                $object{$attr} = decode_entities( $val1 || $val2 );
-            }
-            
-            if ( $line =~ m{/>\s*$} ) {
-                return if &$callback( \%object ) eq 'stop';
-                %object = ();
-            }
-        }
-
-        # tag
-        elsif ( my ($key, undef, $val) = $line =~ m{<tag.* k=["']([^"']+)["'].* v=(["'])(.+)\2} ) {
-            $object{tag}->{$key} = decode_entities( $val );
-        }
-
-        # node ref
-        elsif ( my ($ref) = $line =~ m{<nd.* ref=["']([^"']+)["']} ) {
-            push @{$object{chain}}, $ref;
-        }
-
-        # relation member
-        elsif ( my ($type, $ref, $role) = $line =~ /<member.* type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']*)["']/ ) {
-            push @{$object{members}}, { type => $type, ref => $ref, role => $role };
-        }
-
-        # end of object
-        elsif ( my ($obj) = $line =~ m{</(node|way|relation)} ) {
-            return if &$callback( \%object ) eq 'stop';
-            %object = ();
-        }
-    }
+    my $obj = Geo::Parse::OSM->new( $file );
+    $obj->parse( $callback ); 
 }
 
 
@@ -165,7 +153,7 @@ Geo::Parse::OSM - OpenStreetMap file parser
 
 =head1 VERSION
 
-Version 0.11
+Version 0.20
 
 =head1 SYNOPSIS
 
@@ -185,6 +173,8 @@ Creates parser instance and opens file
 
     my $osm = Geo::Parse::OSM->new( 'planet.osm' );
 
+Compressed files (.gz, .bz2) are also supported.
+
 =head2 parse
 
 Parses file and executes callback function for every object.
@@ -202,9 +192,11 @@ It's possible to filter out unnecessary object types
 
 =head2 seek_to_relations
 
-Seeks to the start of objects of selected type
+Seeks to the first object of selected type.
 
     $osm->seek_to_ways;
+
+Can be slow on compressed files.
 
 =head1 FUNCTIONS
 

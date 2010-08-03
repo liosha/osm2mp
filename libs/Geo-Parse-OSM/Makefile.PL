@@ -12,8 +12,10 @@ WriteMakefile(
       : ()),
     PL_FILES            => {},
     PREREQ_PM => {
+        'Encode' => 0,
         'Test::More' => 0,
         'HTML::Parser' => 0,
+        'IO::Uncompress::AnyUncompress' => 0,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'Geo-Parse-OSM-*' },
