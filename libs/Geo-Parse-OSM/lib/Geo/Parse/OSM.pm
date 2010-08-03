@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.22';
+our $VERSION = '0.221';
 
 use Encode;
 use HTML::Entities;
@@ -41,8 +41,8 @@ sub parse {
     if ( exists $self->{saved} ) {
         my $res = &$callback( $self->{saved} );
 
-        delete $self->{saved}   unless $res eq 'stop' && $prop{save};
-        return  if  $res eq 'stop';
+        delete $self->{saved}   unless defined $res && $res eq 'stop' && $prop{save};
+        return  if  defined $res && $res eq 'stop';
     }
 
     my $pos = tell $self->{stream};
@@ -81,7 +81,6 @@ sub parse {
 
         # end of object
         if ( %object && ( my ($obj) = ( $line =~ m{^\s*</(node|way|relation)} or $line =~ m{^\s*<(node|way|relation).*/>} ) ) ) {
-            #return if &$callback( \%object ) eq 'stop';
             my $res = &$callback( \%object );
             if ( defined $res && $res eq 'stop' ) {
                 $self->{saved} = \%object    if $prop{save};
@@ -197,7 +196,7 @@ Geo::Parse::OSM - OpenStreetMap file parser
 
 =head1 VERSION
 
-Version 0.22
+Version 0.221
 
 =head1 SYNOPSIS
 
