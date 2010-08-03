@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.20';
+our $VERSION = '0.22';
 
 use Encode;
 use HTML::Entities;
@@ -83,7 +83,7 @@ sub parse {
         if ( %object && ( my ($obj) = ( $line =~ m{^\s*</(node|way|relation)} or $line =~ m{^\s*<(node|way|relation).*/>} ) ) ) {
             #return if &$callback( \%object ) eq 'stop';
             my $res = &$callback( \%object );
-            if ( $res eq 'stop' ) {
+            if ( defined $res && $res eq 'stop' ) {
                 $self->{saved} = \%object    if $prop{save};
                 return;
             }
@@ -98,42 +98,28 @@ sub parse {
 }
 
 
-
-sub seek_to_nodes {
+sub seek_to {
     my $self = shift;
-    if ( defined $self->{node} ) {
+    my $obj = shift;
+
+    return unless exists $self->{$obj};
+
+    if ( defined $self->{$obj} ) {
+        delete $self->{saved};
         $self->{stream} = new IO::Uncompress::AnyUncompress $self->{file}
             if tell $self->{stream} > $self->{node};
-        seek $self->{stream}, $self->{node}, 0;
+        seek $self->{stream}, $self->{$obj}, 0;
     }
     else {
-        parse( $self, sub{ 'stop' }, only => 'node', save => 1 );
+        parse( $self, sub{ 'stop' }, only => $obj, save => 1 );
     }
 }
 
-sub seek_to_ways {
-    my $self = shift;
-    if ( defined $self->{way} ) {
-        $self->{stream} = new IO::Uncompress::AnyUncompress $self->{file}
-            if tell $self->{stream} > $self->{way};
-        seek $self->{stream}, $self->{way}, 0;
-    }
-    else {
-        parse( $self, sub{ 'stop' }, only => 'way', save => 1 );
-    }
-}
+sub seek_to_nodes     {  seek_to( shift(), 'node' )  }
 
-sub seek_to_relations {
-    my $self = shift;
-    if ( defined $self->{relation} ) {
-        $self->{stream} = new IO::Uncompress::AnyUncompress $self->{file}
-            if tell $self->{stream} > $self->{relation};
-        seek $self->{stream}, $self->{relation}, 0;
-    }
-    else {
-        parse( $self, sub{ 'stop' }, only => 'relation', save => 1 );
-    }
-}
+sub seek_to_ways      {  seek_to( shift(), 'way' )  }
+
+sub seek_to_relations {  seek_to( shift(), 'relation' )  }
 
 
 
@@ -147,20 +133,78 @@ sub parse_file {
 }
 
 
+my %attrorder = (
+    action      => 1,
+    id          => 2,
+    version     => 3,
+    timestamp   => 4,
+    uid         => 5,
+    user        => 6,
+    changeset   => 7,
+    lat         => 8,
+    lon         => 9,
+);
+
+my $enc = q{\x00-\x19<>&"'};
+
+sub to_xml {
+    my $class = shift;
+    my %obj = %{ shift() };
+
+    my $type = $obj{type}; 
+    delete $obj{type};
+
+    my $res = qq{  <$type }
+        . join( q{ },
+            map { qq{$_="} . encode("utf8",encode_entities($obj{$_}, $enc)) . q{"} }
+            grep { ! ref $obj{$_} }
+            sort { (exists $attrorder{$a} ? $attrorder{$a} : 999) <=> (exists $attrorder{$b} ? $attrorder{$b} : 999) or $a cmp $b } keys %obj );
+
+    if ( grep { ref } values %obj ) {
+        $res .= qq{>\n};
+        if ( exists $obj{chain} ) {
+            for my $nd ( @{$obj{chain}} ) {
+                $res .= qq{    <nd ref="$nd"/>\n};
+            }
+        }
+        if ( exists $obj{members} ) {
+            for my $nd ( @{$obj{members}} ) {
+                $res .= qq{    <member type="$nd->{type}" ref="$nd->{ref}" role="$nd->{role}"/>\n};
+            }
+        }
+        if ( exists $obj{tag} ) {
+            for my $tag ( sort keys %{$obj{tag}} ) {
+                $res .= q{    <tag k="}
+                    . encode("utf8",encode_entities($tag, $enc))
+                    . q{" v="}
+                    . encode("utf8",encode_entities($obj{tag}->{$tag}, $enc))
+                    . qq{"/>\n};
+            }
+        }
+        $res .= qq{  </$type>\n};
+    }
+    else {
+        $res .= qq{/>\n};
+    }
+
+    return $res;
+}
+
+
 =head1 NAME
 
 Geo::Parse::OSM - OpenStreetMap file parser
 
 =head1 VERSION
 
-Version 0.20
+Version 0.22
 
 =head1 SYNOPSIS
 
 
     use Geo::Parse::OSM;
 
-    my $osm = Geo::Parse::OSM->new( 'planet.osm' );
+    my $osm = Geo::Parse::OSM->new( 'planet.osm.gz' );
     $osm->seek_to_relations;
     $osm->parse( sub{ warn $_[0]->{id}  if  $_[0]->{user} eq 'Alice' } );
 
@@ -186,17 +230,21 @@ It's possible to filter out unnecessary object types
 
     $osm->parse( sub{ ... }, only => 'way' );
 
+=head2 seek_to
+
+Seeks to the first object of selected type.
+
+    $osm->seek_to( 'way' );
+
+Can be slow on compressed files.
+
 =head2 seek_to_nodes
 
 =head2 seek_to_ways
 
 =head2 seek_to_relations
 
-Seeks to the first object of selected type.
-
     $osm->seek_to_ways;
-
-Can be slow on compressed files.
 
 =head1 FUNCTIONS
 
@@ -205,6 +253,16 @@ Can be slow on compressed files.
 Simple parser - parses contents of file and executes callback function for every object.
 
     Geo::Parse::OSM->parse_file( 'planet.osm', sub{ print Dumper $_[0] } );
+
+=head2 to_xml
+
+Returns xml representation of the object.
+
+    sub callback {
+        my ($obj) = @_;
+        print Geo::Parse::OSM->to_xml( $obj );
+    }
+    Geo::Parse::OSM->parse_file( 'planet.osm', \&callback );
 
 
 =head1 AUTHOR

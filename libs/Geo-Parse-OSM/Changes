@@ -10,3 +10,6 @@ Revision history for Geo-Parse-OSM
 0.20    August 02 2010
         Compressed file support
 
+0.22    August 03 2010
+        to_xml
+
