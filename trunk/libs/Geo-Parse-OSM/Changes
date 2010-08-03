@@ -7,3 +7,6 @@ Revision history for Geo-Parse-OSM
         Basic OO interface
         File seek
 
+0.20    August 02 2010
+        Compressed file support
+
