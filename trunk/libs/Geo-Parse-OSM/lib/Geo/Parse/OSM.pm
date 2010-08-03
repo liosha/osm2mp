@@ -1,4 +1,4 @@
-package Geo::Parse::OSM;
+﻿package Geo::Parse::OSM;
 
 use warnings;
 use strict;
