@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.221';
+our $VERSION = '0.30';
 
 use Encode;
 use HTML::Entities;
@@ -196,7 +196,7 @@ Geo::Parse::OSM - OpenStreetMap file parser
 
 =head1 VERSION
 
-Version 0.221
+Version 0.30
 
 =head1 SYNOPSIS
 
