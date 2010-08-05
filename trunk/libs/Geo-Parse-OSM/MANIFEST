@@ -3,6 +3,7 @@ MANIFEST
 Makefile.PL
 README
 lib/Geo/Parse/OSM.pm
+lib/Geo/Parse/OSM/Multipass.pm
 t/00-load.t
 t/manifest.t
 t/pod-coverage.t
