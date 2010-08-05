@@ -101,13 +101,12 @@ sub seek_to {
     my $self = shift;
     my $obj = shift;
 
-    return unless exists $self->{$obj};
-
-    if ( defined $self->{$obj} ) {
+    if ( !exists $self->{$obj} || defined $self->{$obj} ) {
         delete $self->{saved};
+        my $pos = exists $self->{$obj} ? $self->{$obj} : $obj;
         $self->{stream} = new IO::Uncompress::AnyUncompress $self->{file}
-            if tell $self->{stream} > $self->{node};
-        seek $self->{stream}, $self->{$obj}, 0;
+            if tell $self->{stream} > $pos;
+        seek $self->{stream}, $pos, 0;
     }
     else {
         parse( $self, sub{ 'stop' }, only => $obj, save => 1 );
