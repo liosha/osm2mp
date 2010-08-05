@@ -16,6 +16,8 @@ WriteMakefile(
         'Test::More' => 0,
         'HTML::Parser' => 0,
         'IO::Uncompress::AnyUncompress' => 0,
+        'List::Util' => 0,
+        'List::MoreUtils' => 0,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'Geo-Parse-OSM-*' },
