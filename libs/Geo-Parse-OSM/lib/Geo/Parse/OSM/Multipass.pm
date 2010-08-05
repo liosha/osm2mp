@@ -4,7 +4,8 @@ use base qw{ Geo::Parse::OSM };
 use strict;
 use warnings;
 
-use List::MoreUtils qw{ true };
+use List::Util qw{ first };
+use List::MoreUtils qw{ true first_index };
 use Data::Dump 'dd';
 
 
@@ -38,7 +39,8 @@ sub new {
         if ( $obj->{tag}->{type} =~ /multipolygon|boundary/ ) {
             # old-style multipolygons - load lists of inner rings
             if ( (true { $_->{role} eq 'outer' } @{ $obj->{members} }) == 1 ) {
-                $self->{mpoly}->{$obj->{id}} = 
+                my $outer = first { $_->{role} eq 'outer' } @{ $obj->{members} };
+                $self->{mpoly}->{$outer->{ref}} = 
                     [ map { $_->{ref} } grep { $_->{role} eq 'inner' } @{ $obj->{members} } ];
             }
             # advanced multipolygons - load lists of ways
@@ -56,7 +58,9 @@ sub new {
 
     ## Second pass - load necessary primitives
 
-    $self->seek_to_nodes();
+    $self->seek_to(0);
+
+    &{ $param{between} }()  if exists $param{between};
 
     my $osm_pass2 = sub {
         my ($obj) = @_;
@@ -74,7 +78,7 @@ sub new {
 
     $self->SUPER::parse( $osm_pass2 );
 
-    $self->seek_to_nodes();
+    $self->seek_to(0);
 
     bless ($self, $class);
     return $self;
@@ -83,11 +87,75 @@ sub new {
 
 sub parse {
 
-    my $self = shift;
+    our $self = shift;
     our $callback = shift;
-    my %prop = @_;
 
     my $parse_extent = sub {
+        my ($obj) = @_;
+
+        # old-style multipolygons
+        if ( $obj->{type} eq 'way' && exists $self->{mpoly}->{ $obj->{id} }
+                && $obj->{chain}->[0] eq $obj->{chain}->[-1] ) {
+            $obj->{outer} = [ [ @{$obj->{chain}} ] ];
+            # $obj->{outer} = [ $obj->{chain} ];
+            for my $inner ( @{ $self->{mpoly}->{ $obj->{id} } } ) {
+                next unless exists $self->{waychain}->{$inner};
+                next unless $self->{waychain}->{$inner}->[0] eq $self->{waychain}->{$inner}->[-1];
+                push @{ $obj->{inner} }, $self->{waychain}->{$inner};
+            }
+        }
+
+        # advanced multipolygons
+        if ( $obj->{type} eq 'relation' && $obj->{tag}->{type} =~ /multipolygon|boundary/ ) {
+
+            for my $contour_type ( 'outer', 'inner' ) {
+    
+                my @list =
+                    grep { exists $self->{waychain}->{$_} }
+                    map { $_->{ref} }
+                    grep { $_->{type} eq 'way'
+                        && exists $role_type{$_->{role}}
+                        && $role_type{$_->{role}} eq $contour_type }
+                    @{ $obj->{members} };
+
+                LIST:
+                while ( @list ) {
+
+                    my $id = shift @list;
+                    my @contour = @{ $self->{waychain}->{$id} };
+
+                    CONTOUR:
+                    while ( 1 ) {
+                        # closed way
+                        if ( $contour[0] eq $contour[-1] ) {
+                            push @{ $obj->{$contour_type} }, [ @contour ];
+                            next LIST;
+                        }
+
+                        my $add = first_index { $contour[-1] eq $self->{waychain}->{$_}->[0] } @list;
+                        if ( $add > -1 ) {
+                            pop @contour;
+                            push @contour, @{ $self->{waychain}->{ $list[$add] } };
+
+                            splice  @list, $add, 1;
+                            next CONTOUR;
+                        }
+            
+                        $add = first_index { $contour[-1] eq $self->{waychain}->{$_}->[-1] } @list;
+                        if ( $add > -1 ) {
+                            pop @contour;
+                            push @contour, reverse @{ $self->{waychain}->{ $list[$add] } };
+
+                            splice  @list, $add, 1;
+                            next CONTOUR;
+                        }
+
+                        last CONTOUR;
+                    } #contour
+                } # members
+            } # outers/inners
+        } # advanced multipolygon
+
         &$callback( @_ );
     };
     
@@ -121,11 +189,22 @@ Geo::Parse::OSM::Multipass extends Geo::Parse::OSM class to resolve geometry.
 
 Creates parser instance and makes two passes:
 1 - only relations, create the list of multipolygon parts
-2 - loads those parts and nodes
+2 - load those parts and nodes
+
+You can add extra custom callback function:
+
+    my $osm = Geo::Parse::OSM::Multipass->new( 'planet.osm', pass1 => sub{ ... } );
+
+* pass1 - for every object during 1st pass
+* pass2 - same for second pass
+* between - before 2nd pass
 
 =head2 parse
 
-Same as in Geo::Parse::OSM, but callback object has extra fields
+Same as in Geo::Parse::OSM, but callback object has additional fields for multipolygon objects:
+
+* outer - list of outer rings (ring is a closed list of node ids)
+* inner - inner rings
 
 =head1 AUTHOR
 
