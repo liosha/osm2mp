@@ -7,6 +7,9 @@ use warnings;
 use List::Util qw{ first };
 use List::MoreUtils qw{ true first_index };
 
+our $VERSION = '0.35';
+
+
 
 my %role_type = (
     q{}      => 'outer',
@@ -23,7 +26,7 @@ sub new {
 
     our $self = $class->SUPER::new( shift );
 
-    $self->{nod}            = {};
+    $self->{latlon}         = {};
     $self->{waychain}       = {};
     $self->{mpoly}          = {};
     $self->{ways_to_load}   = {};
@@ -65,7 +68,7 @@ sub new {
         my ($obj) = @_;
 
         if ( $obj->{type} eq 'node' ) {
-            $self->{nod}->{ $obj->{id} } = [ $obj->{lon}, $obj->{lat} ];
+            $self->{latlon}->{ $obj->{id} } = pack 'Z*Z*', $obj->{lat}, $obj->{lon};
         }
         elsif ( $obj->{type} eq 'way' && exists $self->{ways_to_load}->{$obj->{id}} ) {
             $self->{waychain}->{ $obj->{id} } = $obj->{chain};
@@ -161,6 +164,15 @@ sub parse {
     $self->SUPER::parse( $parse_extent, @_ );    
 }
 
+sub latlon {
+    my $self = shift;
+    my ($node_id) = @_;
+
+    return exists $self->{latlon}->{$node_id}
+        ? ( unpack 'Z*Z*', $self->{latlon}->{$node_id} )
+        : undef;
+}
+
 
 1;
 
@@ -204,6 +216,13 @@ Same as in Geo::Parse::OSM, but callback object has additional fields for multip
 
 * outer - list of outer rings (ring is a closed list of node ids)
 * inner - inner rings
+
+=head2 latlon
+
+Returns coordinates of node (after 2nd pass)
+
+    my ($lat,$lon) = $osm->latlon( '1234578' );
+
 
 =head1 AUTHOR
 
