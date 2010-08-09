@@ -20,3 +20,8 @@ Revision history for Geo-Parse-OSM
         added ::Multipass class
         some fixes
 
+0.35    August 09 2010
+        store packed coordinates (less memory)
+        latlon() method
+        some fixes
+
