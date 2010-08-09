@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.35';
+our $VERSION = '0.35_01';
 
 use Encode;
 use HTML::Entities;

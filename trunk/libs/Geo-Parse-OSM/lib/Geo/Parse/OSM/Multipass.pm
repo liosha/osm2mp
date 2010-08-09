@@ -7,7 +7,7 @@ use warnings;
 use List::Util qw{ first };
 use List::MoreUtils qw{ true first_index };
 
-our $VERSION = '0.35';
+our $VERSION = '0.35_01';
 
 
 
@@ -78,7 +78,8 @@ sub new {
         &{ $param{pass2} }( $obj )  if exists $param{pass2};
     };
 
-    $self->SUPER::parse( $osm_pass2 );
+    #$self->SUPER::parse( $osm_pass2 );
+    $self->parse( $osm_pass2 );
 
     $self->seek_to(0);
 
@@ -95,15 +96,16 @@ sub parse {
     my $parse_extent = sub {
         my ($obj) = @_;
 
-        # old-style multipolygons
-        if ( $obj->{type} eq 'way' && exists $self->{mpoly}->{ $obj->{id} }
-                && $obj->{chain}->[0] eq $obj->{chain}->[-1] ) {
-            $obj->{outer} = [ [ @{$obj->{chain}} ] ];
-            # $obj->{outer} = [ $obj->{chain} ];
-            for my $inner ( @{ $self->{mpoly}->{ $obj->{id} } } ) {
-                next unless exists $self->{waychain}->{$inner};
-                next unless $self->{waychain}->{$inner}->[0] eq $self->{waychain}->{$inner}->[-1];
-                push @{ $obj->{inner} }, $self->{waychain}->{$inner};
+        # closed ways and old-style multipolygons
+        if ( $obj->{type} eq 'way' && $obj->{chain}->[0] eq $obj->{chain}->[-1] ) {
+            # $obj->{outer} = [ [ @{$obj->{chain}} ] ];
+            $obj->{outer} = [ $obj->{chain} ];
+            if ( exists $self->{mpoly}->{ $obj->{id} } ) {
+                for my $inner ( @{ $self->{mpoly}->{ $obj->{id} } } ) {
+                    next unless exists $self->{waychain}->{$inner};
+                    next unless $self->{waychain}->{$inner}->[0] eq $self->{waychain}->{$inner}->[-1];
+                    push @{ $obj->{inner} }, $self->{waychain}->{$inner};
+                }
             }
         }
 

@@ -23,5 +23,6 @@ Revision history for Geo-Parse-OSM
 0.35    August 09 2010
         store packed coordinates (less memory)
         latlon() method
+        generate 'outer' for closed ways
         some fixes
-
+        
