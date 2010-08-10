@@ -1,4 +1,4 @@
-package Geo::Parse::OSM::Multipass;
+package Geo::Parse::OSM::Singlepass;
 use base qw{ Geo::Parse::OSM };
 
 use strict;
@@ -29,57 +29,31 @@ sub new {
     $self->{latlon}         = {};
     $self->{waychain}       = {};
     $self->{mpoly}          = {};
-    $self->{ways_to_load}   = {};
 
     our %param = @_;
 
-    ## First pass - load multipolygon parameters
+    ## Single pass - load node coords and way chains
 
-    my $osm_pass1 = sub {
-        my ($obj) = @_;
-
-        if ( exists $obj->{tag}->{type} && $obj->{tag}->{type} =~ /multipolygon|boundary/ ) {
-            # old-style multipolygons - load lists of inner rings
-            if ( (true { $_->{role} eq 'outer' } @{ $obj->{members} }) == 1 ) {
-                my $outer = first { $_->{role} eq 'outer' } @{ $obj->{members} };
-                $self->{mpoly}->{$outer->{ref}} = 
-                    [ map { $_->{ref} } grep { $_->{role} eq 'inner' } @{ $obj->{members} } ];
-            }
-            # advanced multipolygons - load lists of ways
-            for my $member ( @{ $obj->{members} } ) {
-                next unless $member->{type} eq 'way';
-                next unless exists $role_type{ $member->{role} };
-                $self->{ways_to_load}->{ $member->{ref} } = 1;
-            }
-        }
-
-        &{ $param{pass1} }( $obj )  if exists $param{pass1};
-    };
-
-    $self->SUPER::parse( $osm_pass1, only => 'relation' );
-
-    ## Second pass - load necessary primitives
-
-    $self->seek_to(0);
-
-    &{ $param{between} }()  if exists $param{between};
-
-    my $osm_pass2 = sub {
+    my $osm_pass = sub {
         my ($obj) = @_;
 
         if ( $obj->{type} eq 'node' ) {
             $self->{latlon}->{ $obj->{id} } = pack 'Z*Z*', $obj->{lat}, $obj->{lon};
         }
-        elsif ( $obj->{type} eq 'way' && exists $self->{ways_to_load}->{$obj->{id}} ) {
+        elsif ( $obj->{type} eq 'way' ) {
             $self->{waychain}->{ $obj->{id} } = $obj->{chain};
             delete $self->{ways_to_load}->{$obj->{id}};
         }
+        elsif ( $obj->{type} eq 'relation' && (true { $_->{role} eq 'outer' } @{ $obj->{members} }) == 1 ) {
+            my $outer = first { $_->{role} eq 'outer' } @{ $obj->{members} };
+            $self->{mpoly}->{$outer->{ref}} = 
+                [ map { $_->{ref} } grep { $_->{role} eq 'inner' } @{ $obj->{members} } ];
+        }
 
-        &{ $param{pass2} }( $obj )  if exists $param{pass2};
+        &{ $param{pass1} }( $obj )  if exists $param{pass1};
     };
 
-    #$self->SUPER::parse( $osm_pass2 );
-    $self->parse( $osm_pass2 );
+    $self->parse( $osm_pass );
 
     $self->seek_to(0);
 
@@ -180,16 +154,19 @@ sub latlon {
 
 =head1 NAME
 
-Geo::Parse::OSM::Multipass - Multipass OpenStreetMap file parser
+Geo::Parse::OSM::Singlepass - Single pass OpenStreetMap file parser
 
 
 =head1 SYNOPSIS
 
-Geo::Parse::OSM::Multipass extends Geo::Parse::OSM class to resolve geometry.
+Geo::Parse::OSM::Singlepass extends Geo::Parse::OSM class to resolve geometry on one pass.
+It faster than ::Multipass, but uses much more memory and fails on old-style 
+multipolygons.
 
-    use Geo::Parse::OSM::Multipass;
 
-    my $osm = Geo::Parse::OSM::Multipass->new( 'planet.osm.gz' );
+    use Geo::Parse::OSM::Singlepass;
+
+    my $osm = Geo::Parse::OSM::Singlepass->new( 'planet.osm.gz' );
     $osm->seek_to_relations;
     $osm->parse( sub{ warn $_[0]->{id}  if  $_[0]->{user} eq 'Alice' } );
 
@@ -198,19 +175,14 @@ Geo::Parse::OSM::Multipass extends Geo::Parse::OSM class to resolve geometry.
 
 =head2 new
 
-    my $osm = Geo::Parse::OSM::Multipass->new( 'planet.osm' );
+    my $osm = Geo::Parse::OSM::Singlepass->new( 'planet.osm' );
 
-Creates parser instance and makes two passes:
-1 - only relations, create the list of multipolygon parts
-2 - load those parts and nodes
+Creates parser instance and makes one pass to load node coords,
+way chains and multipolygon lists.
 
-You can add extra custom callback function:
+You can add extra custom callback function pass1 for every object
 
-    my $osm = Geo::Parse::OSM::Multipass->new( 'planet.osm', pass1 => sub{ ... } );
-
-* pass1 - for every object during 1st pass
-* pass2 - same for second pass
-* between - before 2nd pass
+    my $osm = Geo::Parse::OSM::Singlepass->new( 'planet.osm', pass1 => sub{ ... } );
 
 =head2 parse
 
@@ -221,7 +193,7 @@ Same as in Geo::Parse::OSM, but callback object has additional fields for multip
 
 =head2 latlon
 
-Returns coordinates of node (after 2nd pass)
+Returns coordinates of node.
 
     my ($lat,$lon) = $osm->latlon( '1234578' );
 
