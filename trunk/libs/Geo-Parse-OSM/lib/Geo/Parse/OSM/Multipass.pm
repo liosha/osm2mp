@@ -24,7 +24,7 @@ my %role_type = (
 sub new {
     my $class = shift;
 
-    our $self = $class->SUPER::new( shift );
+    my $self = $class->SUPER::new( shift );
 
     $self->{latlon}         = {};
     $self->{waychain}       = {};
@@ -62,10 +62,10 @@ sub new {
 
     $self->seek_to(0);
 
-    &{ $param{between} }()  if exists $param{between};
+    &{ $param{between} }( $self )  if exists $param{between};
 
     my $osm_pass2 = sub {
-        my ($obj) = @_;
+        my ($obj, $self) = @_;
 
         if ( $obj->{type} eq 'node' ) {
             $self->{latlon}->{ $obj->{id} } = pack 'Z*Z*', $obj->{lat}, $obj->{lon};
@@ -75,7 +75,7 @@ sub new {
             delete $self->{ways_to_load}->{$obj->{id}};
         }
 
-        &{ $param{pass2} }( $obj )  if exists $param{pass2};
+        &{ $param{pass2} }( $obj, $self )  if exists $param{pass2};
     };
 
     #$self->SUPER::parse( $osm_pass2 );
@@ -90,7 +90,7 @@ sub new {
 
 sub parse {
 
-    our $self = shift;
+    my $self = shift;
     our $callback = shift;
 
     my $parse_extent = sub {
@@ -160,7 +160,7 @@ sub parse {
             } # outers/inners
         } # advanced multipolygon
 
-        &$callback( @_ );
+        &$callback( $obj, $self );
     };
     
     $self->SUPER::parse( $parse_extent, @_ );    
