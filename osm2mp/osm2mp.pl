@@ -1332,7 +1332,7 @@ if ( $shorelines ) {
             }
         }
 
-        AddPolygon( \%objinfo );
+        WritePolygon( \%objinfo );
     }
 
     printf STDERR "%d lakes, %d islands\n", scalar keys %lake, $countislands;
@@ -1737,32 +1737,32 @@ if ( $routing ) {
         my ($mode, $type, $prio, $llev, $hlev)  =  @{$polytype{$poly}};
         
         $roadid{$roadid} = $roadcount++;
-        
-        print  "; WayID = $roadid\n";
-        print  "; $poly\n";
-        print  "[POLYLINE]\n";
-        printf "Type=%s\n",         $type;
-        printf "EndLevel=%d\n",     $hlev       if  $hlev > $llev;
-        printf "Label=%s\n", ($name || $label2) if  $name || $label2;
-        print  "Label2=$label2\n"               if  $name && $label2;
-        print  "StreetDesc=$name\n"             if  $name  &&  $navitel;
-        print  "DirIndicator=1\n"               if  $rp =~ /^.,.,1/;
 
-        printf "Data%d=(%s)\n",     $llev, join( q{),(}, @node{@{$road->{chain}}} );
-        printf "RoadID=%d\n",       $roadid{$roadid};
-        printf "RouteParams=%s\n",  $rp;
-        
+        my %objinfo = (
+                comment     => "WayID = $roadid\n; $poly",
+                type        => $type,
+                name        => $name || $label2,
+                chain       => [ @node{ @{$road->{chain}} } ],
+                roadid      => $roadid{$roadid},
+                routeparams => $rp,
+            );
+
+        $objinfo{level_l}       = $llev       if $llev > 0;
+        $objinfo{level_h}       = $hlev       if $hlev > $llev;
+
+        $objinfo{name2}         = $label2     if $name && $label2;;
+        $objinfo{StreetDesc}    = $name       if $name && $navitel;
+        $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
+
         if ( $road->{city} ) {
             my $rcity = $city{$road->{city}};
-            print "CityName=$rcity->{name}\n";
-            print "RegionName=$rcity->{region}\n"       if ($rcity->{region});
-            print "CountryName=$rcity->{country}\n"     if ($rcity->{country});
+            $objinfo{CityName}      = $rcity->{name};
+            $objinfo{RegionName}    = $rcity->{region}  if $rcity->{region};
+            $objinfo{CountryName}   = $rcity->{country} if $rcity->{country};
         } elsif ( $name  &&  $defaultcity ) {
-            print "CityName=$defaultcity\n";
+            $objinfo{CityName}      = $defaultcity;
         }
-        
-        
-        my $nodcount = 0;
+
         my @levelchain = ();
         my $prevlevel = 0;
         for my $i ( 0 .. $#{$road->{chain}} ) {
@@ -1770,30 +1770,28 @@ if ( $routing ) {
 
             if ( $interchange3d ) {
                 if ( exists $hlevel{ $node } ) {
-                    push @levelchain, '(' . ($i-1) . ',0)'  if  $i > 0  &&  $prevlevel == 0;
-                    push @levelchain, "($i,$hlevel{$node})";
+                    push @levelchain, [ $i-1, 0 ]   if  $i > 0  &&  $prevlevel == 0;
+                    push @levelchain, [ $i,   $hlevel{$node} ];
                     $prevlevel = $hlevel{$node};
                 }
                 else {
-                    push @levelchain, "($i,0)"              if  $i > 0  &&  $prevlevel != 0;
+                    push @levelchain, [ $i,   0 ]   if  $i > 0  &&  $prevlevel != 0;
                     $prevlevel = 0;
                 }
             }
 
             next unless $nodid{$node};
-            printf "Nod%d=%d,%d,%d\n", $nodcount++, $i, $nodid{$node}, $xnode{$node};
+            push @{$objinfo{nod}}, [ $i, $nodid{$node}, $xnode{$node} ];
         }
 
-        printf "HLevel0=%s\n", join( q{,}, @levelchain)   if @levelchain;
+        $objinfo{HLevel0} = join( q{,}, map { "($_->[0],$_->[1])" } @levelchain)   if @levelchain;
 
-        print  "[END]\n\n\n";
+        WriteLine( \%objinfo );
     }
 
     printf STDERR "%d written\n", $roadcount-1;
 
 } # if $routing
-
-
 
 ####    Background object (?)
 
@@ -1802,7 +1800,7 @@ if ( $bounds && $background  &&  exists $config{types}->{background} ) {
 
     print "\n\n\n; ### Background\n\n";
 
-    AddPolygon({
+    WritePolygon({
             type    => $config{types}->{background}->{type},
             level_h => $config{types}->{background}->{endlevel},
             areas   => [ \@bound ],
@@ -2236,37 +2234,9 @@ sub FindSuburb {
         } keys %suburb;
 }
 
-sub AddLine {
 
-    my %param = %{$_[0]};
-    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
 
-    return      unless  exists $param{chain}; 
-    return      unless  exists $param{type};
-
-    my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
-    my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
-
-    print  "; $param{comment}\n"            if  exists $param{comment};
-    while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        print "; $key = $tag{$key}\n";
-    }
-
-    print  "[POLYLINE]\n";
-    printf "Type=%s\n",         $param{type};
-    printf "EndLevel=%d\n",     $hlev           if $hlev > $llev;
-    printf "Label=$param{name}\n"   if !exists $param{Label} && $param{name} ne q{};
-    printf "Data%d=(%s)\n",     $llev, join( q{),(}, @{ $param{chain} } );
-    for my $key ( keys %param ) {
-        next unless $key =~ /^_*[A-Z]/;
-        next if $param{$key} eq q{};
-        printf "$key=%s\n", convert_string($param{$key});
-    }
-    print  "[END]\n\n\n";
-}
-
-sub AddPOI {
+sub WritePOI {
     my %param = %{$_[0]};
 
     my %tag   = exists $param{tags} ? %{$param{tags}} : ();
@@ -2484,7 +2454,52 @@ sub CalcAccessRules {
 }     
 
 
-sub AddPolygon {
+sub WriteLine {
+
+    my %param = %{$_[0]};
+    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
+
+    return      unless  exists $param{chain}; 
+    return      unless  exists $param{type};
+
+    my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
+    my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
+
+    print  "; $param{comment}\n"            if  exists $param{comment};
+    while ( my ( $key, $val ) = each %tag ) {
+        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
+        print "; $key = $tag{$key}\n";
+    }
+
+    print  "[POLYLINE]\n";
+    printf "Type=%s\n",         $param{type};
+    printf "EndLevel=%d\n",     $hlev           if $hlev > $llev;
+    printf "Data%d=(%s)\n",     $llev, join( q{),(}, @{ $param{chain} } );
+
+    printf "Label=$param{name}\n"   if !exists $param{Label} && $param{name} ne q{};
+    printf "Label2=$param{name2}\n" if !exists $param{Label2} && $param{name2} ne q{};
+
+    # road data
+    printf "RoadID=$param{roadid}\n"            if exists $param{roadid};
+    printf "RouteParams=$param{routeparams}\n"  if exists $param{routeparams};
+    
+    my $nodcount = 0;
+    for my $nod ( @{$param{nod}} ) {
+        printf "Nod%d=%d,%d,%d\n", $nodcount++, @$nod;
+    }
+    
+    # the rest tags (capitals!)
+    for my $key ( sort keys %param ) {
+        next unless $key =~ /^_*[A-Z]/;
+        next if $param{$key} eq q{};
+        # printf "$key=%s\n", convert_string($param{$key});
+        printf "$key=$param{$key}\n";
+    }
+    print  "[END]\n\n\n";
+}
+
+
+sub WritePolygon {
 
     my %param = %{$_[0]};
 
@@ -2606,7 +2621,6 @@ sub AddPolygon {
 
     print "[END]\n\n\n";
 }
-
 
 
 
@@ -2742,7 +2756,7 @@ sub execute_action {
             $objinfo{add_elevation} = 1;
         }
 
-        AddPOI ( \%objinfo );
+        WritePOI ( \%objinfo );
     }
 
     ##  Load coastline
@@ -2771,7 +2785,7 @@ sub execute_action {
             my ($start, $finish) = @$part;
 
             $objinfo{chain} = [ @node{ @{$obj->{chain}}[ $start .. $finish ] } ];
-            AddLine( \%objinfo );
+            WriteLine( \%objinfo );
         }
     }
 
@@ -2808,7 +2822,7 @@ sub execute_action {
             $objinfo{entrance} = [ map { [ $node{$_}, $entrance{$_} ] } grep { exists $entrance{$_} } @{$obj->{chain}} ];
         }
 
-        AddPolygon( \%objinfo );
+        WritePolygon( \%objinfo );
     }
 }
 
