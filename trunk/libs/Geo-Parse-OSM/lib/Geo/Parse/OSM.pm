@@ -29,12 +29,19 @@ sub new {
 }
 
 
+my @obj_types = qw{ node way relation bound bounds };
+my $obj_types = join q{|}, @obj_types;
+
 sub parse {
 
     my $self = shift;
     my $callback = shift;
 
     my %prop = @_;
+
+    my %filter;
+    %filter = map { $_ => 1 } @{ $prop{only} }  if exists $prop{only} && ref $prop{only};
+    %filter = ( $prop{only} => 1 )              if exists $prop{only} && !ref $prop{only};
 
     my %object;
 
@@ -51,11 +58,11 @@ sub parse {
     while ( my $line = decode( 'utf8', $self->{stream}->getline() ) ) {
 
         # start of object
-        if ( my ($obj) = $line =~ m{^\s*<(node|way|relation)} ) {
+        if ( my ($obj) = $line =~ m{^\s*<($obj_types)} ) {
 
             $self->{$obj} = $pos    unless defined $self->{$obj};
             
-            next LINE if exists $prop{only} && $prop{only} ne $obj;
+            next LINE if %filter && !exists $filter{$obj};
 
             %object = ( type => $obj );
             
@@ -80,7 +87,7 @@ sub parse {
         }
 
         # end of object
-        if ( %object && ( my ($obj) = ( $line =~ m{^\s*</(node|way|relation)} or $line =~ m{^\s*<(node|way|relation).*/>} ) ) ) {
+        if ( %object && ( my ($obj) = ( $line =~ m{^\s*</($object{type})} or $line =~ m{^\s*<($object{type}).*/>} ) ) ) {
             my $res = &$callback( \%object );
             if ( defined $res && $res eq 'stop' ) {
                 $self->{saved} = \%object    if $prop{save};
@@ -227,6 +234,7 @@ Stops parsing if callback returns 'stop'
 It's possible to filter out unnecessary object types
 
     $osm->parse( sub{ ... }, only => 'way' );
+    $osm->parse( sub{ ... }, only => [ 'way', 'relation' ] );
 
 =head2 seek_to
 

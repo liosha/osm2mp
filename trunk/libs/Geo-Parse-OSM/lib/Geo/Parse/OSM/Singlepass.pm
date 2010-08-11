@@ -180,7 +180,7 @@ multipolygons.
 Creates parser instance and makes one pass to load node coords,
 way chains and multipolygon lists.
 
-You can add extra custom callback function pass1 for every object
+You can add extra custom callback function 'pass1' for every object
 
     my $osm = Geo::Parse::OSM::Singlepass->new( 'planet.osm', pass1 => sub{ ... } );
 
