@@ -33,19 +33,29 @@ sub new {
 
     our %param = @_;
 
-    ## First pass - load multipolygon parameters
+    
+    
+    ## First pass - load nodes and multipolygon parameters
 
     my $osm_pass1 = sub {
         my ($obj) = @_;
 
-        if ( exists $obj->{tag}->{type} && $obj->{tag}->{type} =~ /multipolygon|boundary/ ) {
-            # old-style multipolygons - load lists of inner rings
+        # node
+        if ( $obj->{type} eq 'node' ) {
+            $self->{latlon}->{ $obj->{id} } = pack 'Z*Z*', $obj->{lat}, $obj->{lon};
+        }
+
+        #multipolygon
+        if ( $obj->{type} eq 'relation' 
+                && exists $obj->{tag}->{type}
+                && $obj->{tag}->{type} =~ /multipolygon|boundary/ ) {
+            # old-style - list of inner rings
             if ( (true { $_->{role} eq 'outer' } @{ $obj->{members} }) == 1 ) {
                 my $outer = first { $_->{role} eq 'outer' } @{ $obj->{members} };
                 $self->{mpoly}->{$outer->{ref}} = 
                     [ map { $_->{ref} } grep { $_->{role} eq 'inner' } @{ $obj->{members} } ];
             }
-            # advanced multipolygons - load lists of ways
+            # advanced - ways
             for my $member ( @{ $obj->{members} } ) {
                 next unless $member->{type} eq 'way';
                 next unless exists $role_type{ $member->{role} };
@@ -56,21 +66,21 @@ sub new {
         &{ $param{pass1} }( $obj )  if exists $param{pass1};
     };
 
-    $self->SUPER::parse( $osm_pass1, only => 'relation' );
+    $self->SUPER::parse( $osm_pass1, only => [ 'node', 'relation' ] );
 
-    ## Second pass - load necessary primitives
+
+    
+    ## Second pass - load necessary ways
 
     $self->seek_to(0);
+    # $self->seek_to_ways();
 
     &{ $param{between} }( $self )  if exists $param{between};
 
     my $osm_pass2 = sub {
         my ($obj, $self) = @_;
 
-        if ( $obj->{type} eq 'node' ) {
-            $self->{latlon}->{ $obj->{id} } = pack 'Z*Z*', $obj->{lat}, $obj->{lon};
-        }
-        elsif ( $obj->{type} eq 'way' && exists $self->{ways_to_load}->{$obj->{id}} ) {
+        if ( $obj->{type} eq 'way' && exists $self->{ways_to_load}->{$obj->{id}} ) {
             $self->{waychain}->{ $obj->{id} } = $obj->{chain};
             delete $self->{ways_to_load}->{$obj->{id}};
         }
@@ -201,14 +211,14 @@ Geo::Parse::OSM::Multipass extends Geo::Parse::OSM class to resolve geometry.
     my $osm = Geo::Parse::OSM::Multipass->new( 'planet.osm' );
 
 Creates parser instance and makes two passes:
-1 - only relations, create the list of multipolygon parts
-2 - load those parts and nodes
+1 - load node coordinates and create list of multipolygon parts
+2 - load those parts
 
 You can add extra custom callback function:
 
     my $osm = Geo::Parse::OSM::Multipass->new( 'planet.osm', pass1 => sub{ ... } );
 
-* pass1 - for every object during 1st pass
+* pass1 - is called for every object during 1st pass
 * pass2 - same for second pass
 * between - before 2nd pass
 
