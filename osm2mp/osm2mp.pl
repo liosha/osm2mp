@@ -2456,8 +2456,17 @@ sub condition_matches {
 
     # inside_city (smart)
     if ( my ($neg) = $condition =~ /(~?)\s*inside_city/ ) {
-        my $res = FindCity( $obj->{chain}->[ floor $#{$obj->{chain}}/3 ] )
+        my $res;
+        if ( $obj->{type} eq 'Node' ) {
+            $res = FindCity( $obj->{id} );
+        }
+        elsif ( exists $obj->{latlon} ) {
+            $res = FindCity( $obj->{latlon} );
+        }
+        elsif ( $obj->{type} eq 'Way' && exists $obj->{chain} ) {
+            $res = FindCity( $obj->{chain}->[ floor $#{$obj->{chain}}/3 ] )
                 && FindCity( $obj->{chain}->[ ceil $#{$obj->{chain}}*2/3 ] );
+        }
         return( $neg xor $res );
     }
 
