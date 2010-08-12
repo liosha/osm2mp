@@ -1396,14 +1396,8 @@ if ( $routing ) {
                     my $id = $roadid.'/'.($i+1);
                     printf "; FIX: Added road %s, nodes from %d to %d\n", $id, $breaks[$i], $breaks[$i+1];
                     
-                    $road{$id} = {
-                        chain   => [ @{$road->{chain}}[$breaks[$i] .. $breaks[$i+1]] ],
-                        type    => $road{$roadid}->{type},
-                        name    => $road{$roadid}->{name},
-                        label2  => $road{$roadid}->{label2},
-                        city    => $road{$roadid}->{city},
-                        rp      => $road{$roadid}->{rp},
-                    };
+                    $road{$id} = { %{$road{$roadid}} };
+                    $road{$id}->{chain} = [ @{$road->{chain}}[$breaks[$i] .. $breaks[$i+1]] ];
 
                     #   update nod->road list
                     for my $nod ( grep { exists $nodeways{$_} } @{$road{$id}->{chain}} ) {
