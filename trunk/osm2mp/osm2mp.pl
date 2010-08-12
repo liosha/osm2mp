@@ -103,21 +103,11 @@ my $poicontacts     = 1;
 
 my $transport_mode  = undef;
 
-# name selection priority
-my %name_list = (
-    label       => [ qw{ name loc_name addr:housenumber operator } ],
-    house       => [ qw{ addr:housenumber addr:housename } ],
-    entrance    => [ qw{ name ref } ],
-    place       => [ qw{ place_name name } ],
-    street      => [ qw{ addr:street name } ],
-    region      => [ qw{ addr:region is_in:region addr:state is_in:state } ],
-    country     => [ qw{ addr:country is_in:country_code is_in:country } ],
-    destination => [ qw{ destination label name } ],
-);
-
-
 
 ####    Global vars
+
+my %yesno;
+my %taglist;
 
 my %node;
 my %waychain;
@@ -125,21 +115,6 @@ my %waychain;
 my %city;
 my $city_rtree = new Tree::R;
 my %suburb;
-
-
-my %yesno = (
-    'yes'            => '1',
-    'true'           => '1',
-    '1'              => '1',
-    'permissive'     => '1',
-    'designated'     => '1',
-    'no'             => '0',
-    'false'          => '0',
-    '0'              => '0',
-    'private'        => '0',
-);
-
-
 
 
 GetOptions (
@@ -194,10 +169,10 @@ GetOptions (
     'poiregion!'        => \$poiregion,
     'poicontacts!'      => \$poicontacts,
 
-    'namelist=s%'       => sub { $name_list{$_[1]} = [ split /[ ,]+/, $_[2] ] },
+    'namelist=s%'       => sub { $taglist{$_[1]} = [ split /[ ,]+/, $_[2] ] },
     
     # deprecated
-    'nametaglist=s'     => sub { $name_list{label} = [ split /[ ,]+/, $_[1] ] },
+    'nametaglist=s'     => sub { $taglist{label} = [ split /[ ,]+/, $_[1] ] },
 );
 
 
@@ -268,6 +243,12 @@ while ( my $cfgfile = shift @$config ) {
         }
         elsif ( $key eq 'yesno' ) {
             %yesno = %{ $item };
+        }
+        elsif ( $key eq 'taglist' ) {
+            while ( my ( $key, $val ) = each %$item ) {
+                next if exists $taglist{$key};
+                $taglist{$key} = $val;
+            }
         }
         elsif ( $key eq 'nodes' || $key eq 'ways' ) {
             for my $rule ( @$item ) {
@@ -1795,7 +1776,9 @@ sub convert_string {            # String
 
 sub name_from_list {
     my ($list_name, $tag_ref) = @_;
-    my $key = first { exists $tag_ref->{$_} } @{$name_list{$list_name}};
+
+    my $key = first { exists $tag_ref->{$_} } @{$taglist{$list_name}};
+
     my $name;
     $name = $tag_ref->{$key}            if  $key;
     $name = $country_code{uc $name}     if  $list_name eq 'country'  &&  exists $country_code{uc $name};
@@ -1918,7 +1901,7 @@ sub usage  {
     my $usage = <<"END_USAGE";
 Usage:  osm2mp.pl [options] file.osm > file.mp
 
-Possible options [defaults]:
+Available options [defaults]:
 
  --config <file>           configuration file   [$config]
  --mapid <id>              map id               [$mapid]
@@ -1929,7 +1912,7 @@ Possible options [defaults]:
  --translit                tranliterate labels               [$onoff[$translit]]
  --ttable <file>           character conversion table
  --roadshields             shields with road numbers         [$onoff[$roadshields]]
- --namelist <key>=<list>   comma-separated list of tags to select names; defaults:%s
+ --namelist <key>=<list>   comma-separated list of tags to select names
  
  --addressing              use city polygons for addressing  [$onoff[$addressing]]
  --navitel                 write addresses for polygons      [$onoff[$navitel]]
@@ -1969,8 +1952,7 @@ Possible options [defaults]:
 You can use no<option> to disable features (i.e --norouting)
 END_USAGE
 
-    printf $usage, 
-        join( q{}, map { sprintf "\n     %-12s -  %s", $_, join( q{, }, @{$name_list{$_}} ) } sort keys %name_list );
+    printf $usage;
     exit;
 }
 
