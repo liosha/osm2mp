@@ -56,7 +56,7 @@ my %action_type = (
     r   =>  'load_road',
 );
 
-open CFG, "poly-water.cfg";
+open CFG, "poly.cfg";
 while (<CFG>) {
     next   if (!$_) || /^\s*[\#\;]/;
     chomp;
