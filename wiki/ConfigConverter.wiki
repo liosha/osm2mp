@@ -47,6 +47,7 @@ close CFG;
 
 == Poly ==
 
+{{{
 use YAML;
 
 my %action_type = (
@@ -98,3 +99,4 @@ $cfg =~ s/\b[1-9](\w)/$1/g;
 open CFG, '>', 'ways-common-draft.yml';
 print CFG $cfg;
 close CFG;
+}}}
