@@ -1560,6 +1560,8 @@ if ( $routing ) {
         
         $roadid{$roadid} = $roadcount++;
 
+        $rp =~ s/^(.,.),./$1,0/     unless $oneway;
+
         my %objinfo = (
                 comment     => "WayID = $roadid" . $road->{comment},
                 type        => $type,
@@ -1940,7 +1942,7 @@ Possible options [defaults]:
  --countrylist <file>      replace country code by name
 
  --routing                 produce routable map                      [$onoff[$routing]]
- --oneway                  set oneway attribute for roads            [$onoff[$oneway]]
+ --oneway                  enable oneway attribute for roads         [$onoff[$oneway]]
  --mergeroads              merge same ways                           [$onoff[$mergeroads]]
  --mergecos <cosine>       max allowed angle between roads to merge  [$mergecos]
  --splitroads              split long and self-intersecting roads    [$onoff[$splitroads]]
@@ -2321,6 +2323,136 @@ sub WriteLine {
 }
 
 
+sub AddRoad {
+
+    my %param = %{$_[0]};
+    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
+
+    return      unless  exists $param{chain}; 
+    return      unless  exists $param{type};
+
+    my ($orig_id) = $param{id} =~ /^([^:]+)/;
+    
+    my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
+    my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
+
+    my @rp = split q{,}, $param{routeparams};
+    @rp[4..11] = CalcAccessRules( \%tag, [ @rp[4..11] ] );
+
+    # determine city
+    my $city = FindCity( 
+        $param{chain}->[ floor $#{$param{chain}}/3 ], 
+        $param{chain}->[ ceil $#{$param{chain}}*2/3 ] );
+    
+    # calculate speed class
+    if ( $tag{'maxspeed'} > 0 ) {
+       $tag{'maxspeed'} *= 1.61      if  $tag{'maxspeed'} =~ /mph$/i;
+       $rp[0]  = speed_code( $tag{'maxspeed'} * 0.9 ); # real speed ?
+    }
+    if ( $tag{'maxspeed:practical'} > 0 ) {
+       $tag{'maxspeed:practical'} *= 1.61        if  $tag{'maxspeed:practical'} =~ /mph$/i;
+       $rp[0]  = speed_code( $tag{'maxspeed:practical'} );
+    }
+
+    # navitel-style 3d interchanges
+    if ( $interchange3d && exists $waytag{'layer'} && $waytag{'layer'} != 0 ) {
+        my $layer = ( $tag{'layer'}<0 ? $tag{'layer'} : $tag{'layer'} * 2 );
+        for my $node ( @{$param{chain}} ) {
+            $hlevel{ $node } = $layer;
+        }
+        $layer = $layer - ( $layer < 0  ?  0  :  1 );
+        $hlevel { $param{chain}->[0]  } = $layer;
+        $hlevel { $param{chain}->[-1] } = $layer;
+    }
+
+    # determine suburb
+    if ( $city && $param{name} ) {
+        my $suburb;
+        if ( exists $tag{'addr:suburb'}) { 
+            $suburb = $tag{'addr:suburb'};
+        }
+        else {
+            my $sub_ref = FindSuburb( 
+               $param{chain}->[ floor $#{$param{chain}}/3 ], 
+                $param{chain}->[ ceil $#{$param{chain}}*2/3 ]
+            );
+            $suburb = $suburb{$sub_ref}->{name} if $sub_ref;
+        }
+
+        $param{name} .= qq{ ($suburb)} if $suburb;
+    }
+
+    # road shield
+    if ( $roadshields  &&  !$city ) {
+        my @ref;
+        @ref = @{ $road_ref{$orig_id} }                 if exists $road_ref{$orig_id};
+        push @ref, convert_string( $tag{'ref'} )        if exists $tag{'ref'};
+        push @ref, convert_string( $tag{'int_ref'} )    if exists $tag{'int_ref'};
+        
+        if ( @ref ) {
+            my $ref = join q{,}, sort( uniq( map { s/[\s\-]+//g; split /[,;]/, $_ } @ref ) );
+            $param{name} = '~[0x06]' . $ref . ( $param{name} ? q{ } . $param{name} : q{} );
+        }
+    }
+
+    # load roads and external nodes
+    $road{$param{id}} = {
+        #comment =>  $param{comment},
+        type    =>  $param{type},
+        name    =>  $param{name},
+        label2  =>  convert_string( $tag{'addr:street'} ),
+        chain   =>  $param{chain},
+        level_l =>  $llev,
+        level_h =>  $hlev,
+        city    =>  $city,
+        rp      =>  join( q{,}, @rp ),
+    };
+
+    # FIXME: buggy object comment
+    while ( my ( $key, $val ) = each %tag ) {
+        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
+        $road{$param{id}}->{comment} .= "\n; $key = $tag{$key}";
+    }
+
+    if ( $bounds ) {
+        if ( !is_inside_bounds( $node{ $param{chain}->[0] } ) ) {
+            $xnode{ $param{chain}->[0] } = 1;
+            $xnode{ $param{chain}->[1] } = 1;
+        }
+        if ( !is_inside_bounds( $node{ $param{chain}->[-1] } ) ) {
+            $xnode{ $param{chain}->[-1] } = 1;
+            $xnode{ $param{chain}->[-2] } = 1;
+        }
+    }
+
+    # process associated turn restrictions
+    if ( $restrictions  ||  $destsigns ) {
+        
+        for my $relid ( grep { $trest{$_}->{fr_way} eq $orig_id } @{$nodetr{$param{chain}->[0]}} ) {
+            $trest{$relid}->{fr_way} = $param{id};
+            $trest{$relid}->{fr_dir} = -1;
+            $trest{$relid}->{fr_pos} = 0;
+        }
+        for my $relid ( grep { $trest{$_}->{to_way} eq $orig_id } @{$nodetr{$param{chain}->[0]}} ) {
+            $trest{$relid}->{to_way} = $param{id};
+            $trest{$relid}->{to_dir} = 1;
+            $trest{$relid}->{to_pos} = 0;
+        }
+
+        for my $relid ( grep { $trest{$_}->{fr_way} eq $orig_id } @{$nodetr{$param{chain}->[-1]}} ) {
+            $trest{$relid}->{fr_way} = $param{id};
+            $trest{$relid}->{fr_dir} = 1;
+            $trest{$relid}->{fr_pos} = $#{ $param{chain} };
+        }
+        for my $relid ( grep { $trest{$_}->{to_way} eq $orig_id } @{$nodetr{$param{chain}->[-1]}} ) {
+            $trest{$relid}->{to_way} = $param{id};
+            $trest{$relid}->{to_dir} = -1;
+            $trest{$relid}->{to_pos} = $#{ $param{chain} };
+        }
+    }
+}
+
+
 sub WritePolygon {
 
     my %param = %{$_[0]};
@@ -2613,7 +2745,7 @@ sub execute_action {
     }
 
     ##  Write line or load road
-    if ( $param{action} eq 'write_line' || $param{action} eq 'load_road' ) {
+    if ( $param{action} ~~ [ qw{ write_line load_road modify_road } ] ) {
 
         %objinfo = ( %objinfo, (
                 type        => $action->{type},
@@ -2638,168 +2770,35 @@ sub execute_action {
             if ( $routing && $param{action} eq 'load_road' ) {
                 AddRoad( \%objinfo );
             }
-            else {
+            elsif ( $routing && $param{action} eq 'modify_road' ) {
+                # type
+                if ( exists $action->{type} ) {
+                    $road{ $objinfo{id} }->{type} = $action->{type};
+                }
+                # reverse
+                if ( exists $action->{reverse} && $action->{reverse} ) {
+                    $road{ $objinfo{id} }->{chain} = [ reverse @{ $road{ $objinfo{id} }->{chain} } ];
+                }
+                # routeparams
+                if ( exists $action->{routeparams} ) {
+                    my @rp  = split q{,}, $road{ $objinfo{id} }->{rp};
+                    my @mrp = split q{,}, $action->{routeparams};
+                    for my $p ( @rp ) {
+                        my $mp = shift @mrp;
+                        $p = $mp    if $mp =~ /^\d$/;
+                        $p = 1-$p   if $mp eq q{~};
+                        $p = $p+$1  if $p < 4 && $mp =~ /^\+(\d)$/;
+                        $p = $p-$1  if $p > 0 && $mp =~ /^\-(\d)$/;
+                    }
+                    $road{ $objinfo{id} }->{rp} = join q{,}, @rp;
+                }
+            }
+            elsif ( $param{action} ne 'modify_road' ) {
                 $countlines ++;
                 WriteLine( \%objinfo );
             }
         }
     }
-
-sub AddRoad {
-
-    my %param = %{$_[0]};
-    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
-
-    return      unless  exists $param{chain}; 
-    return      unless  exists $param{type};
-
-    my ($orig_id) = $param{id} =~ /^([^:]+)/;
-    
-    my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
-    my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
-
-    my @rp = split q{,}, $param{routeparams};
-    @rp[4..11] = CalcAccessRules( \%tag, [ @rp[4..11] ] );
-
-    # determine city
-    my $city = FindCity( 
-        $param{chain}->[ floor $#{$param{chain}}/3 ], 
-        $param{chain}->[ ceil $#{$param{chain}}*2/3 ] );
-    
-    # calculate speed class
-    if ( $tag{'maxspeed'} > 0 ) {
-       $tag{'maxspeed'} *= 1.61      if  $tag{'maxspeed'} =~ /mph$/i;
-       $rp[0]  = speed_code( $tag{'maxspeed'} * 0.9 ); # real speed ?
-    }
-    if ( $tag{'maxspeed:practical'} > 0 ) {
-       $tag{'maxspeed:practical'} *= 1.61        if  $tag{'maxspeed:practical'} =~ /mph$/i;
-       $rp[0]  = speed_code( $tag{'maxspeed:practical'} );
-    }
-
-    if ( $tag{'oneway'} == -1 ) {
-        $tag{'oneway'} = 'yes';
-        @{$param{chain}} = reverse @{$param{chain}};
-    }
-
-    $rp[2] = $yesno{$tag{'oneway'}} if  $oneway && exists $yesno{$tag{'oneway'}};
-    $rp[3] = $yesno{$tag{'toll'}}   if  exists $yesno{$tag{'toll'}};
-    
-    
-    # navitel-style 3d interchanges
-    if ( $interchange3d && exists $waytag{'layer'} && $waytag{'layer'} != 0 ) {
-        my $layer = ( $tag{'layer'}<0 ? $tag{'layer'} : $tag{'layer'} * 2 );
-        for my $node ( @{$param{chain}} ) {
-            $hlevel{ $node } = $layer;
-        }
-        $layer = $layer - ( $layer < 0  ?  0  :  1 );
-        $hlevel { $param{chain}->[0]  } = $layer;
-        $hlevel { $param{chain}->[-1] } = $layer;
-    }
-
-    # decrease road class for unsurfaced roads
-    if ( $rp[1] > 0  &&  exists $tag{'surface'}
-            &&  $tag{'surface'} =~ /^(unpaved|ground|earth|mud|grass|sand|dirt)$/ ) {
-        $rp[1] --;
-    }
-
-    # increase road class for motorroads
-    if ( $rp[1] < 4  
-            &&  exists $tag{'highway'}    &&  $tag{'highway'} !~ /motorway/ 
-            &&  exists $tag{'motorroad'}  &&  $yesno{ $tag{'motorroad'} } ) {
-        $rp[1] ++;
-    }
-    if ( $rp[1] > 0
-            &&  exists $tag{'highway'}    &&  $tag{'highway'} =~ /motorway/ 
-            &&  exists $tag{'motorroad'}  &&  !$yesno{ $tag{'motorroad'} } ) {
-        $rp[1] --;
-    }
-
-    # determine suburb
-    if ( $city && $param{name} ) {
-        my $suburb;
-        if ( exists $tag{'addr:suburb'}) { 
-            $suburb = $tag{'addr:suburb'};
-        }
-        else {
-            my $sub_ref = FindSuburb( 
-               $param{chain}->[ floor $#{$param{chain}}/3 ], 
-                $param{chain}->[ ceil $#{$param{chain}}*2/3 ]
-            );
-            $suburb = $suburb{$sub_ref}->{name} if $sub_ref;
-        }
-
-        $param{name} .= qq{ ($suburb)} if $suburb;
-    }
-
-    # road shield
-    if ( $roadshields  &&  !$city ) {
-        my @ref;
-        @ref = @{ $road_ref{$orig_id} }                 if exists $road_ref{$orig_id};
-        #push @ref, convert_string( $tag{'ref'} )        if exists $tag{'ref'};
-        #push @ref, convert_string( $tag{'int_ref'} )    if exists $tag{'int_ref'};
-        
-        if ( @ref ) {
-            my $ref = join q{,}, sort( uniq( map { s/[\s\-]+//g; split /[,;]/, $_ } @ref ) );
-            $param{name} = '~[0x06]' . $ref . ( $param{name} ? q{ } . $param{name} : q{} );
-        }
-    }
-
-    # load roads and external nodes
-    $road{$param{id}} = {
-        #comment =>  $param{comment},
-        type    =>  $param{type},
-        name    =>  $param{name},
-        label2  =>  convert_string( $tag{'addr:street'} ),
-        chain   =>  $param{chain},
-        level_l =>  $llev,
-        level_h =>  $hlev,
-        city    =>  $city,
-        rp      =>  join( q{,}, @rp ),
-    };
-
-    # FIXME: buggy object comment
-    while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        $road{$param{id}}->{comment} .= "\n; $key = $tag{$key}";
-    }
-
-    if ( $bounds ) {
-        if ( !is_inside_bounds( $node{ $param{chain}->[0] } ) ) {
-            $xnode{ $param{chain}->[0] } = 1;
-            $xnode{ $param{chain}->[1] } = 1;
-        }
-        if ( !is_inside_bounds( $node{ $param{chain}->[-1] } ) ) {
-            $xnode{ $param{chain}->[-1] } = 1;
-            $xnode{ $param{chain}->[-2] } = 1;
-        }
-    }
-
-    # process associated turn restrictions
-    if ( $restrictions  ||  $destsigns ) {
-        
-        for my $relid ( grep { $trest{$_}->{fr_way} eq $orig_id } @{$nodetr{$param{chain}->[0]}} ) {
-            $trest{$relid}->{fr_way} = $param{id};
-            $trest{$relid}->{fr_dir} = -1;
-            $trest{$relid}->{fr_pos} = 0;
-        }
-        for my $relid ( grep { $trest{$_}->{to_way} eq $orig_id } @{$nodetr{$param{chain}->[0]}} ) {
-            $trest{$relid}->{to_way} = $param{id};
-            $trest{$relid}->{to_dir} = 1;
-            $trest{$relid}->{to_pos} = 0;
-        }
-
-        for my $relid ( grep { $trest{$_}->{fr_way} eq $orig_id } @{$nodetr{$param{chain}->[-1]}} ) {
-            $trest{$relid}->{fr_way} = $param{id};
-            $trest{$relid}->{fr_dir} = 1;
-            $trest{$relid}->{fr_pos} = $#{ $param{chain} };
-        }
-        for my $relid ( grep { $trest{$_}->{to_way} eq $orig_id } @{$nodetr{$param{chain}->[-1]}} ) {
-            $trest{$relid}->{to_way} = $param{id};
-            $trest{$relid}->{to_dir} = -1;
-            $trest{$relid}->{to_pos} = $#{ $param{chain} };
-        }
-    }
-}
 
     ##  Write polygon
     if ( $param{action} eq 'write_polygon' ) {
