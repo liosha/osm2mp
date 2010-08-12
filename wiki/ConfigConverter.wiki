@@ -81,7 +81,7 @@ while (<CFG>) {
     $action{'3level_l'} = $llev     if $llev > 0;
     $action{'4level_h'} = $hlev     if $hlev > 0;
     if ( $hlev =~ /\*(.*)/ ) {
-        $action{'4level_by_square'}  = [ split /,/, $1 ];
+        $action{'4level_h'}  = [ split /,/, $1 ];
     }
     $action{'5routeparams'} = $rp   if $rp && $mode eq 'r';
 
