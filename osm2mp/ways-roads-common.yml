@@ -196,6 +196,34 @@
       type: 0x16
       routeparams: '0,0,0,0,1,1,1,1,1,0,0,1'
 
+
+- condition:
+    - highway = construction
+  action:
+    - action: load_road
+      type: 0x12
+      level_h: 1
+      routeparams: '1,0,0,0,1,1,1,1,1,1,1,1'
+
+- condition:
+    - highway = steps
+  action:
+    - action: load_road
+      type: 0x13
+      routeparams: '0,0,0,0,1,1,1,1,1,0,1,1'
+
+- condition:
+    - route = ferry
+  action:
+    - action: load_road
+      type: 0x1b
+      level_h: 2
+      routeparams: '0,0,0,0,0,0,0,0,0,0,0,0'
+
+
+
+## Tracks
+
 - condition:
     - highway = track
   action:
@@ -206,97 +234,22 @@
 
 - condition:
     - highway = track
-    - inside_city
+    - tracktype = grade4|grade5
   action:
-    - action: load_road
-      type: 0x0a
-      level_h: 1
-      routeparams: '1,0,0,0,0,0,0,1,0,0,0,0'
+    - action: modify_road
+      type: 0x16
 
 - condition:
-    - tracktype = grade1
+    - highway = track
+    - tracktype = grade1|grade2
+    - !inside_city
   action:
-    - action: load_road
-      type: 0x0a
+    - action: modify_road
       level_h: 2
-      routeparams: '1,0,0,0,0,0,0,1,0,0,0,0'
 
-- condition:
-    - tracktype = grade1
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x0a
-      level_h: 1
-      routeparams: '1,0,0,0,0,0,0,1,0,0,0,0'
 
-- condition:
-    - tracktype = grade2
-  action:
-    - action: load_road
-      type: 0x0a
-      level_h: 2
-      routeparams: '1,0,0,0,0,0,0,1,0,0,0,0'
 
-- condition:
-    - tracktype = grade2
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x0a
-      level_h: 1
-      routeparams: '1,0,0,0,0,0,0,1,0,0,0,0'
-
-- condition:
-    - tracktype = grade3
-  action:
-    - action: load_road
-      type: 0x0a
-      level_h: 2
-      routeparams: '1,0,0,0,0,0,0,1,0,0,0,0'
-
-- condition:
-    - tracktype = grade3
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x0a
-      level_h: 1
-      routeparams: '1,0,0,0,0,0,0,1,0,0,0,0'
-
-- condition:
-    - tracktype = grade4
-  action:
-    - action: load_road
-      type: 0x16
-      level_h: 1
-      routeparams: '0,0,0,0,0,0,0,1,0,0,0,0'
-
-- condition:
-    - tracktype = grade4
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x16
-      level_h: 1
-      routeparams: '0,0,0,0,0,0,0,1,0,0,0,0'
-
-- condition:
-    - tracktype = grade5
-  action:
-    - action: load_road
-      type: 0x16
-      level_h: 1
-      routeparams: '0,0,0,0,0,0,0,1,0,0,0,0'
-
-- condition:
-    - tracktype = grade5
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x16
-      level_h: 1
-      routeparams: '0,0,0,0,0,0,0,1,0,0,0,0'
+## Transport platforms
 
 - condition:
     - railway = platform
@@ -324,35 +277,12 @@
 
 - condition:
     - man_made = pier
+    - area != yes|true|1
   action:
     - action: load_road
       type: 0x11
       level_h: 1
       routeparams: '0,0,0,0,1,1,1,1,1,0,1,1'
-
-- condition:
-    - highway = construction
-  action:
-    - action: load_road
-      type: 0x12
-      level_h: 1
-      routeparams: '1,0,0,0,1,1,1,1,1,1,1,1'
-
-- condition:
-    - highway = steps
-  action:
-    - action: load_road
-      type: 0x13
-      routeparams: '0,0,0,0,1,1,1,1,1,0,1,1'
-
-- condition:
-    - route = ferry
-  action:
-    - action: load_road
-      type: 0x1b
-      level_h: 2
-      routeparams: '0,0,0,0,0,0,0,0,0,0,0,0'
-
 
 
 
@@ -390,12 +320,8 @@
     - action: modify_road
       routeparams: '.,.,.,1,.,.,.,.,.,.,.,.'
 
-- condition:
-    - surface = unpaved|ground|earth|mud|grass|sand|dirt
-  action:
-    - action: modify_road
-      routeparams: '.,-1,.,.,.,.,.,.,.,.,.,.'
 
+# unpaved roads
 - condition:
     - highway = unclassified|residential|road
     - surface = unpaved|ground|earth|mud|grass|sand|dirt
@@ -403,7 +329,14 @@
     - action: modify_road
       type: 0x0a
 
+- condition:
+    - surface = unpaved|ground|earth|mud|grass|sand|dirt
+  action:
+    - action: modify_road
+      routeparams: '.,-1,.,.,.,.,.,.,.,.,.,.'
 
+
+# motorroads
 - condition:
     - highway != motorway
     - motorroad = yes|true|1
