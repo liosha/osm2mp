@@ -2746,7 +2746,7 @@ sub execute_action {
             if ( $routing && $param{action} eq 'load_road' ) {
                 AddRoad( \%objinfo );
             }
-            elsif ( $routing && $param{action} eq 'modify_road' ) {
+            elsif ( $routing && $param{action} eq 'modify_road' && exists $road{ $objinfo{id} } ) {
                 # type
                 if ( exists $action->{type} ) {
                     $road{ $objinfo{id} }->{type} = $action->{type};
