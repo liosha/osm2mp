@@ -242,7 +242,7 @@
 - condition:
     - highway = track
     - tracktype = grade1|grade2
-    - !inside_city
+    - ~inside_city
   action:
     - action: modify_road
       level_h: 2
