@@ -35,8 +35,7 @@
     - action: load_road
       type: 0x01
       level_h: 4
-      routeparams: '3,3,0,0,0,0,0,0,0,0,0,0'
-
+      routeparams: '3,4,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
     - highway = trunk_link
@@ -46,14 +45,6 @@
       level_h: 2
       routeparams: '3,4,0,0,0,0,0,0,0,0,0,0'
 
-- condition:
-    - highway = trunk_link
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x09
-      level_h: 2
-      routeparams: '3,3,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
     - highway = primary
@@ -70,24 +61,16 @@
     - action: load_road
       type: 0x04
       level_h: 3
-      routeparams: '3,2,0,0,0,0,0,0,0,0,0,0'
+      routeparams: '3,3,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
-    - highway = primary_link|secondary_link
+    - highway = primary_link
   action:
     - action: load_road
       type: 0x08
       level_h: 1
       routeparams: '2,3,0,0,0,0,0,0,0,0,0,0'
 
-- condition:
-    - highway = primary_link|secondary_link
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x08
-      level_h: 1
-      routeparams: '2,2,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
     - highway = secondary
@@ -95,7 +78,7 @@
     - action: load_road
       type: 0x02
       level_h: 2
-      routeparams: '4,3,0,0,0,0,0,0,0,0,0,0'
+      routeparams: '4,2,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
     - highway = secondary
@@ -107,12 +90,21 @@
       routeparams: '3,2,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
+    - highway = secondary_link
+  action:
+    - action: load_road
+      type: 0x08
+      level_h: 1
+      routeparams: '2,2,0,0,0,0,0,0,0,0,0,0'
+
+
+- condition:
     - highway = tertiary
   action:
     - action: load_road
       type: 0x03
       level_h: 2
-      routeparams: '4,2,0,0,0,0,0,0,0,0,0,0'
+      routeparams: '4,1,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
     - highway = tertiary
@@ -123,13 +115,14 @@
       level_h: 1
       routeparams: '3,1,0,0,0,0,0,0,0,0,0,0'
 
+
 - condition:
     - highway = unclassified
   action:
     - action: load_road
       type: 0x03
       level_h: 1
-      routeparams: '3,2,0,0,0,0,0,0,0,0,0,0'
+      routeparams: '3,1,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
     - highway = unclassified
@@ -140,6 +133,7 @@
       level_h: 1
       routeparams: '2,1,0,0,0,0,0,0,0,0,0,0'
 
+
 - condition:
     - highway = residential|road
   action:
@@ -147,6 +141,7 @@
       type: 0x06
       level_h: 1
       routeparams: '2,0,0,0,0,0,0,0,0,0,0,0'
+
 
 - condition:
     - highway = living_street
@@ -180,6 +175,7 @@
       level_h: 1
       routeparams: '1,0,0,0,1,1,1,1,1,0,0,1'
 
+
 - condition:
     - highway = footway|path
   action:
@@ -196,21 +192,15 @@
       type: 0x16
       routeparams: '0,0,0,0,1,1,1,1,1,0,0,1'
 
-
 - condition:
-    - highway = construction
+    - man_made = cut_line
+    - highway != *
   action:
     - action: load_road
-      type: 0x12
+      type: 0x16
       level_h: 1
-      routeparams: '1,0,0,0,1,1,1,1,1,1,1,1'
+      routeparams: '0,0,0,0,1,1,1,1,1,0,0,1'
 
-- condition:
-    - highway = steps
-  action:
-    - action: load_road
-      type: 0x13
-      routeparams: '0,0,0,0,1,1,1,1,1,0,1,1'
 
 - condition:
     - route = ferry
