@@ -115,13 +115,6 @@
       level_h: 2
 
 - condition:
-    - aeroway = taxiway
-  action:
-    - action: write_line
-      type: 0x2c
-      level_h: 1
-
-- condition:
     - man_made = pipeline
   action:
     - action: write_line

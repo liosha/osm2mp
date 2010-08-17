@@ -81,3 +81,10 @@
       type: 0x010f12
       Label:
 
+
+- condition:
+    - aeroway = taxiway
+  action:
+    - action: write_line
+      type: 0x010f11
+      level_h: 1
