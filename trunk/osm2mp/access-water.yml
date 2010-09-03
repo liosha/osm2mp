@@ -1,0 +1,41 @@
+################################
+##  Transport restrictions
+################################
+
+# emergency, delivery, car, bus, taxi, foot, bike, truck
+
+--- transport
+---
+
+- key:     access
+  val:     1,1,1,1,1,1,1,1
+
+- key:     boat
+  val:     1,1,1,1,1,1,1,1
+- key:     motorboat
+  val:     1,1,1,1,1,0,0,1
+- key:     ship
+  val:     0,0,0,1,0,0,0,1
+  
+
+
+################################
+##  Barriers
+################################
+
+# emergency, delivery, car, bus, taxi, foot, bike, truck
+# default: 1,1,1,1,1,1,1,1 - restricts all
+
+--- barrier
+---
+
+block:          1,1,1,1,1,0,1,1
+stile:          1,1,1,1,1,0,1,1
+chain:          1,1,1,1,1,0,1,1
+bollard:        1,1,1,1,1,0,0,1
+bus_trap:       1,1,1,0,1,0,0,1
+toll_booth:     0,0,0,0,0,0,0,0
+cattle_grid:    0,0,0,0,0,0,0,0
+
+
+

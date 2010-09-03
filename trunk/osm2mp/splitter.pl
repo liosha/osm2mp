@@ -12,12 +12,12 @@ use Data::Dump qw{ dd };
 
 
 ##  Initial settings
-my $lat_cell = 0.1;     # in degrees
-my $lon_cell = 0.2;
+my $lat_cell = 0.02;     # in degrees
+my $lon_cell = 0.04;
 
 my $relations       = 1;
 my $mapid           = 65430001;
-my $max_tile_nodes  = 1_000_000;
+my $max_tile_nodes  = 2_000_000;
 my $init_file_name  = q{};
 my $optimize        = 1;
 
