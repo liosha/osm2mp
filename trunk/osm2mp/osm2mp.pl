@@ -204,7 +204,7 @@ $transport_mode = $transport_code{ $transport_mode }
 
 my %country_code;
 if ( $country_list ) {
-    open CL, '<', $country_list;
+    open CL, '<:encoding(utf8)', $country_list;
     while ( my $line = <CL> ) {
         chomp $line;
         next if $line =~ /^#/;
@@ -214,9 +214,6 @@ if ( $country_list ) {
     }
     close CL;
 }
-
-$defaultcountry = convert_string( $country_code{uc $defaultcountry} )   
-    if exists $country_code{uc $defaultcountry};
 
 
 
@@ -275,6 +272,9 @@ print STDERR "Ok\n\n";
 
 ####    Header
 
+$defaultcountry = convert_string( $country_code{uc $defaultcountry} )   
+    if exists $country_code{uc $defaultcountry};
+
 my $tmpl = Template->new();
 $tmpl->process (\$config{header}, {
     mapid           => $mapid,
@@ -295,7 +295,7 @@ print "\n; #### Converted from OpenStreetMap data with  osm2mp $version  (" . st
 
 
 my ($infile) = @ARGV;
-open IN, $infile;
+open IN, '<:encoding(utf8)', $infile;
 print STDERR "Processing file $infile\n\n";
 
 
@@ -550,7 +550,7 @@ while ( my $line = <IN> ) {
             $countsigns ++;
             for my $from ( @{ $relmember{'way:from'} } ) {
                 $trest{$relid} = { 
-                    name    => convert_string( $name ),
+                    name    => $name,
                     node    => $node,
                     type    => 'sign',
                     fr_way  => $from,
@@ -588,8 +588,8 @@ while ( my $line = <IN> ) {
             for my $role ( keys %relmember ) {
                 next unless $role =~ /^way:/;
                 for my $way ( @{ $relmember{$role} } ) {
-                    push @{ $road_ref{$way} }, convert_string($reltag{'ref'})       if exists $reltag{'ref'};
-                    push @{ $road_ref{$way} }, convert_string($reltag{'int_ref'})   if exists $reltag{'int_ref'};
+                    push @{ $road_ref{$way} }, $reltag{'ref'}       if exists $reltag{'ref'};
+                    push @{ $road_ref{$way} }, $reltag{'int_ref'}   if exists $reltag{'int_ref'};
                 }
             }
         }
@@ -1737,7 +1737,7 @@ print "\n; ### That's all, folks!\n\n";
 sub convert_string {            # String
 
     my $str = shift @_;
-    $str = decode('utf8', $str) unless @_;
+#    $str = decode('utf8', $str) unless @_;
     return $str     unless $str;
 
     
@@ -1776,7 +1776,7 @@ sub name_from_list {
     my $name;
     $name = $tag_ref->{$key}            if  $key;
     $name = $country_code{uc $name}     if  $list_name eq 'country'  &&  exists $country_code{uc $name};
-    return convert_string( $name );
+    return $name;
 }
 
 
@@ -2068,23 +2068,23 @@ sub WritePOI {
         @stops = ( @{ $trstop{$param{nodeid}} } )    
             if exists $param{nodeid}  &&  exists $trstop{$param{nodeid}};
         push @stops, split( /\s*[,;]\s*/, $tag{'route_ref'} )   if exists $tag{'route_ref'};
-        $label .= q{ (} . convert_string( join q{,}, uniq( sort { $a <=> $b or $a cmp $b } @stops ) ) . q{)}   if @stops; 
+        $label .= q{ (} . join q{,}, uniq( sort { $a <=> $b or $a cmp $b } @stops ) . q{)}   if @stops; 
     }
 
     print  "[POI]\n";
     print  "Type=$param{type}\n";
-    printf "Label=%s\n", $label     if $label ne q{} && !exists( $param{Label} ); 
+    printf "Label=%s\n", convert_string( $label )
+        if $label ne q{}  &&  !exists( $param{Label} ); 
     printf "Data%d=$data\n", $llev;
     print  "EndLevel=$hlev\n"       if  $hlev > $llev;
 
     # region and country - for cities
     if ( $poiregion  &&  $label  &&  $param{add_region} ) {
         my $region  = name_from_list( 'region', $param{tags});
-        $region .= q{, }. convert_string($tag{'addr:district'})
-            if exists $tag{'addr:district'};
-        print "RegionName=$region\n"        if $region;
-        my $country = name_from_list( 'country', $param{tags});
-        print "CountryName=$country\n"      if $country;
+        $region .= q{, }. $tag{'addr:district'}     if exists $tag{'addr:district'};
+        printf "RegionName=%s\n", convert_string( $region )     if $region;
+        my $country = convert_string( name_from_list( 'country', $param{tags}) );
+        printf "CountryName=%s\n", convert_string( $country )   if $country;
     }
 
     # contact information: address, phone
@@ -2092,22 +2092,22 @@ sub WritePOI {
         my $city;
         $city = $city{ FindCity( $param{nodeid} || $param{latlon} ) };
         if ( $city ) {
-            print "CityName=$city->{name}\n";
-            print "RegionName=$city->{region}\n"        if  $city->{region};
-            print "CountryName=$city->{country}\n"      if  $city->{country};
+            printf "CityName=%s\n", convert_string( $city->{name} );
+            printf "RegionName=%s\n", convert_string( $city->{region} )        if  $city->{region};
+            printf "CountryName=%s\n", convert_string( $city->{country} )      if  $city->{country};
         }
         elsif ( $defaultcity ) {
-            print "CityName=$defaultcity\n";
+            printf "CityName=$defaultcity\n";
         }
                                                             
-        my $housenumber = name_from_list( 'house', \%tag );
+        my $housenumber = convert_string( name_from_list( 'house', \%tag ) );
         print  "HouseNumber=$housenumber\n"     if $housenumber;
 
-        my $street = convert_string($tag{'addr:street'});
+        my $street = $tag{'addr:street'};
         if ( $street ) {
             my $suburb = FindSuburb( $param{nodeid} || $param{latlon} );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
-            print "StreetDesc=$street\n";
+            printf "StreetDesc=%s\n", convert_string( $street );
         }
 
         printf "Zip=%s\n",          convert_string($tag{'addr:postcode'})   if exists $tag{'addr:postcode'};
@@ -2276,8 +2276,10 @@ sub WriteLine {
     printf "EndLevel=%d\n",     $hlev           if $hlev > $llev;
     printf "Data%d=(%s)\n",     $llev, join( q{),(}, @node{ @{ $param{chain} } } );
 
-    printf "Label=$param{name}\n"   if !exists $param{Label} && $param{name} ne q{};
-    printf "Label2=$param{name2}\n" if !exists $param{Label2} && $param{name2} ne q{};
+    printf "Label=%s\n", convert_string( $param{name} )
+        if !exists $param{Label} && $param{name} ne q{};
+    printf "Label2=%s\n", convert_string( $param{name2} )
+        if !exists $param{Label2} && $param{name2} ne q{};
 
     # road data
     printf "RoadID=$param{roadid}\n"            if exists $param{roadid};
@@ -2292,8 +2294,7 @@ sub WriteLine {
     for my $key ( sort keys %param ) {
         next unless $key =~ /^_*[A-Z]/;
         next if $param{$key} eq q{};
-        # printf "$key=%s\n", convert_string($param{$key});
-        printf "$key=$param{$key}\n";
+        printf "$key=%s\n", convert_string( $param{$key} );
     }
     print  "[END]\n\n\n";
 }
@@ -2365,9 +2366,9 @@ sub AddRoad {
     # road shield
     if ( $roadshields  &&  !$city ) {
         my @ref;
-        @ref = @{ $road_ref{$orig_id} }                 if exists $road_ref{$orig_id};
-        push @ref, convert_string( $tag{'ref'} )        if exists $tag{'ref'};
-        push @ref, convert_string( $tag{'int_ref'} )    if exists $tag{'int_ref'};
+        @ref = @{ $road_ref{$orig_id} }     if exists $road_ref{$orig_id};
+        push @ref, $tag{'ref'}              if exists $tag{'ref'};
+        push @ref, $tag{'int_ref'}          if exists $tag{'int_ref'};
         
         if ( @ref ) {
             my $ref = join q{,}, sort( uniq( map { s/[\s\-]+//g; split /[,;]/, $_ } @ref ) );
@@ -2380,7 +2381,7 @@ sub AddRoad {
         #comment =>  $param{comment},
         type    =>  $param{type},
         name    =>  $param{name},
-        label2  =>  convert_string( $tag{'addr:street'} ),
+        label2  =>  $tag{'addr:street'},
         chain   =>  $param{chain},
         level_l =>  $llev,
         level_h =>  $hlev,
@@ -2501,12 +2502,13 @@ sub WritePolygon {
     print  "[POLYGON]\n";
     printf "Type=%s\n",        $param{type};
     printf "EndLevel=%d\n",    $hlev    if  $hlev > $llev;
-    printf "Label=$param{name}\n"   if !exists $param{Label} && $param{name} ne q{};
+    printf "Label=%s\n", convert_string( $param{name} )
+        if !exists $param{Label} && $param{name} ne q{};
 
     ## Navitel
     if ( $navitel ) {
         my $housenumber = name_from_list( 'house', \%tag );
-        my $street = convert_string($tag{'addr:street'});
+        my $street = $tag{'addr:street'};
         $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
 
         if ( $housenumber && $street ) {
@@ -2515,12 +2517,12 @@ sub WritePolygon {
             my $suburb = FindSuburb( $plist[0]->[0] );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
 
-            print  "HouseNumber=$housenumber\n";
-            print  "StreetDesc=$street\n";
+            printf  "HouseNumber=%s\n", convert_string( $housenumber );
+            printf  "StreetDesc=%s\n", convert_string( $street );
             if ( $city ) {
-                print "CityName="    . $city->{name}      . "\n";
-                print "RegionName="  . $city->{region}    . "\n"      if $city->{region};
-                print "CountryName=" . $city->{country}   . "\n"      if $city->{country};
+                printf "CityName=%s\n",     convert_string( $city->{name} );
+                printf "RegionName=%s\n",   convert_string( $city->{region} )      if $city->{region};
+                printf "CountryName=%s\n",  convert_string( $city->{country} )     if $city->{country};
             } 
             elsif ( $defaultcity ) {
                 print "CityName=$defaultcity\n";
@@ -2530,7 +2532,7 @@ sub WritePolygon {
         # entrances
         for my $entr ( @{ $param{entrance} } ) {
             next unless !$bounds || is_inside_bounds( $entr->[0] );
-            printf "EntryPoint=(%s),%s\n", @$entr;
+            printf "EntryPoint=(%s),%s\n", $entr->[0], convert_string( $entr->[1] );
         }
     }
 
@@ -2618,7 +2620,7 @@ sub execute_action {
         $param{$key} =~ s/%(\w+)/ name_from_list( $1, $obj->{tag} ) /ge;
     }
     
-    $param{region} .= q{, }. convert_string($obj->{tag}->{'addr:district'})
+    $param{region} .= q{, }. $obj->{tag}->{'addr:district'}
         if exists $param{region} && exists $obj->{tag}->{'addr:district'};
 
     my %objinfo = map { $_ => $param{$_} } grep { /^[A-Z]/ } keys %param;
@@ -2633,7 +2635,10 @@ sub execute_action {
             print "; ERROR: City polygon $obj->{type}ID=$obj->{id} is not closed\n";
         }
         else {
-            print "; Found city: $obj->{type}ID=$obj->{id} - $param{name} [ $param{country}, $param{region} ]\n\n";
+            printf "; Found city: $obj->{type}ID=$obj->{id} - %s [ %s, %s ]\n\n",
+                convert_string( $param{name}),
+                convert_string( $param{country} ),
+                convert_string( $param{region} );
             my $cityid = $obj->{type} . $obj->{id};
             $city{ $cityid } = {
                 name        =>  $param{name},
@@ -2942,3 +2947,5 @@ sub merge_polygon_chains {
     }
     return undef;
 }
+
+
