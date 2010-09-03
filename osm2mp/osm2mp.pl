@@ -2323,11 +2323,15 @@ sub AddRoad {
     # calculate speed class
     if ( $tag{'maxspeed'} > 0 ) {
        $tag{'maxspeed'} *= 1.61      if  $tag{'maxspeed'} =~ /mph$/i;
-       $rp[0]  = speed_code( $tag{'maxspeed'} * 0.9 ); # real speed ?
+       $rp[0]  = speed_code( $tag{'maxspeed'} * 0.9 );
     }
     if ( $tag{'maxspeed:practical'} > 0 ) {
        $tag{'maxspeed:practical'} *= 1.61        if  $tag{'maxspeed:practical'} =~ /mph$/i;
-       $rp[0]  = speed_code( $tag{'maxspeed:practical'} );
+       $rp[0]  = speed_code( $tag{'maxspeed:practical'} * 0.9 );
+    }
+    if ( $tag{'avgspeed'} > 0 ) {
+       $tag{'avgspeed'} *= 1.61        if  $tag{'avgspeed'} =~ /mph$/i;
+       $rp[0]  = speed_code( $tag{'avgspeed'} );
     }
 
     # navitel-style 3d interchanges

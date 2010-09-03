@@ -71,9 +71,18 @@ while (scalar @tiles) {
     my $res = $ua->request($req);
 
     if ( $res->is_success ) {
-        print STDERR "Ok\n";
+
         my $data;
         gunzip \($res->content) => \$data;
+
+        if ( $data =~ m{<error>} ) {
+            print STDERR "Ok but error! shall try again\n";
+            push @tiles, $tile;
+            sleep 10;
+            next TILE;
+        }
+        
+        print STDERR "Ok\n";
         print $data;
     }
     else {
@@ -94,6 +103,7 @@ while (scalar @tiles) {
         else {
             print STDERR "shall try again\n";
             push @tiles, $tile;
+            sleep 60;
         }
     }
 }
