@@ -2050,7 +2050,7 @@ sub WritePOI {
     print  "; $param{comment}\n"            if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        print "; $key = $tag{$key}\n";
+        printf "; %s = %s\n", convert_string($key), convert_string( $tag{$key} );
     }
 
     my $data;
@@ -2494,7 +2494,7 @@ sub WritePolygon {
     print  "; $param{comment}\n"            if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        print "; $key = $tag{$key}\n";
+        printf "; %s = %s\n", convert_string( $key ), convert_string( $tag{$key} );
     }
 
     $countpolygons ++;
