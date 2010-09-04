@@ -295,7 +295,7 @@ print "\n; #### Converted from OpenStreetMap data with  osm2mp $version  (" . st
 
 
 my ($infile) = @ARGV;
-open IN, '<:encoding(utf8)', $infile;
+open IN, '<', $infile;
 print STDERR "Processing file $infile\n\n";
 
 
@@ -425,7 +425,7 @@ continue { $relpos = tell IN }
 seek IN, $relpos, 0;
 
 
-while ( my $line = <IN> ) {
+while ( my $line = decode 'utf8', <IN> ) {
 
     if ( $line =~ /<relation/ ) {
         ($relid)    =  $line =~ / id=["']([^"']+)["']/;
@@ -650,7 +650,7 @@ my $dupcount;
 
 seek IN, $waypos, 0;
 
-while ( my $line = <IN> ) {
+while ( my $line = decode 'utf8', <IN> ) {
 
     if ( $line =~/<way / ) {
         ($wayid)  = $line =~ / id=["']([^"']+)["']/;
@@ -789,7 +789,7 @@ my %nodetag;
 
 seek IN, 0, 0;
 
-while ( my $line = <IN> ) {
+while ( my $line = decode 'utf8', <IN> ) {
 
     if ( $line =~ /<node/ ) {
         ($nodeid)  =  $line =~ / id=["']([^"']+)["']/;
@@ -859,7 +859,7 @@ my $inbounds;
 
 seek IN, $waypos, 0;
 
-while ( my $line = <IN> ) {
+while ( my $line = decode 'utf8', <IN> ) {
 
     if ( $line =~ /<way/ ) {
         ($wayid)  =  $line =~ / id=["']([^"']+)["']/;
@@ -2664,7 +2664,7 @@ sub execute_action {
             print "; ERROR: Suburb polygon $obj->{type}ID=$obj->{id} is not closed\n";
         }
         else {
-            print "; Found suburb: $obj->{type}ID=$obj->{id} - $param{name}\n";
+            printf "; Found suburb: $obj->{type}ID=$obj->{id} - %s\n", convert_string( $param{name} );
             $suburb{ $obj->{type} . $obj->{id} } = {
                 name        =>  $param{name},
                 bound       =>  Math::Polygon::Tree->new( 
