@@ -195,7 +195,7 @@
       routeparams: '0,0,0,0,1,1,1,1,1,0,0,1'
 
 - condition:
-    - man_made = cut_line
+    - man_made = cut_line|cutline
     - highway != *
   action:
     - action: load_road
