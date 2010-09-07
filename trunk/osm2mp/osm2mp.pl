@@ -2682,7 +2682,7 @@ sub execute_action {
         return  unless  !$bounds 
             || $obj->{type} eq 'Node' && is_inside_bounds( $node{$obj->{id}} )
             || exists $obj->{latlon} && is_inside_bounds( $obj->{latlon} );
-        return  if  exists $tag{'layer'} && $tag{'layer'} < -1;
+        #return  if  exists $tag{'layer'} && $tag{'layer'} < -1;
 
         $countpoi ++;
 
