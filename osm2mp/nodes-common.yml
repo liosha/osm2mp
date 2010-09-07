@@ -714,6 +714,14 @@
       type: 0x2F10
       contacts: yes
 
+- id:   sauna
+  condition:
+    - amenity = sauna
+  action:
+    - action: write_poi
+      type: 0x2F10
+      contacts: yes
+
 
 
 # Hospital
