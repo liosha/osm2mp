@@ -29,6 +29,16 @@
       level_h: 1
 
 
+- id:   sauna
+  condition:
+    - amenity = sauna
+  action:
+    - action: write_poi
+      type: 0x2F10
+      contacts: yes
+    - action: write_poi
+      type: 0x11500
+
 - id:   toilets
   condition:
     - amenity = toilets
