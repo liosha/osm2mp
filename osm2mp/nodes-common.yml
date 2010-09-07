@@ -472,7 +472,7 @@
       contacts: yes
 
 - condition:
-    - shop = books|bicycle|electronics|electrogoods|electrotools|hardware|outdoor|stationery
+    - shop = books|bicycle|electronics|electrogoods|electrotools|hardware|outdoor|stationery|sports
   action:
     - action: write_poi
       type: 0x2E0A
