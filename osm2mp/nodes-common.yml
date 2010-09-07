@@ -447,7 +447,7 @@
     - shop = convenience|kiosk
   action:
     - action: write_poi
-      type: 0x2E06
+      type: 0x2E02
       contacts: yes
 
 - condition:
