@@ -796,6 +796,8 @@
 - condition:
     - tunnel = yes
     - highway != service|footway|steps|residential
+    - railway != subway|platform
+    - station != subway    
   action:
     - action: write_poi
       type: 0x6413
