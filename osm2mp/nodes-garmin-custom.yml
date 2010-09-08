@@ -26,8 +26,14 @@
       contacts: yes
     - action: write_poi
       type: 0x11600
-      level_h: 1
 
+- condition:
+    - railway = station
+    - station = subway
+  action:
+    - action: write_poi
+      type: 0x11600
+      level_l: 1
 
 - id:   sauna
   condition:
