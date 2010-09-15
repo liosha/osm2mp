@@ -2134,11 +2134,13 @@ sub WritePOI {
         }
                                                             
         my $housenumber = convert_string( name_from_list( 'house', \%tag ) );
-        $housenumber = $param{housenumber}      if exists $param{housenumber} && !defined $housenumber;
+        $housenumber = convert_string( $param{housenumber} )
+            if exists $param{housenumber} && !defined $housenumber;
         print  "HouseNumber=$housenumber\n"     if $housenumber;
 
         my $street = $tag{'addr:street'};
-        $street = $param{street}                if exists $param{street} && !defined $street;
+        $street = convert_string( $param{street} )
+            if exists $param{street} && !defined $street;
         if ( $street ) {
             my $suburb = FindSuburb( $param{nodeid} || $param{latlon} );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
