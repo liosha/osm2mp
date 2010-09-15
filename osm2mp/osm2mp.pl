@@ -2133,13 +2133,13 @@ sub WritePOI {
             printf "CityName=$defaultcity\n";
         }
                                                             
-        my $housenumber = convert_string( name_from_list( 'house', \%tag ) );
-        $housenumber = convert_string( $param{housenumber} )
+        my $housenumber = name_from_list( 'house', \%tag );
+        $housenumber = $param{housenumber}
             if exists $param{housenumber} && !defined $housenumber;
-        print  "HouseNumber=$housenumber\n"     if $housenumber;
+        printf "HouseNumber=%s\n", convert_string( $housenumber )     if $housenumber;
 
         my $street = $tag{'addr:street'};
-        $street = convert_string( $param{street} )
+        $street = $param{street}
             if exists $param{street} && !defined $street;
         if ( $street ) {
             my $suburb = FindSuburb( $param{nodeid} || $param{latlon} );
