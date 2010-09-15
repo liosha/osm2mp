@@ -93,6 +93,7 @@ my $marine          = 1;
 
 my $addressing      = 1;
 my $navitel         = 0;
+my $addrfrompoly    = 1;
 my $makepoi         = 1;
 my $country_list;
 my $defaultcountry  = "Earth";
@@ -115,6 +116,9 @@ my %waychain;
 my %city;
 my $city_rtree = new Tree::R;
 my %suburb;
+
+my %poi;
+my $poi_rtree = new Tree::R;
 
 
 GetOptions (
@@ -165,6 +169,7 @@ GetOptions (
 
     'addressing!'       => \$addressing,
     'navitel!'          => \$navitel,
+    'addrfrompoly!'     => \$addrfrompoly,
     'makepoi!'          => \$makepoi,
     'poiregion!'        => \$poiregion,
     'poicontacts!'      => \$poicontacts,
@@ -772,7 +777,7 @@ printf STDERR "                          %d cities and %d suburbs loaded\n", sca
 
 
 ####    3rd pass
-###     writing POIs
+###     loading and writing points
 
 my %barrier;
 my %xnode;
@@ -941,6 +946,17 @@ printf STDERR "                          %d coastlines loaded\n", scalar keys %c
 
 undef %waychain;
 
+
+####    Writing non-addressed POIs
+
+if ( %poi ) {
+    while ( my ($id,$list) = each %poi ) {
+        for my $poi ( @$list ) {
+            WritePOI( $poi );
+        }
+    }
+    undef %poi;
+}
 
 
 
@@ -2035,6 +2051,18 @@ sub FindSuburb {
 }
 
 
+sub AddPOI {
+    if ( exists $_[0]->{nodeid} && exists $_[0]->{add_contacts} ) {
+        my $id = $_[0]->{nodeid};
+        my @bbox = ( reverse split q{,}, $node{$id} ) x 2;
+        push @{$poi{$id}}, $_[0];
+        $poi_rtree->insert( $id, @bbox );
+    }
+    else {
+        WritePOI( @_ );
+    }
+}
+
 
 sub WritePOI {
     my %param = %{$_[0]};
@@ -2101,9 +2129,11 @@ sub WritePOI {
         }
                                                             
         my $housenumber = convert_string( name_from_list( 'house', \%tag ) );
+        $housenumber = $param{housenumber}      if exists $param{housenumber} && !defined $housenumber;
         print  "HouseNumber=$housenumber\n"     if $housenumber;
 
         my $street = $tag{'addr:street'};
+        $street = $param{street}                if exists $param{street} && !defined $street;
         if ( $street ) {
             my $suburb = FindSuburb( $param{nodeid} || $param{latlon} );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
@@ -2718,7 +2748,7 @@ sub execute_action {
             $objinfo{add_elevation} = 1;
         }
 
-        WritePOI ( \%objinfo );
+        AddPOI ( \%objinfo );
     }
 
     ##  Load coastline
@@ -2819,6 +2849,36 @@ sub execute_action {
         }
 
         WritePolygon( \%objinfo );
+    }
+
+    ##  Address loaded POI
+    if ( $param{action} eq 'address_poi' && exists $obj->{chain} && exists $poi_rtree->{root} ) {
+
+        my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $node{$_} ]} @{$obj->{chain}} );
+        my @poilist;
+
+        $poi_rtree->query_completely_within_rect( @bbox, \@poilist );
+        
+        for my $id ( @poilist ) {
+            next unless exists $poi{$id};
+            next unless Math::Polygon::Calc::polygon_contains_point( 
+                [ reverse split q{,}, $node{$id} ],
+                map {[ reverse split q{,}, $node{$_} ]} @{$obj->{chain}} 
+            );
+
+            my %tag = %{ $obj->{tag} };
+            my $housenumber = name_from_list( 'house', \%tag );
+            my $street = $tag{'addr:street'};
+            $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
+
+            for my $poiobj ( @{ $poi{$id} } ) {
+                $poiobj->{street} = $street;
+                $poiobj->{housenumber} = $housenumber;
+                WritePOI( $poiobj );
+            }
+
+            delete $poi{$id};
+        }
     }
 }
 

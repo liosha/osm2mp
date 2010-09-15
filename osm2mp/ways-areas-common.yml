@@ -114,6 +114,8 @@
     - action: write_polygon
       type: 0x13
       Label: %house
+    - action: address_poi
+      
 
 - condition:
     - leisure = common|garden|park
