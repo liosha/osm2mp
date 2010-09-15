@@ -840,7 +840,10 @@ while ( my $line = decode 'utf8', <IN> ) {
 }
 
 printf STDERR "%d POIs written\n", $countpoi;
-printf STDERR "                          %d barriers loaded\n", scalar keys %barrier    if $barriers;
+printf STDERR "                          %d POIs loaded\n", sum map { scalar @$_ } values %poi
+    if $addrfrompoly;
+printf STDERR "                          %d barriers loaded\n", scalar keys %barrier
+    if $barriers;
 
 
 
@@ -950,6 +953,7 @@ undef %waychain;
 ####    Writing non-addressed POIs
 
 if ( %poi ) {
+    print "\n\n\n; ### Non-addressed POIs\n\n";
     while ( my ($id,$list) = each %poi ) {
         for my $poi ( @$list ) {
             WritePOI( $poi );
@@ -1926,6 +1930,7 @@ Available options [defaults]:
  
  --addressing              use city polygons for addressing  [$onoff[$addressing]]
  --navitel                 write addresses for polygons      [$onoff[$navitel]]
+ --addrfrompoly            get POI address from buildings    [$onoff[$addrfrompoly]]
  --makepoi                 create POIs for polygons          [$onoff[$makepoi]]
  --poiregion               write region info for settlements [$onoff[$poiregion]]
  --poicontacts             write contact info for POIs       [$onoff[$poicontacts]]
@@ -2052,7 +2057,7 @@ sub FindSuburb {
 
 
 sub AddPOI {
-    if ( exists $_[0]->{nodeid} && exists $_[0]->{add_contacts} ) {
+    if ( $addrfrompoly && exists $_[0]->{nodeid} && exists $_[0]->{add_contacts} ) {
         my $id = $_[0]->{nodeid};
         my @bbox = ( reverse split q{,}, $node{$id} ) x 2;
         push @{$poi{$id}}, $_[0];
