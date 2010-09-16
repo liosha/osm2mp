@@ -2859,7 +2859,7 @@ sub execute_action {
     }
 
     ##  Address loaded POI
-    if ( $param{action} eq 'address_poi' && exists $obj->{chain} && exists $poi_rtree->{root} ) {
+    if ( $param{action} eq 'address_poi' && exists $obj->{chain} && $obj->{chain}->[0] eq $obj->{chain}->[-1] && exists $poi_rtree->{root} ) {
 
         my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $node{$_} ]} @{$obj->{chain}} );
         my @poilist;
