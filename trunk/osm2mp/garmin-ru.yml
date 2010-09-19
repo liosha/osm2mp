@@ -5,7 +5,7 @@
 --- load
 ---
 
-- nodes-common-ru.yml
+- nodes-common.yml
 - nodes-garmin-custom.yml
 - nodes-garmin-marine.yml
 
@@ -15,6 +15,8 @@
 - ways-areas-garmin-custom.yml
 - ways-roads-common.yml
 - ways-roads-garmin.yml
+
+- nodes-common-ru.yml
 
 
 ################################
