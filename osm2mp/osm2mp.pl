@@ -2868,10 +2868,10 @@ sub execute_action {
         
         for my $id ( @poilist ) {
             next unless exists $poi{$id};
-            next unless Math::Polygon::Calc::polygon_contains_point( 
-                [ reverse split q{,}, $node{$id} ],
-                map {[ reverse split q{,}, $node{$_} ]} @{$obj->{chain}} 
-            );
+            next unless Math::Polygon::Tree::polygon_contains_point(
+                    [ reverse split q{,}, $node{$id} ],
+                    map {[ reverse split q{,}, $node{$_} ]} @{$obj->{chain}}
+                );
 
             my %tag = %{ $obj->{tag} };
             my $housenumber = name_from_list( 'house', \%tag );

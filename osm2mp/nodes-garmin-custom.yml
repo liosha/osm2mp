@@ -3,6 +3,17 @@
 --- nodes
 ---
 
+##  Experimental
+
+- condition:
+    - note = *
+  action:
+    - action: write_poi
+      type: 0x010800
+      Label:
+      Text: %note
+
+
 ##  Replaced rules
 
 - id:   railway_station
