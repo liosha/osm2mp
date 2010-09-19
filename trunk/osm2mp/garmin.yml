@@ -77,6 +77,7 @@ street:         [ addr:street, name ]
 region:         [ addr:region, is_in:region, addr:state, is_in:state ]
 country:        [ addr:country, is_in:country_code, is_in:country ]
 destination:    [ destination, label, name ]
+note:           [ note ]
 
 
 
