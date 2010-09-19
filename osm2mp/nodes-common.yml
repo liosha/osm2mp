@@ -471,8 +471,16 @@
       type: 0x2E09
       contacts: yes
 
+- id: books_shop
+  condition:
+    - shop = books
+  action:
+    - action: write_poi
+      type: 0x2E0A
+      contacts: yes
+
 - condition:
-    - shop = books|bicycle|electronics|electrogoods|electrotools|hardware|outdoor|stationery|sports
+    - shop = bicycle|electronics|electrogoods|electrotools|hardware|outdoor|stationery|sports
   action:
     - action: write_poi
       type: 0x2E0A
