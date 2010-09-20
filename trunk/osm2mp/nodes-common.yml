@@ -648,9 +648,34 @@
 
 - condition:
     - amenity = place_of_worship
+    - religion != christian|muslim|jewish
   action:
     - action: write_poi
-      type: 0x2C0B
+      type: 0x2C0F
+      contacts: yes
+
+- condition:
+    - amenity = place_of_worship
+    - religion = christian
+  action:
+    - action: write_poi
+      type: 0x2C0E
+      contacts: yes
+
+- condition:
+    - amenity = place_of_worship
+    - religion = muslim
+  action:
+    - action: write_poi
+      type: 0x2C0D
+      contacts: yes
+
+- condition:
+    - amenity = place_of_worship
+    - religion = jewish
+  action:
+    - action: write_poi
+      type: 0x2C10
       contacts: yes
 
 - condition:
