@@ -4,6 +4,15 @@
 --- nodes
 ---
 
+- id: shoes_shop
+  condition:
+    - shop = shoes
+  action:
+    - action: write_poi
+      type: 0x2E07
+      contacts: yes
+      Label: %label (обувь)
+
 - id: books_shop
   condition:
     - shop = books
