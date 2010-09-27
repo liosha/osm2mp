@@ -241,28 +241,18 @@
       contacts: yes
 
 - condition:
-    - leisure = theme_park|water_park
+    - or:
+        - leisure = theme_park|water_park
+        - tourism = theme_park
   action:
     - action: write_poi
       type: 0x2C01
       contacts: yes
 
 - condition:
-    - tourism = theme_park
-  action:
-    - action: write_poi
-      type: 0x2C01
-      contacts: yes
-
-- condition:
-    - historic = archaeological_site|battlefield|castle|museum|ruins
-  action:
-    - action: write_poi
-      type: 0x2C02
-      contacts: yes
-
-- condition:
-    - tourism = museum
+    - or:
+        - historic = archaeological_site|battlefield|castle|museum|ruins
+        - tourism = museum
   action:
     - action: write_poi
       type: 0x2C02
@@ -323,15 +313,9 @@
       contacts: yes
 
 - condition:
-    - leisure = ice_rink
-    - sport != skating|hockey
-  action:
-    - action: write_poi
-      type: 0x2D08
-      contacts: yes
-
-- condition:
-    - sport = skating|hockey
+    - or:
+        - leisure = ice_rink
+        - sport = skating|hockey
   action:
     - action: write_poi
       type: 0x2D08
@@ -396,7 +380,7 @@
       contacts: yes
 
 - condition:
-    - shop = butcher|grocery|supermarket|alcohol
+    - shop = convenience|kiosk|butcher|grocery|supermarket|alcohol
   action:
     - action: write_poi
       type: 0x2E02
@@ -410,24 +394,12 @@
       contacts: yes
 
 - condition:
-    - amenity = pharmacy
+    - or:
+        - amenity = pharmacy
+        - shop = chemist
   action:
     - action: write_poi
       type: 0x2E05
-      contacts: yes
-
-- condition:
-    - shop = chemist
-  action:
-    - action: write_poi
-      type: 0x2E05
-      contacts: yes
-
-- condition:
-    - shop = convenience|kiosk
-  action:
-    - action: write_poi
-      type: 0x2E02
       contacts: yes
 
 - condition:
@@ -468,15 +440,11 @@
       contacts: yes
 
 - condition:
-    - shop = bicycle|electronics|electrogoods|electrotools|hardware|outdoor|stationery|sports
-  action:
-    - action: write_poi
-      type: 0x2E0A
-      contacts: yes
-
-- condition:
-    - amenity = marketplace
-    - named
+    - or:
+        - shop = bicycle|electronics|electrogoods|electrotools|hardware|outdoor|stationery|sports
+        - and:
+            - amenity = marketplace
+            - named
   action:
     - action: write_poi
       type: 0x2E0A
@@ -501,7 +469,11 @@
       contacts: yes
 
 - condition:
-    - shop = car_repair|tyres
+    - or:
+        - shop = car_repair|tyres
+        - and:
+            - shop = car
+            - service = repair|tyres
   action:
     - action: write_poi
       type: 0x2F03
@@ -509,23 +481,9 @@
 
 - condition:
     - shop = car
-    - service = repair|tyres
-  action:
-    - action: write_poi
-      type: 0x2F03
-      contacts: yes
-
-- condition:
-    - shop = car
-    - service != *
-  action:
-    - action: write_poi
-      type: 0x2F07
-      contacts: yes
-
-- condition:
-    - shop = car
-    - service = dealer|parts
+    - or:
+        - service = dealer|parts
+        - service != *
   action:
     - action: write_poi
       type: 0x2F07
@@ -561,6 +519,7 @@
 
 - condition:
     - aeroway = aerodrome
+    - place != airport
   action:
     - action: write_poi
       type: 0x2F04
@@ -568,16 +527,9 @@
       contacts: yes
 
 - condition:
-    - amenity = bus_station|bus_stop
-  action:
-    - action: write_poi
-      type: 0x2F08
-      transport: yes
-      contacts: yes
-
-- condition:
-    - highway = bus_station|bus_stop
-    - amenity != bus_station|bus_stop
+    - or:
+        - amenity = bus_station|bus_stop
+        - highway = bus_station|bus_stop
   action:
     - action: write_poi
       type: 0x2F08
@@ -695,15 +647,9 @@
       contacts: yes
 
 - condition:
-    - amenity = embassy|public_building
-  action:
-    - action: write_poi
-      type: 0x3007
-      contacts: yes
-
-- condition:
-    - office = government
-    - amenity != embassy|public_building
+    - or:
+        - amenity = embassy|public_building
+        - office = government
   action:
     - action: write_poi
       type: 0x3007
@@ -775,32 +721,24 @@
 # Manmade features
 
 - condition:
-    - railway = viaduct
+    - or:
+        - and:
+            - bridge = yes
+            - highway != steps|\w+_link
+        - railway = viaduct
   action:
     - action: write_poi
       type: 0x6401
 
 - condition:
-    - bridge = yes
-    - highway != steps|\w+_link
-  action:
-    - action: write_poi
-      type: 0x6401
-
-- condition:
-    - amenity = grave_yard
+    - or:
+        - amenity = grave_yard
+        - landuse = cemetery
   action:
     - action: write_poi
       type: 0x6403
 
 - condition:
-    - landuse = cemetery
-  action:
-    - action: write_poi
-      type: 0x6403
-
-- condition:
-    #- railway = crossing|level_crossing
     - railway = level_crossing
   action:
     - action: write_poi
@@ -974,25 +912,13 @@
 ##  The rest
 
 - condition:
-    - amenity = shelter
+    - or:
+        - amenity = shelter
+        - tourism = alpine_hut
+        - and:
+            - landuse = residential
+            - only_node
   action:
     - action: write_poi
       type: 0x6100
-
-- condition:
-    - landuse = residential
-    - only_node
-    - amenity != shelter
-  action:
-    - action: write_poi
-      type: 0x6100
-
-- condition:
-    - tourism = alpine_hut
-    - amenity != shelter
-  action:
-    - action: write_poi
-      type: 0x6100
-
-
 

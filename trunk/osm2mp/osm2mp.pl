@@ -2302,7 +2302,7 @@ sub WriteLine {
     my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
     my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
 
-    print  "; $param{comment}\n"            if  exists $param{comment};
+    printf "; %s\n", convert_string( $param{comment} )  if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
         print "; $key = $tag{$key}\n";
