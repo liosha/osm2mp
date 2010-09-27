@@ -2605,6 +2605,24 @@ sub condition_matches {
     my ($condition, $obj) = @_;
 
 
+    # tag =/!= value or * 
+    if ( my ($key, $neg, $val) =  $condition =~ /(\S+)\s*(!?)=\s*(.+)/ ) {
+        return( $neg xor
+            ( exists $obj->{tag}->{$key}  
+            && ( $val eq q{*} 
+                || any { $_ =~ /^($val)$/ } split( /;/, $obj->{tag}->{$key} ) ) ) );
+    }
+
+    # and / or
+    if ( ref $condition ) {
+        if ( exists $condition->{or} ) {
+            return any { condition_matches( $_, $obj ) } @{ $condition->{or} };
+        }
+        if ( exists $condition->{and} ) {
+            return all { condition_matches( $_, $obj ) } @{ $condition->{and} };
+        }
+    }
+
     # inside_city (smart)
     if ( my ($neg) = $condition =~ /(~?)\s*inside_city/ ) {
         my $res;
@@ -2634,14 +2652,6 @@ sub condition_matches {
     # no_way etc
     if ( my ( $type ) = $condition =~ 'no_(\w+)' ) {
         return (uc $obj->{type}) ne (uc $type);
-    }
-
-    # tag =/!= value or * 
-    if ( my ($key, $neg, $val) =  $condition =~ /(\S+)\s*(!?)=\s*(.+)/ ) {
-        return( $neg xor
-            ( exists $obj->{tag}->{$key}  
-            && ( $val eq q{*} 
-                || any { $_ =~ /^($val)$/ } split( /;/, $obj->{tag}->{$key} ) ) ) );
     }
 }
 

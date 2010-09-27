@@ -4,25 +4,15 @@
 --- nodes
 ---
 
-
 ##  Settlements
 
 - condition:
     - place = city
     - only_node
     - capital = yes
-    - admin_level = 1|2
-  action:
-    - action: write_poi
-      type: 0x0100
-      level_h: 4
-      city: yes
-
-- condition:
-    - place = city
-    - only_node
-    - capital = yes
-    - admin_level != *
+    - or:
+        - admin_level = 1|2
+        - admin_level != *
   action:
     - action: write_poi
       type: 0x0100
@@ -43,22 +33,12 @@
 - condition:
     - place = city
     - only_node
-    - capital = yes
-    - admin_level != 1|2|3|4
-  action:
-    - action: write_poi
-      type: 0x0400
-      level_h: 3
-      city: yes
-    - action: write_poi
-      type: 0x0800
-      level_l: 4
-      level_h: 4
-
-- condition:
-    - place = city
-    - only_node
-    - capital != yes
+    - or:
+        - capital != yes
+        - and:
+            - capital = yes
+            - admin_level = *
+            - admin_level != 1|2|3|4
   action:
     - action: write_poi
       type: 0x0400
