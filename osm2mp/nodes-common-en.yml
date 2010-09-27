@@ -34,18 +34,9 @@
 
 - condition:
     - amenity = bank
-    - atm = yes|1|true
-    - amenity != atm
-  action:
-    - action: write_poi
-      type: 0x2F06
-      contacts: yes
-      Label: %label (+atm)
-
-- condition:
-    - amenity = bank
-    - amenity = atm
-    - atm != yes|1|true
+    - or:
+        - atm = yes|1|true
+        - amenity = atm
   action:
     - action: write_poi
       type: 0x2F06
