@@ -168,43 +168,6 @@
       routeparams: '1,0,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
-    - highway = bridleway|cycleway
-  action:
-    - action: load_road
-      type: 0x16
-      level_h: 1
-      routeparams: '1,0,0,0,1,1,1,1,1,0,0,1'
-
-
-- condition:
-    - highway = footway|path
-    - layer != -[2-5]
-  action:
-    - action: load_road
-      type: 0x16
-      level_h: 1
-      routeparams: '0,0,0,0,1,1,1,1,1,0,0,1'
-
-- condition:
-    - highway = footway|path
-    - layer != -[2-5]
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x16
-      routeparams: '0,0,0,0,1,1,1,1,1,0,0,1'
-
-- condition:
-    - man_made = cut_line|cutline
-    - highway != *
-  action:
-    - action: load_road
-      type: 0x16
-      level_h: 1
-      routeparams: '0,0,0,0,1,1,1,1,1,0,0,1'
-
-
-- condition:
     - route = ferry
   action:
     - action: load_road
@@ -283,22 +246,6 @@
   action:
     - action: modify_road
       type: 0x0a
-
-- condition:
-    - surface = unpaved|ground|earth|mud|grass|sand|dirt
-  action:
-    - action: modify_road
-      routeparams: '.,-1,.,.,.,.,.,.,.,.,.,.'
-
-
-# motorroads
-- condition:
-    - highway != motorway
-    - motorroad = yes|true|1
-  action:
-    - action: modify_road
-      routeparams: '.,+1,.,.,.,.,.,.,.,.,.,.'
-
 
 # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
 

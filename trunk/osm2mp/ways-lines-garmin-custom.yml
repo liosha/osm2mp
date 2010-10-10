@@ -28,17 +28,6 @@
       level_l: 1
       level_h: 1
 
-- id: service_railway_err
-  condition:
-    - railway = siding|spur|yard
-  action:
-    - action: write_line
-      type: 0x14
-    - action: write_line
-      type: 0x010f13
-      level_l: 1
-      level_h: 1
-
 - id: light_railway
   condition:
     - railway = narrow_gauge|light_rail
@@ -50,41 +39,3 @@
       level_l: 1
       level_h: 1
 
-- condition:
-    - railway = tram
-  action:
-    - action: write_line
-      type: 0x010f14
-
-
-
-# Custom lines
-
-- condition:
-    - aerialway = cable_car|chair_lift|drag_lift|gondola|mixed_lift
-  action:
-    - action: write_line
-      type: 0x010f15
-      level_h: 1
-
-- condition:
-    - barrier = fence|hedge|wall
-  action:
-    - action: write_line
-      type: 0x010f12
-      Label:
-
-- condition:
-    - fenced = yes
-  action:
-    - action: write_line
-      type: 0x010f12
-      Label:
-
-
-- condition:
-    - aeroway = taxiway
-  action:
-    - action: write_line
-      type: 0x010f11
-      level_h: 1
