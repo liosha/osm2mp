@@ -6,25 +6,15 @@
 ---
 
 - nodes-common.yml
-- nodes-common-univ.yml
 - nodes-garmin-custom.yml
-- nodes-garmin-custom-univ.yml
-- nodes-garmin-marine.yml
 
 - ways-lines-common.yml
-- ways-lines-common-univ.yml
 - ways-lines-garmin-custom.yml
-- ways-lines-garmin-custom-univ.yml
 
 - ways-areas-common.yml
-- ways-areas-common-univ.yml
 - ways-areas-garmin-custom.yml
-- ways-areas-garmin-custom-univ.yml
-
 - ways-roads-common.yml
-- ways-roads-common-univ.yml
 - ways-roads-garmin.yml
-- ways-roads-garmin-univ.yml
 
 - nodes-common-ru.yml
 

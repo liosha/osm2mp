@@ -1,0 +1,25 @@
+--- ways
+---
+
+# The rest
+
+- condition:
+    - aeroway = runway
+  action:
+    - action: write_line
+      type: 0x27
+      level_h: 2
+
+- condition:
+    - man_made = pipeline
+  action:
+    - action: write_line
+      type: 0x28
+      level_h: 2
+
+- condition:
+    - power = line
+  action:
+    - action: write_line
+      type: 0x29
+      level_h: 2
