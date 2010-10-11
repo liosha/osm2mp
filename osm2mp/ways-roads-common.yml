@@ -124,6 +124,7 @@
       level_h: 1
       routeparams: '3,1,0,0,0,0,0,0,0,0,0,0'
 
+
 - condition:
     - highway = unclassified
     - inside_city
