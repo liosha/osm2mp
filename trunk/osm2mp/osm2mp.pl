@@ -181,6 +181,10 @@ GetOptions (
 );
 
 
+$codepage = 'utf8'  unless defined $codepage;
+my $codepagenum = ( $codepage =~ /^cp\-?(\d+)$/i ) ? $1 : $codepage;
+$codepage = "cp$codepagenum"    if $codepagenum =~ /^\d+$/;
+
 our %cmap;
 if ( $ttable ) {
     open TT, '<', $ttable;
@@ -284,7 +288,7 @@ my $tmpl = Template->new();
 $tmpl->process (\$config{header}, {
     mapid           => $mapid,
     mapname         => $mapname,
-    codepage        => $codepage,
+    codepage        => $codepagenum,
     routing         => $routing,
     defaultcountry  => $defaultcountry,
     defaultregion   => $defaultregion,
@@ -1770,7 +1774,7 @@ sub convert_string {            # String
     $str = unidecode($str)      if $translit;
     $str = uc($str)             if $upcase;
     
-    $str = encode( ( defined $codepage ? 'cp'.$codepage : 'utf8' ), $str );
+    $str = encode $codepage, $str;
    
     $str =~ s/\&#(\d+)\;/chr($1)/ge;
     $str =~ s/\&amp\;/\&/gi;
@@ -1782,8 +1786,10 @@ sub convert_string {            # String
     $str =~ s/[\x00-\x1F]//g;
    
     $str =~ s/^[ \`\'\;\.\,\!\-\+\_]+//;
-    $str =~ s/ +/ /g;
+    $str =~ s/  +/ /g;
     $str =~ s/\s+$//;
+
+    $str =~ s/~\[0X(\w+)\]/~[0x$1]/;
     
     return $str;
 }
@@ -2083,7 +2089,7 @@ sub WritePOI {
     print  "; $param{comment}\n"            if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        printf "; %s = %s\n", convert_string($key), convert_string( $tag{$key} );
+        print encode $codepage, "; $key = $val\n";
     }
 
     my $data;
@@ -2305,7 +2311,7 @@ sub WriteLine {
     printf "; %s\n", convert_string( $param{comment} )  if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        print "; $key = $tag{$key}\n";
+        print encode $codepage, "; $key = $val\n";
     }
 
     print  "[POLYLINE]\n";
@@ -2531,7 +2537,7 @@ sub WritePolygon {
     print  "; $param{comment}\n"            if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        printf "; %s = %s\n", convert_string( $key ), convert_string( $tag{$key} );
+        print encode $codepage, "; $key = $val\n";
     }
 
     $countpolygons ++;
