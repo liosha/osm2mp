@@ -1207,14 +1207,20 @@ if ( $routing ) {
             
             my $r1 = $keys[$i];
 
-            unless ( exists $road{$r1} )        {  $i++;  next;  }
+            unless ( exists $road{$r1} ) {
+                $i++;
+                next;
+            }
 
             my $p1 = $road{$r1}->{chain};
     
             my @list = ();
             for my $r2 ( keys %{$rstart{$p1->[-1]}} ) {
+                my @plist = qw{ type name label2 city rp level_l level_h };
+                push @plist, grep { /^_*[A-Z]/ } ( keys %{$road{$r1}}, keys %{$road{$r2}} );
                 if ( $r1 ne $r2  
-                  && [ @{$road{$r1}}{qw{type name label2 city rp}} ] ~~ [ @{$road{$r2}}{qw{type name label2 city rp}} ]
+                  #&& [ @{$road{$r1}}{qw{type name label2 city rp}} ] ~~ [ @{$road{$r2}}{qw{type name label2 city rp}} ]
+                  && all { exists $road{$r1}->{$_} && exists $road{$r2}->{$_} && $road{$r1}->{$_} eq $road{$r2}->{$_} } @plist
                   && lcos( $p1->[-2], $p1->[-1], $road{$r2}->{chain}->[1] ) > $mergecos ) {
                     push @list, $r2;
                 }
@@ -1262,7 +1268,6 @@ if ( $routing ) {
     
         print STDERR "$countmerg merged\n";
     }
-
 
 
 
@@ -1608,6 +1613,12 @@ if ( $routing ) {
         }
 
         $objinfo{HLevel0} = join( q{,}, map { "($_->[0],$_->[1])" } @levelchain)   if @levelchain;
+
+        # the rest object parameters (capitals!)
+        for my $key ( keys %$road ) {
+            next unless $key =~ /^_*[A-Z]/;
+            $objinfo{$key} = $road->{$key};
+        }
 
         WriteLine( \%objinfo );
     }
@@ -2308,7 +2319,7 @@ sub WriteLine {
     my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
     my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
 
-    printf "; %s\n", convert_string( $param{comment} )  if  exists $param{comment};
+    printf encode $codepage, "; $param{comment}\n"      if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
         print encode $codepage, "; $key = $val\n";
@@ -2438,6 +2449,13 @@ sub AddRoad {
         $road{$param{id}}->{comment} .= "\n; $key = $tag{$key}";
     }
 
+    # the rest object parameters (capitals!)
+    for my $key ( keys %param ) {
+        next unless $key =~ /^_*[A-Z]/;
+        $road{$param{id}}->{$key} = $param{$key};
+    }
+
+    # external nodes
     if ( $bounds ) {
         if ( !is_inside_bounds( $node{ $param{chain}->[0] } ) ) {
             $xnode{ $param{chain}->[0] } = 1;
