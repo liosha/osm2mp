@@ -21,6 +21,11 @@ my $noinner = 0;
 
 
 my %rename = (
+    
+    rus             =>  60189,
+    russia          =>  60189,
+    russian_federation  =>  60189,
+    
     # cloudmade
     afghanistan     =>  303427,
     albania         =>  53292,
