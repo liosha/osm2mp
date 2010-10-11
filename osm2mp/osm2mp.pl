@@ -1216,10 +1216,9 @@ if ( $routing ) {
     
             my @list = ();
             for my $r2 ( keys %{$rstart{$p1->[-1]}} ) {
-                my @plist = qw{ type name label2 city rp level_l level_h };
+                my @plist = qw{ type name city rp level_l level_h };
                 push @plist, grep { /^_*[A-Z]/ } ( keys %{$road{$r1}}, keys %{$road{$r2}} );
                 if ( $r1 ne $r2  
-                  #&& [ @{$road{$r1}}{qw{type name label2 city rp}} ] ~~ [ @{$road{$r2}}{qw{type name label2 city rp}} ]
                   && all { exists $road{$r1}->{$_} && exists $road{$r2}->{$_} && $road{$r1}->{$_} eq $road{$r2}->{$_} } @plist
                   && lcos( $p1->[-2], $p1->[-1], $road{$r2}->{chain}->[1] ) > $mergecos ) {
                     push @list, $r2;
@@ -1559,7 +1558,7 @@ if ( $routing ) {
     
     while ( my ($roadid, $road) = each %road ) {
 
-        my ($name, $label2, $rp) = ( $road->{name}, $road->{label2}, $road->{rp} );
+        my ($name, $rp) = ( $road->{name}, $road->{rp} );
         my ($type, $llev, $hlev) = ( $road->{type}, $road->{level_l}, $road->{level_h} );
         
         $roadid{$roadid} = $roadcount++;
@@ -1569,7 +1568,7 @@ if ( $routing ) {
         my %objinfo = (
                 comment     => "WayID = $roadid" . $road->{comment},
                 type        => $type,
-                name        => $name || $label2,
+                name        => $name,
                 chain       => [ @{$road->{chain}} ],
                 roadid      => $roadid{$roadid},
                 routeparams => $rp,
@@ -1578,7 +1577,6 @@ if ( $routing ) {
         $objinfo{level_l}       = $llev       if $llev > 0;
         $objinfo{level_h}       = $hlev       if $hlev > $llev;
 
-        $objinfo{name2}         = $label2     if $name && $label2;;
         $objinfo{StreetDesc}    = $name       if $name && $navitel;
         $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
 
@@ -2332,8 +2330,6 @@ sub WriteLine {
 
     printf "Label=%s\n", convert_string( $param{name} )
         if !exists $param{Label} && $param{name} ne q{};
-    printf "Label2=%s\n", convert_string( $param{name2} )
-        if !exists $param{Label2} && $param{name2} ne q{};
 
     # road data
     printf "RoadID=$param{roadid}\n"            if exists $param{roadid};
@@ -2430,12 +2426,11 @@ sub AddRoad {
         }
     }
 
-    # load roads and external nodes
+    # load road
     $road{$param{id}} = {
         #comment =>  $param{comment},
         type    =>  $param{type},
         name    =>  $param{name},
-        label2  =>  $tag{'addr:street'},
         chain   =>  $param{chain},
         level_l =>  $llev,
         level_h =>  $hlev,
