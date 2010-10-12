@@ -1217,13 +1217,17 @@ if ( $routing ) {
             }
 
             my $p1 = $road{$r1}->{chain};
-    
+
             my @list = ();
             for my $r2 ( keys %{$rstart{$p1->[-1]}} ) {
                 my @plist = qw{ type name city rp level_l level_h };
                 push @plist, grep { /^_*[A-Z]/ } ( keys %{$road{$r1}}, keys %{$road{$r2}} );
+
                 if ( $r1 ne $r2  
-                  && all { exists $road{$r1}->{$_} && exists $road{$r2}->{$_} && $road{$r1}->{$_} eq $road{$r2}->{$_} } @plist
+                  && ( all {
+                        ( !exists $road{$r1}->{$_} && !exists $road{$r2}->{$_} ) ||
+                        ( exists $road{$r1}->{$_} && exists $road{$r2}->{$_} && $road{$r1}->{$_} eq $road{$r2}->{$_} )
+                    } @plist )
                   && lcos( $p1->[-2], $p1->[-1], $road{$r2}->{chain}->[1] ) > $mergecos ) {
                     push @list, $r2;
                 }
