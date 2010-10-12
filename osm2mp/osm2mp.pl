@@ -2689,7 +2689,7 @@ sub execute_action {
     $param{region} .= q{, }. $obj->{tag}->{'addr:district'}
         if exists $param{region} && exists $obj->{tag}->{'addr:district'};
 
-    my %objinfo = map { $_ => $param{$_} } grep { /^[A-Z]/ } keys %param;
+    my %objinfo = map { $_ => $param{$_} } grep { /^_*[A-Z]/ } keys %param;
 
     ##  Load area as city
     if ( $param{type} eq 'load_city' ) {
@@ -2822,12 +2822,8 @@ sub execute_action {
                 AddRoad( \%objinfo );
             }
             elsif ( $routing && $param{action} eq 'modify_road' && exists $road{ $objinfo{id} } ) {
-                # type
-                if ( exists $action->{type} ) {
-                    $road{ $objinfo{id} }->{type} = $action->{type};
-                }
                 # reverse
-                if ( exists $action->{reverse} && $action->{reverse} ) {
+                if ( exists $action->{reverse} ) {
                     $road{ $objinfo{id} }->{chain} = [ reverse @{ $road{ $objinfo{id} }->{chain} } ];
                 }
                 # routeparams
@@ -2842,6 +2838,12 @@ sub execute_action {
                         $p = $p-$1  if $p > 0 && $mp =~ /^\-(\d)$/;
                     }
                     $road{ $objinfo{id} }->{rp} = join q{,}, @rp;
+                }
+                # the rest - just copy
+                for my $key ( keys %objinfo ) {
+                    next unless $key =~ /^_*[A-Z]/ or any { $key eq $_ } qw{ type level_l level_h };
+                    next unless defined $objinfo{$key};
+                    $road{ $objinfo{id} }->{$key} = $objinfo{$key};
                 }
             }
             elsif ( $param{action} ne 'modify_road' ) {
