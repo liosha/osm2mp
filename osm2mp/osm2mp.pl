@@ -28,6 +28,7 @@ use POSIX;
 use YAML;
 use Template;
 use Getopt::Long;
+use File::Spec;
 
 use Encode;
 use Text::Unidecode;
@@ -49,7 +50,7 @@ use Data::Dump 'dd';
 
 ####    Settings
 
-my $version = '0.90-a';
+my $version = '0.90b';
 
 my $config          = [ 'garmin.yml' ];
 
@@ -245,7 +246,10 @@ while ( my $cfgfile = shift @$config ) {
     my %cfgpart = YAML::LoadFile $cfgfile;
     while ( my ( $key, $item ) = each %cfgpart ) {
         if ( $key eq 'load' && ref $item ) {
-            push @$config, @$item;
+            my ( $vol, $dir, undef ) = File::Spec->splitpath( $cfgfile );
+            for my $addcfg ( @$item ) {
+                push @$config, File::Spec->catpath( $vol, $dir, $addcfg );
+            }
         }
         elsif ( $key eq 'yesno' ) {
             %yesno = %{ $item };
