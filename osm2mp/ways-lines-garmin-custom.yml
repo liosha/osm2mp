@@ -7,7 +7,7 @@
 - id: railway
   condition:
     - railway = rail
-    - service != siding|spur|yard
+    - service != siding|yard
   action:
     - action: write_line
       type: 0x14
@@ -18,15 +18,27 @@
 
 - id: service_railway
   condition:
-    - railway = rail
-    - service = siding|spur|yard
+    - or:
+        - and:
+            - railway = rail
+            - service = siding|yard
+        - railway = siding|yard
   action:
     - action: write_line
-      type: 0x14
+      type: 0x010f13
+      level_h: 1
+
+- id: service_railway
+  condition:
+    - or:
+        - and:
+            - railway = rail
+            - service = spur
+        - railway = spur
+  action:
     - action: write_line
       type: 0x010f13
-      level_l: 1
-      level_h: 1
+      level_h: 2
 
 - id: light_railway
   condition:
