@@ -87,7 +87,18 @@
   action:
     - action: write_polygon
       type: 0x17
-      level_h: 1
+      level_l: 1
+      level_h: 2
+
+- condition:
+    - or:
+        - leisure = nature_reserve
+        - boundary = national_park
+  action:
+    - action: write_polygon
+      type: 0x14
+      level_l: 2
+      level_h: 3
 
 - condition:
     - leisure = stadium|pitch
