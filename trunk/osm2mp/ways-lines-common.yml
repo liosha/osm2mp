@@ -17,12 +17,24 @@
     - or:
         - and:
             - railway = rail
-            - service = siding|spur|yard
-        - railway = siding|spur|yard
+            - service = siding|yard
+        - railway = siding|yard
   action:
     - action: write_line
       type: 0x14
       level_h: 1
+
+- id: spur_railway
+  condition:
+    - or:
+        - and:
+            - railway = rail
+            - service = spur
+        - railway = spur
+  action:
+    - action: write_line
+      type: 0x14
+      level_h: 2
 
 - id: light_railway
   condition:
