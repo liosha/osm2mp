@@ -80,15 +80,6 @@
       type: 0x13
       Label: %house
     - action: address_poi
-      
-
-- condition:
-    - leisure = garden|park
-  action:
-    - action: write_polygon
-      type: 0x17
-      level_l: 0
-      level_h: 2
 
 - condition:
     - or:
@@ -97,8 +88,16 @@
   action:
     - action: write_polygon
       type: 0x14
-      level_l: 1
-      level_h: 3
+      level_l: 2
+      level_h: 4
+
+- condition:
+    - leisure = garden|park
+  action:
+    - action: write_polygon
+      type: 0x17
+      level_l: 0
+      level_h: 2
 
 - condition:
     - leisure = stadium|pitch
