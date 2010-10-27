@@ -38,7 +38,9 @@
       type: 0x07
 
 - condition:
-    - landuse = farm|grass|meadow
+    - or:
+        - landuse = farm|grass|meadow
+        - leisure = common
   action:
     - action: write_polygon
       type: 0x18

@@ -83,11 +83,11 @@
       
 
 - condition:
-    - leisure = common|garden|park
+    - leisure = garden|park
   action:
     - action: write_polygon
       type: 0x17
-      level_l: 1
+      level_l: 0
       level_h: 2
 
 - condition:
@@ -97,7 +97,7 @@
   action:
     - action: write_polygon
       type: 0x14
-      level_l: 2
+      level_l: 1
       level_h: 3
 
 - condition:
