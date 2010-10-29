@@ -28,7 +28,7 @@
       type: 0x010f13
       level_h: 1
 
-- id: service_railway
+- id: spur_railway
   condition:
     - or:
         - and:
