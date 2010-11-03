@@ -1916,7 +1916,7 @@ sub write_turn_restriction {            # \%trest
         print  "[Sign]\n";
         print  "SignPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
         print  "SignRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
-        print  "SignParam=T,$tr->{name}\n";
+        print  encode $codepage, "SignParam=T,$tr->{name}\n";
         print  "[END-Sign]\n\n";
     } 
     else {
@@ -2124,7 +2124,8 @@ sub WritePOI {
         @stops = ( @{ $trstop{$param{nodeid}} } )    
             if exists $param{nodeid}  &&  exists $trstop{$param{nodeid}};
         push @stops, split( /\s*[,;]\s*/, $tag{'route_ref'} )   if exists $tag{'route_ref'};
-        $label .= q{ (} . join q{,}, uniq( sort { $a <=> $b or $a cmp $b } @stops ) . q{)}   if @stops; 
+        @stops = uniq @stops;
+        $label .= q{ (} . join( q{,}, sort { $a <=> $b or $a cmp $b } @stops ) . q{)}   if @stops; 
     }
 
     print  "[POI]\n";
