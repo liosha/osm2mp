@@ -45,5 +45,5 @@
   action:
     - action: write_poi
       type: 0x011510
-      Label: traffic light
+      #Label: traffic light
 
