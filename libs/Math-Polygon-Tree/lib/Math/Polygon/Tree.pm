@@ -46,18 +46,25 @@ sub new {
             $self->{ymax} = $ymax       if  !(exists $self->{ymax})  ||  $ymax > $self->{ymax};
         }
         else {
-            croak "File $chain_ref does not exist" 
-                unless -f $chain_ref;
 
-            open my $in, '<', $chain_ref;
+            open my $in, '<', $chain_ref
+                or croak "Couldn't open $chain_ref: $!";
 
-            my @bound = ();
+            my @bound;
+            my $pid;
+
             while ( my $line = readline $in ) {
-                if ( $line =~ /^\s+([0-9.Ee+-]+)\s+([0-9.Ee+-]+)/ ) {
+                if ( $line =~ /^(-?\d+)/ ) {
+                    $pid = $1;
+                }
+                elsif ( $line =~ /^\s+([0-9.Ee+-]+)\s+([0-9.Ee+-]+)/ ) {
                     push @bound, [ $1+0, $2+0 ];
                 }
+                elsif ( $line =~ /^END/  &&  $pid < 0 ) {
+                    @bound = ();
+                }
                 elsif ( $line =~ /^END/  &&  @bound ) {
-                    #@bound = reverse @bound     if  Math::Polygon->new( @bound )->isClockwise();
+
                     push @bound, $bound[0] 
                         unless  $bound[0]->[0] == $bound[-1]->[0]
                             &&  $bound[0]->[1] == $bound[-1]->[1];
@@ -69,7 +76,7 @@ sub new {
                     $self->{xmax} = $xmax       if  !(exists $self->{xmax})  ||  $xmax > $self->{xmax};
                     $self->{ymin} = $ymin       if  !(exists $self->{ymin})  ||  $ymin < $self->{ymin};
                     $self->{ymax} = $ymax       if  !(exists $self->{ymax})  ||  $ymax > $self->{ymax};
-                
+
                     @bound = ();
                 }
             }
@@ -325,10 +332,15 @@ This method is effective if polygon has hundreds or more segments.
 =head2 new
 
 Takes polygons (at least one) and creates a tree structure. All polygons are outer, inners in not implemented.
+Polygon is a reference to array of points
 
     my $poly1 = [ [0,0], [0,2], [2,2], ... ];   
     ...
     my $bound = Math::Polygon::Tree->new( $poly1, $poly2, ... );
+
+or .poly file
+
+    my $bound = Math::Polygon::Tree->new( 'boundary.poly' );
 
 =head2 contains
 
