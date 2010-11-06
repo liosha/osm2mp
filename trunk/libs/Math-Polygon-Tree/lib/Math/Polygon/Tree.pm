@@ -5,13 +5,15 @@ use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.035';
+our $VERSION = '0.036';
 
 use List::Util qw{ sum min max };
 use List::MoreUtils qw{ uniq };
 
 # FIXME: remove and use simple bbox clip?
 use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
+
+use Data::Dump 'dd';
 
 
 my $MAX_LEAF_POINTS = 16;       # minimum 6
@@ -23,23 +25,57 @@ sub new {
 
     ##  load and close polys, calc bbox
     while ( my $chain_ref = shift ) {
-        croak "Polygon should be a reference to array of points" 
-            unless ref $chain_ref;
 
-        my @epoint = ();
-        push @epoint, $chain_ref->[0]
-            unless  $chain_ref->[0]->[0] == $chain_ref->[-1]->[0]
-                &&  $chain_ref->[0]->[1] == $chain_ref->[-1]->[1];
+        if ( ref $chain_ref ) {
+            croak "Polygon should be a reference to array of points" 
+                unless ref $chain_ref eq 'ARRAY';
+        
+            my @epoint = ();
+            push @epoint, $chain_ref->[0]
+                unless  $chain_ref->[0]->[0] == $chain_ref->[-1]->[0]
+                    &&  $chain_ref->[0]->[1] == $chain_ref->[-1]->[1];
 
-        my $poly = [ @$chain_ref, @epoint ];
-        push @{$self->{poly}}, $poly;
+            my $poly = [ @$chain_ref, @epoint ];
+            push @{$self->{poly}}, $poly;
 
-        my ($xmin, $ymin, $xmax, $ymax) = polygon_bbox( @$poly );
+            my ($xmin, $ymin, $xmax, $ymax) = polygon_bbox( @$poly );
 
-        $self->{xmin} = $xmin       if  !(exists $self->{xmin})  ||  $xmin < $self->{xmin};
-        $self->{xmax} = $xmax       if  !(exists $self->{xmax})  ||  $xmax > $self->{xmax};
-        $self->{ymin} = $ymin       if  !(exists $self->{ymin})  ||  $ymin < $self->{ymin};
-        $self->{ymax} = $ymax       if  !(exists $self->{ymax})  ||  $ymax > $self->{ymax};
+            $self->{xmin} = $xmin       if  !(exists $self->{xmin})  ||  $xmin < $self->{xmin};
+            $self->{xmax} = $xmax       if  !(exists $self->{xmax})  ||  $xmax > $self->{xmax};
+            $self->{ymin} = $ymin       if  !(exists $self->{ymin})  ||  $ymin < $self->{ymin};
+            $self->{ymax} = $ymax       if  !(exists $self->{ymax})  ||  $ymax > $self->{ymax};
+        }
+        else {
+            croak "File $chain_ref does not exist" 
+                unless -f $chain_ref;
+
+            open my $in, '<', $chain_ref;
+
+            my @bound = ();
+            while ( my $line = readline $in ) {
+                if ( $line =~ /^\s+([0-9.Ee+-]+)\s+([0-9.Ee+-]+)/ ) {
+                    push @bound, [ $1+0, $2+0 ];
+                }
+                elsif ( $line =~ /^END/  &&  @bound ) {
+                    #@bound = reverse @bound     if  Math::Polygon->new( @bound )->isClockwise();
+                    push @bound, $bound[0] 
+                        unless  $bound[0]->[0] == $bound[-1]->[0]
+                            &&  $bound[0]->[1] == $bound[-1]->[1];
+                    push @{$self->{poly}}, [ @bound ];
+
+                    my ($xmin, $ymin, $xmax, $ymax) = polygon_bbox( @bound );
+
+                    $self->{xmin} = $xmin       if  !(exists $self->{xmin})  ||  $xmin < $self->{xmin};
+                    $self->{xmax} = $xmax       if  !(exists $self->{xmax})  ||  $xmax > $self->{xmax};
+                    $self->{ymin} = $ymin       if  !(exists $self->{ymin})  ||  $ymin < $self->{ymin};
+                    $self->{ymax} = $ymax       if  !(exists $self->{ymax})  ||  $ymax > $self->{ymax};
+                
+                    @bound = ();
+                }
+            }
+
+            close $in;
+        }
     }
 
     my $nrpoints = sum map { scalar @$_ } @{$self->{poly}};
