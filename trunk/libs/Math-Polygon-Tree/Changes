@@ -1,5 +1,8 @@
 Revision history for Math-Polygon-Tree
 
+0.04   2010-11-07
+        * added  .poly files support
+
 0.035   2010-04-27
         * added contains_points method
 

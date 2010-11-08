@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use Carp;
 
-our $VERSION = '0.036';
+our $VERSION = '0.04';
 
 use List::Util qw{ sum min max };
 use List::MoreUtils qw{ uniq };
@@ -338,7 +338,7 @@ Polygon is a reference to array of points
     ...
     my $bound = Math::Polygon::Tree->new( $poly1, $poly2, ... );
 
-or .poly file
+or a .poly file
 
     my $bound = Math::Polygon::Tree->new( 'boundary.poly' );
 
