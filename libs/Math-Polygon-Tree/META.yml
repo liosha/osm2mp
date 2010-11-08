@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Math-Polygon-Tree
-version:             0.03
+version:             0.04
 abstract:            Class for fast check if point is inside polygon
 license:             perl
 author:              
