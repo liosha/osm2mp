@@ -13,7 +13,7 @@ use List::MoreUtils qw{ uniq };
 # FIXME: remove and use simple bbox clip?
 use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
 
-use Data::Dump 'dd';
+# use Data::Dump 'dd';
 
 
 my $MAX_LEAF_POINTS = 16;       # minimum 6
