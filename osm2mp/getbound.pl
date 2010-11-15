@@ -31,6 +31,7 @@ my %rename = (
     albania         =>  53292,
     armenia         =>  364066,
     azerbaijan      =>  364110,
+    cuba            =>  307833,
     cyprus          =>  307787,
     egypt           =>  192761,
     estonia         =>  79510,
@@ -65,6 +66,7 @@ my %rename = (
     
     # gis-lab contries
     belarus         =>  59065,
+    belarus_preprocessed    =>  59065,
     kazakhstan      =>  214665,
     kyrgyzstan      =>  178009,
     tajikistan      =>  214626,
