@@ -16,6 +16,8 @@ my $callback = sub {
         print "[IMG ID]\n";
         for my $line ( @{ $obj->{lines} } ) {
             next if $line =~ /^Routing=/;
+            $line =~ s/^ID=(\d)/'ID='.($1+1)/e;
+            $line =~ s/^(Name=.*)/$1 (search)/;
             print "$line\n";
         }
         print "Numbering=Y\n";
