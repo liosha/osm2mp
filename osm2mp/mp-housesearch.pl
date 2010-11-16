@@ -63,7 +63,9 @@ my $callback = sub {
     print 'Nod1=1,' . $nodeid++ . ",0\n";
     #print 'Nod2=' . $#{$obj->{attributes}->{Data0}} . ',' . $nodeid++ . ",0\n";
 
-    $number += 0;
+    #$number += 0;
+    ($number) = $number =~ /(\d+)/;
+
     $obj->{attributes}->{CityName} =~ s/,/ /g;
     $obj->{attributes}->{RegionName} =~ s/,/ /g;
     $obj->{attributes}->{CountryName} =~ s/,/ /g;
