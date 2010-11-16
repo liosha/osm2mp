@@ -9,7 +9,7 @@ use List::MoreUtils qw{ all any };
 use Data::Dump 'dd';
 
 my $roadid = 1;
-my $nodeid = 1;
+#my $nodeid = 1;
 
 my $callback = sub {
     my $obj = shift;
@@ -59,8 +59,8 @@ my $callback = sub {
     printf "Data0=(%f,%f),(%f,%f)\n", $lat-0.00002, $lon, $lat+0.00002, $lon;
     
     print 'RoadID=' . $roadid++ . "\n";
-    print 'Nod1=0,' . $nodeid++ . ",0\n";
-    print 'Nod1=1,' . $nodeid++ . ",0\n";
+    #print 'Nod1=0,' . $nodeid++ . ",0\n";
+    #print 'Nod2=1,' . $nodeid++ . ",0\n";
     #print 'Nod2=' . $#{$obj->{attributes}->{Data0}} . ',' . $nodeid++ . ",0\n";
 
     #$number += 0;
