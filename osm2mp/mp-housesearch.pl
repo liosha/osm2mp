@@ -9,7 +9,6 @@ use List::MoreUtils qw{ all any };
 use Data::Dump 'dd';
 
 my $roadid = 1;
-#my $nodeid = 1;
 
 my $callback = sub {
     my $obj = shift;
@@ -38,12 +37,10 @@ my $callback = sub {
         print "[END]\n\n\n";
         return;
     };
-
     
     return  unless $obj->{attributes}->{Type} eq '0x13';
     return  unless all { exists $obj->{attributes}->{$_} } qw{ HouseNumber StreetDesc CityName };
 
-    #dd $obj;
     print "[POLYLINE]\n";
     print "Type=0x0D\n";
 
@@ -52,19 +49,12 @@ my $callback = sub {
 
     print "Label=$number $obj->{attributes}->{StreetDesc}\n";
 
-    #pop @{ $obj->{attributes}->{Data0} };
-    #print 'Data0=(' . join( q{),(}, map { join( q{,}, @$_ ) } @{ $obj->{attributes}->{Data0} } ) . ")\n";
-
     my ( $lat, $lon ) = centroid( @{ $obj->{attributes}->{Data0} } );
     printf "Data0=(%f,%f),(%f,%f)\n", $lat-0.00002, $lon, $lat+0.00002, $lon;
     
     print 'RoadID=' . $roadid++ . "\n";
-    #print 'Nod1=0,' . $nodeid++ . ",0\n";
-    #print 'Nod2=1,' . $nodeid++ . ",0\n";
-    #print 'Nod2=' . $#{$obj->{attributes}->{Data0}} . ',' . $nodeid++ . ",0\n";
 
-    #$number += 0;
-    ($number) = $number =~ /(\d+)/;
+    ($number) = $number =~ /(\d{1,4})/;
 
     $obj->{attributes}->{CityName} =~ s/,/ /g;
     $obj->{attributes}->{RegionName} =~ s/,/ /g;
