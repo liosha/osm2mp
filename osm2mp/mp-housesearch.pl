@@ -70,6 +70,9 @@ my $callback = sub {
 };
 
 
+
+local $SIG{__WARN__} = sub { shift };
+
 my $parser = Geo::Parse::PolishFormat->new();
 $parser->parse( $ARGV[0], $callback );
 
