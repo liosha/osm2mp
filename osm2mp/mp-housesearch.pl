@@ -9,6 +9,7 @@ use List::MoreUtils qw{ all any };
 use Data::Dump 'dd';
 
 my $roadid = 1;
+my $nodeid = 1;
 
 my $callback = sub {
     my $obj = shift;
@@ -60,6 +61,9 @@ my $callback = sub {
     $obj->{attributes}->{RegionName} =~ s/,/ /g;
     $obj->{attributes}->{CountryName} =~ s/,/ /g;
     print "Numbers1=0,B,$number,$number,N,-1,-1,-1,-1,$obj->{attributes}->{CityName},$obj->{attributes}->{RegionName},$obj->{attributes}->{CountryName},-1\n";
+
+    printf "Nod1=0,%d,0\n", $nodeid++;
+    printf "Nod2=1,%d,0\n", $nodeid++;
 
     while ( my ( $k, $v ) = each %{ $obj->{attributes} } ) {
         next if any { $k eq $_ } qw{ Type Label HouseNumber StreetDesc };
