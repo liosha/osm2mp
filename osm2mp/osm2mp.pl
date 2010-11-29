@@ -2162,7 +2162,7 @@ sub WritePOI {
             if exists $param{housenumber} && !defined $housenumber;
         printf "HouseNumber=%s\n", convert_string( $housenumber )     if $housenumber;
 
-        my $street = $tag{'addr:street'};
+        my $street = $tag{'addr:street'} // ( $city ? $city->{name} : $defaultcity );
         $street = $param{street}
             if exists $param{street} && !defined $street;
         if ( $street ) {
@@ -2573,12 +2573,13 @@ sub WritePolygon {
     ## Navitel
     if ( $navitel ) {
         my $housenumber = name_from_list( 'house', \%tag );
-        my $street = $tag{'addr:street'};
-        $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
 
-        if ( $housenumber && $street ) {
+        if ( $housenumber ) {
     
             my $city = $city{ FindCity( $plist[0]->[0] ) };
+            my $street = $tag{'addr:street'} // ( $city ? $city->{name} : $defaultcity );
+            $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
+        
             my $suburb = FindSuburb( $plist[0]->[0] );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
 
