@@ -166,7 +166,7 @@
     - action: load_road
       type: 0x07
       level_h: 0
-      routeparams: '1,0,0,0,0,0,0,0,0,0,0,0'
+      routeparams: '0,0,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
     - route = ferry
