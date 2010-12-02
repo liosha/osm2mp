@@ -42,6 +42,7 @@ my %rename = (
     mongolia        =>  161033,
     oman            =>  305138,
     saudi_arabia    =>  307584,
+    syria           =>  184840,
     tunisia         =>  192757,
     turkey          =>  174737,
     united_arab_emirates    =>  307763,
