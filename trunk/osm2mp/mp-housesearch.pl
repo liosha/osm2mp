@@ -28,9 +28,7 @@ my $callback = sub {
         return;
     };
 
-    return  unless $obj->{name} eq 'POLYGON';
-
-    if ( $obj->{attributes}->{Type} eq '0x4B' ) {
+    if ( $obj->{name} eq 'POLYGON' && $obj->{attributes}->{Type} eq '0x4B' ) {
         print "[POLYGON]\n";
         for my $line ( @{ $obj->{lines} } ) {
             print "$line\n";
@@ -39,7 +37,10 @@ my $callback = sub {
         return;
     };
     
-    return  unless $obj->{attributes}->{Type} eq '0x13';
+    return  unless 
+            $obj->{name} eq 'POLYGON' && $obj->{attributes}->{Type} eq '0x13'
+        ||  $obj->{name} eq 'POI'     && $obj->{attributes}->{Type} eq '0x6100';
+
     return  unless all { exists $obj->{attributes}->{$_} } qw{ HouseNumber StreetDesc CityName };
 
     print "[POLYLINE]\n";
