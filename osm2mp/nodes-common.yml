@@ -366,7 +366,11 @@
 # Shopping
 
 - condition:
-    - shop = dry_cleaning|laundry|toys
+    - or:
+        - shop = dry_cleaning|laundry|beauty|hairdresser
+        - and:
+            - amenity = marketplace
+            - named
   action:
     - action: write_poi
       type: 0x2E00
@@ -396,7 +400,6 @@
 - condition:
     - or:
         - amenity = pharmacy
-        - shop = chemist
   action:
     - action: write_poi
       type: 0x2E05
@@ -418,7 +421,7 @@
       contacts: yes
 
 - condition:
-    - shop = doityourself|garden_centre
+    - shop = doityourself|garden_centre|hardware|chemist
   action:
     - action: write_poi
       type: 0x2E08
@@ -440,11 +443,7 @@
       contacts: yes
 
 - condition:
-    - or:
-        - shop = bicycle|electronics|electrogoods|electrotools|hardware|outdoor|stationery|sports
-        - and:
-            - amenity = marketplace
-            - named
+    - shop = bicycle|electronics|electrogoods|electrotools|outdoor|stationery|sports|toys
   action:
     - action: write_poi
       type: 0x2E0A
@@ -480,10 +479,13 @@
       contacts: yes
 
 - condition:
-    - shop = car
     - or:
-        - service = dealer|parts
-        - service != *
+        - shop = car_parts
+        - and:
+            - shop = car
+            - or:
+                - service = dealer|parts
+                - service != *
   action:
     - action: write_poi
       type: 0x2F07
@@ -690,7 +692,9 @@
 # Hospital
 
 - condition:
-    - amenity = dentist|doctors|hospital
+    - or:
+        - amenity = dentist|doctors|hospital
+        - healthcare = centre|clinic|dentist|doctor|hospital
   action:
     - action: write_poi
       type: 0x3002

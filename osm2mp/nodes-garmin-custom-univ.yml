@@ -52,6 +52,7 @@
     - action: write_poi
       type: 0x011503
 
+
 - condition:
     - traffic_calming = yes|bump|cushion|hump|table
   action:
@@ -81,6 +82,18 @@
   action:
     - action: write_poi
       type: 0x011515
+
+- condition:
+    - barrier = block
+  action:
+    - action: write_poi
+      type: 0x011516
+
+- condition:
+    - barrier = chain
+  action:
+    - action: write_poi
+      type: 0x011517
 
 
 ##  Whitewater

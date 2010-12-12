@@ -34,7 +34,7 @@
   action:
     - action: write_line
       type: 0x14
-      level_h: 2
+      level_h: 1
 
 - id: light_railway
   condition:
