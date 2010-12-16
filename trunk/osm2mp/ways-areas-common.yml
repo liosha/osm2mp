@@ -75,6 +75,10 @@
 - condition:
     - building = *
     - building != no
+    # kill fakes
+    - or:
+        - addr:housenumber = *
+        - height != *
   action:
     - action: write_polygon
       type: 0x13
