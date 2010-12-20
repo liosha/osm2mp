@@ -136,7 +136,7 @@
 
 
 - condition:
-    - highway = residential|road
+    - highway = residential
   action:
     - action: load_road
       type: 0x06
@@ -181,7 +181,7 @@
 ## Tracks
 
 - condition:
-    - highway = track
+    - highway = track|road
   action:
     - action: load_road
       type: 0x0a

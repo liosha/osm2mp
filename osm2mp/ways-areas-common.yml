@@ -78,7 +78,12 @@
     # kill fakes
     - or:
         - addr:housenumber = *
-        - height != *
+        - and:
+            - height != *
+            - min_height != *
+            - building:height != *
+            - building:levels != *
+            - building:min_level != *
   action:
     - action: write_polygon
       type: 0x13
