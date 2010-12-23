@@ -10,7 +10,7 @@ use List::MoreUtils qw{ first_index };
 use IO::Uncompress::Gunzip qw{ gunzip $GunzipError };
 
 
-use Data::Dump 'dd';
+use Data::Dumper;
 
 
 my $api  = 'http://www.openstreetmap.org/api/0.6';
@@ -225,7 +225,6 @@ my $osm = XMLin( $osmdata,
             KeyAttr     => [ 'id', 'k' ],
           );
 
-
 my %role = (
     ''          => 'outer',
     'outer'     => 'outer',
@@ -252,7 +251,7 @@ for my $member ( @{ $osm->{relation}->{$rel}->{member} } ) {
 
 }
 
-while ( my ($type,$list_ref) = each %ring ) {
+while ( my ( $type, $list_ref ) = each %ring ) {
     while ( @$list_ref ) {
         my @chain = @{ shift @$list_ref };
         
@@ -286,6 +285,7 @@ while ( my ($type,$list_ref) = each %ring ) {
             next;
         }
         print STDERR "Invalid data: ring is not closed\n";
+        print STDERR "Non-connecting chain:\n" . Dumper( \@chain );
         exit;
     }
 }
