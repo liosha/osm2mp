@@ -1,11 +1,39 @@
 
+
 package Math::Polygon::Tree;
+
+=head1 NAME
+
+Math::Polygon::Tree - Class for fast check if point is inside polygon
+
+=head1 SYNOPSIS
+
+Math::Polygon::Tree creates a B-tree of polygon parts for fast check if object is inside this polygon.
+This method is effective if polygon has hundreds or more segments.
+
+    use Math::Polygon::Tree;
+
+    my $poly  = [ [0,0], [0,2], [2,2], ... ];
+    my $bound = Math::Polygon::Tree->new( $poly );
+
+    if ( $bound->contains( [1,1] ) )  { ... }
+
+=cut
+
+our $VERSION = '0.041';
+our @EXPORT_OK = qw{
+    polygon_bbox
+    polygon_centroid
+    polygon_contains_point
+};
+
+
+
+use base qw{ Exporter };
 
 use warnings;
 use strict;
 use Carp;
-
-our $VERSION = '0.04';
 
 use List::Util qw{ sum min max };
 use List::MoreUtils qw{ uniq };
@@ -16,8 +44,26 @@ use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
 # use Data::Dump 'dd';
 
 
+
 my $MAX_LEAF_POINTS = 16;       # minimum 6
 
+
+=head1 METHODS
+
+=head2 new
+
+Takes polygons (at least one) and creates a tree structure. All polygons are outer, inners in not implemented.
+Polygon is a reference to array of points
+
+    my $poly1 = [ [0,0], [0,2], [2,2], ... ];   
+    ...
+    my $bound = Math::Polygon::Tree->new( $poly1, $poly2, ... );
+
+or a .poly file
+
+    my $bound = Math::Polygon::Tree->new( 'boundary.poly' );
+
+=cut
 
 sub new {
     my $class = shift;
@@ -139,6 +185,14 @@ sub new {
 }
 
 
+=head2 contains
+
+Checks if point is inside bound polygon.
+Returns 1 if point is inside polygon or 0 otherwise.
+
+    if ( $bound->contains( [1,1] ) )  { ... 
+
+=cut
 
 sub contains {
     my $self  = shift;
@@ -174,6 +228,15 @@ sub contains {
 }
 
 
+=head2 contains_points
+
+Checks if points are inside bound polygon.
+Returns 1 if all points are inside polygon, 0 if all outside, or B<undef>.
+
+    if ( $bound->contains_points( [1,1], [2,2] ... ) )  { ...
+
+=cut
+
 sub contains_points {
     my $self  = shift;
     my $result = undef;
@@ -193,6 +256,16 @@ sub contains_points {
     return $result;
 }
 
+
+=head2 contains_bbox_rough
+
+Checks if box is inside bound polygon.
+Returns 1 if box is inside polygon, 0 if box is outside polygon or B<undef> if it 'doubts'. 
+
+    my ($xmin, $ymin, $xmax, $ymax) = ( 1, 1, 2, 2 );
+    if ( $bound->contains_bbox_rough( $xmin, $ymin, $xmax, $ymax ) )  { ... }
+
+=cut
 
 sub contains_bbox_rough {
     my $self  = shift;
@@ -230,6 +303,15 @@ sub contains_bbox_rough {
 }
 
 
+=head2 contains_polygon_rough
+
+Checks if polygon is inside bound polygon.
+Returns 1 if inside, 0 if outside or B<undef> if 'doubts'. 
+
+    if ( $bound->contains_polygon_rough( [ [1,1], [1,2], [2,2], ... ] ) )  { ... }
+
+=cut
+
 sub contains_polygon_rough {
     my $self = shift;
     my $poly = shift; 
@@ -243,6 +325,14 @@ sub contains_polygon_rough {
 
 
 
+=head2 bbox
+
+Returns polygon's bounding box. 
+
+    my ( $xmin, $ymin, $xmax, $ymax ) = $bound->bbox();
+
+=cut
+
 sub bbox {
     my $self  = shift;
     return ( $self->{xmin}, $self->{ymin}, $self->{xmax}, $self->{ymax} );
@@ -251,8 +341,15 @@ sub bbox {
 
 
 
+=head1 FUNCTIONS
 
-####    Service functions
+=head2 polygon_bbox
+
+Function that returns polygon's bbox.
+
+    my ( $xmin, $ymin, $xmax, $ymax ) = polygon_bbox( [1,1], [1,2], [2,2], ... );
+
+=cut
 
 sub polygon_bbox (@) {
 
@@ -265,8 +362,48 @@ sub polygon_bbox (@) {
 }
 
 
-# modified function from Math::Polygon::Calc
-# returns -1 if point lays on polygon's boundary
+=head2 polygon_centroid
+
+Function that returns polygon's weightened center.
+
+    my ( $x, $y ) = polygon_centroid( [1,1], [1,2], [2,2], ... );
+
+=cut
+
+sub polygon_centroid {
+
+    my $slat = 0;
+    my $slon = 0;
+    my $ssq  = 0;
+
+    for my $i ( 1 .. $#_-1 ) {
+        my $tlon = ( $_[0]->[0] + $_[$i]->[0] + $_[$i+1]->[0] ) / 3;
+        my $tlat = ( $_[0]->[1] + $_[$i]->[1] + $_[$i+1]->[1] ) / 3;
+
+        my $tsq = ( ( $_[$i]  ->[0] - $_[0]->[0] ) * ( $_[$i+1]->[1] - $_[0]->[1] )
+                  - ( $_[$i+1]->[0] - $_[0]->[0] ) * ( $_[$i]  ->[1] - $_[0]->[1] ) );
+
+        $slat += $tlat * $tsq;
+        $slon += $tlon * $tsq;
+        $ssq  += $tsq;
+    }
+
+    if ( $ssq == 0 ) {
+        return (
+            ((min map { $_->[0] } @_) + (max map { $_->[0] } @_)) / 2,
+            ((min map { $_->[1] } @_) + (max map { $_->[1] } @_)) / 2 );
+    }
+
+    return ( $slon/$ssq , $slat/$ssq );
+}
+
+
+=head2 polygon_contains_point
+
+Function that tests if polygon contains point (modified one from Math::Polygon::Calc).
+Returns -1 if point lays on polygon's boundary
+
+=cut
 
 sub polygon_contains_point ($@) {
 
@@ -307,87 +444,7 @@ sub polygon_contains_point ($@) {
 
 1;
 
-__END__
 
-
-=head1 NAME
-
-Math::Polygon::Tree - Class for fast check if point is inside polygon
-
-=head1 SYNOPSIS
-
-Math::Polygon::Tree creates a B-tree of polygon parts for fast check if object is inside this polygon.
-This method is effective if polygon has hundreds or more segments.
-
-    use Math::Polygon::Tree;
-
-    my $poly  = [ [0,0], [0,2], [2,2], ... ];
-    my $bound = Math::Polygon::Tree->new( $poly );
-
-    if ( $bound->contains( [1,1] ) )  { ... }
-
-
-=head1 METHODS
-
-=head2 new
-
-Takes polygons (at least one) and creates a tree structure. All polygons are outer, inners in not implemented.
-Polygon is a reference to array of points
-
-    my $poly1 = [ [0,0], [0,2], [2,2], ... ];   
-    ...
-    my $bound = Math::Polygon::Tree->new( $poly1, $poly2, ... );
-
-or a .poly file
-
-    my $bound = Math::Polygon::Tree->new( 'boundary.poly' );
-
-=head2 contains
-
-Checks if point is inside bound polygon.
-Returns 1 if point is inside polygon or 0 otherwise.
-
-    if ( $bound->contains( [1,1] ) )  { ...
-
-=head2 contains_points
-
-Checks if some points is inside bound polygon.
-Returns 1 if all points is inside polygon, 0 if all outside, or B<undef>.
-
-    if ( $bound->contains_points( [1,1], [2,2] ... ) )  { ...
-
-=head2 contains_bbox_rough
-
-Checks if box is inside bound polygon.
-Returns 1 if box is inside polygon, 0 if box is outside polygon or B<undef> if it 'doubts'. 
-
-    my ($xmin, $ymin, $xmax, $ymax) = ( 1, 1, 2, 2 );
-    if ( $bound->contains_bbox_rough( $xmin, $ymin, $xmax, $ymax ) )  { ... }
-
-
-=head2 contains_polygon_rough
-
-Checks if polygon is inside bound polygon.
-Returns 1 if inside, 0 if outside or B<undef> if 'doubts'. 
-
-    if ( $bound->contains_polygon_rough( [ [1,1], [1,2], [2,2], ... ] ) )  { ... }
-
-=head2 bbox
-
-Returns polygon's bounding box. 
-
-    my ( $xmin, $ymin, $xmax, $ymax ) = $bound->bbox();
-
-
-=head1 FUNCTIONS
-
-=head2 polygon_bbox
-
-Function that returns polygon's bbox.
-
-=head2 polygon_contains_point
-
-Function that tests if polygon contains point.
 
 =head1 AUTHOR
 
@@ -398,8 +455,6 @@ liosha, C<< <liosha at cpan.org> >>
 Please report any bugs or feature requests to C<bug-math-polygon-tree at rt.cpan.org>, or through
 the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Math-Polygon-Tree>.  I will be notified, and then you'll
 automatically be notified of progress on your bug as I make changes.
-
-
 
 
 =head1 SUPPORT
