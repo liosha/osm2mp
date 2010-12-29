@@ -2162,9 +2162,11 @@ sub WritePOI {
             if exists $param{housenumber} && !defined $housenumber;
         printf "HouseNumber=%s\n", convert_string( $housenumber )     if $housenumber;
 
-        my $street = $tag{'addr:street'} // ( $city ? $city->{name} : $defaultcity );
+        my $street = $tag{'addr:street'};
         $street = $param{street}
             if exists $param{street} && !defined $street;
+        $street //= ( $city ? $city->{name} : $defaultcity );
+
         if ( $street ) {
             my $suburb = FindSuburb( $param{nodeid} || $param{latlon} );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
@@ -2577,9 +2579,10 @@ sub WritePolygon {
         if ( $housenumber ) {
     
             my $city = $city{ FindCity( $plist[0]->[0] ) };
-            my $street = $tag{'addr:street'} // ( $city ? $city->{name} : $defaultcity );
+            my $street = $tag{'addr:street'};
             $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
-        
+            $street //= ( $city ? $city->{name} : $defaultcity );
+
             my $suburb = FindSuburb( $plist[0]->[0] );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
 
