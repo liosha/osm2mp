@@ -1,15 +1,51 @@
-﻿package Geo::Parse::OSM;
+﻿
+package Geo::Parse::OSM;
+use base qw{ Exporter };
 
-use warnings;
+our $VERSION = '0.40_1';
+
+our @EXPORT_OK = qw(
+    object_to_xml
+);
+
+=head1 NAME
+
+Geo::Parse::OSM - OpenStreetMap XML file regexp parser
+
+=head1 SYNOPSIS
+
+    use Geo::Parse::OSM;
+
+    my $osm = Geo::Parse::OSM->new( 'planet.osm.gz' );
+    $osm->seek_to_relations;
+    $osm->parse( sub{ warn $_[0]->{id}  if  $_[0]->{user} eq 'Alice' } );
+
+=cut
+
+
 use strict;
+use warnings;
+use 5.010;
 use Carp;
-
-our $VERSION = '0.40';
 
 use Encode;
 use HTML::Entities;
 use IO::Uncompress::AnyUncompress qw($AnyUncompressError);
 
+
+
+
+=head1 METHODS
+
+=head2 new
+
+Creates parser instance and opens file
+
+    my $osm = Geo::Parse::OSM->new( 'planet.osm' );
+
+Compressed files (.gz, .bz2) are also supported.
+
+=cut
 
 sub new {
     my $class = shift;
@@ -28,6 +64,22 @@ sub new {
     return $self;
 }
 
+
+
+
+=head2 parse
+
+Parses file and executes callback function for every object.
+Stops parsing if callback returns 'stop'
+
+    $osm->parse( sub{ warn $_[0]->{id} and return 'stop' } );
+
+It's possible to filter out unnecessary object types
+
+    $osm->parse( sub{ ... }, only => 'way' );
+    $osm->parse( sub{ ... }, only => [ 'way', 'relation' ] );
+
+=cut
 
 my @obj_types = qw{ node way relation bound bounds };
 my $obj_types = join q{|}, @obj_types;
@@ -58,7 +110,7 @@ sub parse {
     while ( my $line = decode( 'utf8', $self->{stream}->getline() ) ) {
 
         # start of object
-        if ( my ($obj) = $line =~ m{^\s*<($obj_types)} ) {
+        if ( my ($obj) = $line =~ m{ ^\s* <($obj_types) }xo ) {
 
             $self->{$obj} = $pos    unless defined $self->{$obj};
             
@@ -67,27 +119,28 @@ sub parse {
             %object = ( type => $obj );
             
             # ALL attributes
-            my @res = $line =~ m{(\w+)=(?:"([^"]*)"|'([^']*)')}g;
+            my @res = $line =~ m{ (?<attr>\w+) = (?<q>['"]) (?<val>.*?) \k<q> }gx;
             while (@res) {
-                my ( $attr, $val1, $val2 ) = ( shift @res, shift @res, shift @res );
-                $object{$attr} = decode_entities( $val1 || $val2 );
+                my ( $attr, undef, $val ) = ( shift @res, shift @res, shift @res );
+                $object{$attr} = decode_entities( $val );
             }
         }
         # tag
-        elsif ( %object && ( my ($key, undef, $val) = $line =~ m{^\s*<tag.* k=["']([^"']+)["'].* v=(["'])(.+)\2} ) ) {
-            $object{tag}->{$key} = decode_entities( $val );
+        elsif ( %object  &&  $line =~ m{ ^\s* <tag.*? \bk = (?<q>["']) (?<key>.*?) \k<q> .*? \bv = \k<q> (?<val>.*?) \k<q> }x ) {
+            $object{tag}->{ $+{key} } = decode_entities( $+{val} );
         }
         # node ref
-        elsif ( %object && ( my ($nref) = $line =~ m{^\s*<nd.* ref=["']([^"']+)["']} ) ) {
-            push @{$object{chain}}, $nref;
+        elsif ( %object  &&  $line =~ m{ ^\s* <nd.*? \bref = (?<q>["']) (?<nref>.*?) \k<q> }x ) {
+            push @{$object{chain}}, $+{nref};
         }
         # relation member
-        elsif ( %object && ( my ($type, $mref, $role) = $line =~ /^\s*<member.* type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']*)["']/ ) ) {
-            push @{$object{members}}, { type => $type, ref => $mref, role => $role };
+        elsif ( %object  &&  $line =~ m{ ^\s* <member.*? \btype = (?<q>["']) (?<type>.*?) \k<q> .*? \bref = \k<q> (?<ref>.*?) \k<q> .*? \brole = \k<q> (?<role>.*?) \k<q> } ) {
+            push @{$object{members}}, { type => $+{type}, ref => $+{ref}, role => $+{role} };
         }
 
+
         # end of object
-        if ( %object && ( my ($obj) = ( $line =~ m{^\s*</($object{type})} or $line =~ m{^\s*<($object{type}).*/>} ) ) ) {
+        if ( %object  &&  $line =~ m{ ^\s* <(?: / $object{type} | $object{type} .* / > ) }x ) {
             my $res = &$callback( \%object );
             if ( defined $res && $res eq 'stop' ) {
                 $self->{saved} = \%object    if $prop{save};
@@ -103,6 +156,17 @@ sub parse {
     }
 }
 
+
+=head2 seek_to
+
+Seeks to the file position or to the first object of selected type.
+
+    $osm->seek_to( 0 );
+    $osm->seek_to( 'way' );
+
+Can be slow on compressed files!
+
+=cut
 
 sub seek_to {
     my $self = shift;
@@ -120,40 +184,79 @@ sub seek_to {
     }
 }
 
-sub seek_to_nodes     {  seek_to( shift(), 'node' )  }
 
-sub seek_to_ways      {  seek_to( shift(), 'way' )  }
+=head2 seek_to_nodes
 
-sub seek_to_relations {  seek_to( shift(), 'relation' )  }
+=head2 seek_to_ways
+
+=head2 seek_to_relations
+
+    $osm->seek_to_ways;     # same as seek_to('way');
+
+=cut
+
+sub seek_to_nodes     {  return seek_to( shift(), 'node' )  }
+
+sub seek_to_ways      {  return seek_to( shift(), 'way' )  }
+
+sub seek_to_relations {  return seek_to( shift(), 'relation' )  }
 
 
+=head2 parse_file
+
+Class method - creates parser instance and does one parser() pass.
+Returns created parser object.
+
+    use Data::Dumper;
+    Geo::Parse::OSM->parse_file( 'planet.osm', sub{ print Dumper $_[0] } );
+
+=cut
 
 sub parse_file {
     my $class = shift;
 
     my ( $file, $callback ) = @_;
 
-    my $obj = Geo::Parse::OSM->new( $file );
+    my $obj = $class->new( $file );
     $obj->parse( $callback ); 
+
+    return $obj;
 }
 
 
-my %attrorder = (
-    action      => 1,
-    id          => 2,
-    version     => 3,
-    timestamp   => 4,
-    uid         => 5,
-    user        => 6,
-    changeset   => 7,
-    lat         => 8,
-    lon         => 9,
+
+=head1 FUNCTIONS
+
+=head2 object_to_xml
+
+Returns xml representation of the callback object.
+
+    sub callback {
+        print Geo::Parse::OSM::object_to_xml( shift @_);
+    }
+    Geo::Parse::OSM->parse_file( 'planet.osm', \&callback );
+
+=cut
+
+my @attrorder = qw(
+    action
+    id
+    lat
+    lon
+    version
+    changeset
+    visible
+    timestamp
+    user
+    uid
 );
+
+my %attrorder = map { $attrorder[$_-1] => $_ } ( 1 .. scalar @attrorder );
 
 my $enc = q{\x00-\x19<>&"'};
 
-sub to_xml {
-    my $class = shift;
+
+sub object_to_xml {
     my %obj = %{ shift() };
 
     my $type = $obj{type}; 
@@ -161,7 +264,7 @@ sub to_xml {
 
     my $res = qq{  <$type }
         . join( q{ },
-            map { qq{$_="} . encode("utf8",encode_entities($obj{$_}, $enc)) . q{"} }
+            map { qq{$_="} . encode( 'utf8', encode_entities( $obj{$_}, $enc ) ) . q{"} }
             grep { ! ref $obj{$_} }
             sort { (exists $attrorder{$a} ? $attrorder{$a} : 999) <=> (exists $attrorder{$b} ? $attrorder{$b} : 999) or $a cmp $b } keys %obj );
 
@@ -180,9 +283,9 @@ sub to_xml {
         if ( exists $obj{tag} ) {
             for my $tag ( sort keys %{$obj{tag}} ) {
                 $res .= q{    <tag k="}
-                    . encode("utf8",encode_entities($tag, $enc))
+                    . encode( 'utf8', encode_entities($tag, $enc) )
                     . q{" v="}
-                    . encode("utf8",encode_entities($obj{tag}->{$tag}, $enc))
+                    . encode( 'utf8', encode_entities($obj{tag}->{$tag}, $enc) )
                     . qq{"/>\n};
             }
         }
@@ -196,82 +299,6 @@ sub to_xml {
 }
 
 
-=head1 NAME
-
-Geo::Parse::OSM - OpenStreetMap file parser
-
-=head1 VERSION
-
-Version 0.40
-
-=head1 SYNOPSIS
-
-
-    use Geo::Parse::OSM;
-
-    my $osm = Geo::Parse::OSM->new( 'planet.osm.gz' );
-    $osm->seek_to_relations;
-    $osm->parse( sub{ warn $_[0]->{id}  if  $_[0]->{user} eq 'Alice' } );
-
-
-=head1 METHODS
-
-=head2 new
-
-Creates parser instance and opens file
-
-    my $osm = Geo::Parse::OSM->new( 'planet.osm' );
-
-Compressed files (.gz, .bz2) are also supported.
-
-=head2 parse
-
-Parses file and executes callback function for every object.
-Stops parsing if callback returns 'stop'
-
-    $osm->parse( sub{ warn $_[0]->{id} and return 'stop' } );
-
-It's possible to filter out unnecessary object types
-
-    $osm->parse( sub{ ... }, only => 'way' );
-    $osm->parse( sub{ ... }, only => [ 'way', 'relation' ] );
-
-=head2 seek_to
-
-Seeks to the file position or first object of selected type.
-
-    $osm->seek_to( 0 );
-    $osm->seek_to( 'way' );
-
-Can be slow on compressed files.
-
-=head2 seek_to_nodes
-
-=head2 seek_to_ways
-
-=head2 seek_to_relations
-
-    $osm->seek_to_ways;     # same as seek_to('way');
-
-=head1 FUNCTIONS
-
-=head2 parse_file
-
-Simple parser - parses contents of file and executes callback function for every object.
-
-    Geo::Parse::OSM->parse_file( 'planet.osm', sub{ print Dumper $_[0] } );
-
-=head2 to_xml
-
-Returns xml representation of the object.
-
-    sub callback {
-        my ($obj) = @_;
-        print Geo::Parse::OSM->to_xml( $obj );
-    }
-    Geo::Parse::OSM->parse_file( 'planet.osm', \&callback );
-
-
 =head1 AUTHOR
 
 liosha, C<< <liosha at cpan.org> >>
@@ -281,8 +308,6 @@ liosha, C<< <liosha at cpan.org> >>
 Please report any bugs or feature requests to C<bug-geo-parse-osm at rt.cpan.org>, or through
 the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Geo-Parse-OSM>.  I will be notified, and then you'll
 automatically be notified of progress on your bug as I make changes.
-
-
 
 
 =head1 SUPPORT
