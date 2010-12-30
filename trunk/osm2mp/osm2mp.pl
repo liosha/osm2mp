@@ -1,6 +1,12 @@
 #!/usr/bin/perl
 
 ##
+##  osm2mp.pl - OpenStreetMap to 'polish' format converter
+##
+
+our $VERSION = '0.90';
+
+##
 ##  Required packages: 
 ##    * Template-toolkit
 ##    * Getopt::Long
@@ -12,13 +18,12 @@
 ##    * Math::Geometry::Planar::GPC::Polygon
 ##    * Tree::R  
 ##
-##  See http://cpan.org/ or use PPM (Perl package manager) or CPAN module
+##  See http://search.cpan.org/ or use PPM (Perl package manager) or CPAN module
 ##
 
 ##
 ##  Licenced under GPL v2
 ##
-
 
 
 use 5.0100;
@@ -35,22 +40,20 @@ use Text::Unidecode;
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
-use Math::Polygon::Tree;
+use Math::Polygon::Tree  0.041  qw{ polygon_centroid };
 use Tree::R;
 
 use List::Util qw{ first reduce sum min max };
 use List::MoreUtils qw{ all none any first_index last_index uniq };
 
 # debug
-use Data::Dump 'dd';
+#use Data::Dump 'dd';
 
 
 
 
 
 ####    Settings
-
-my $version = '0.90b';
 
 my $config          = [ 'garmin.yml' ];
 
@@ -230,7 +233,7 @@ if ( $country_list ) {
 
 ####    Action
 
-print STDERR "\n  ---|   OSM -> MP converter  $version   (c) 2008-2010  liosha, xliosha\@gmail.com\n\n";
+print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2010  liosha, xliosha\@gmail.com\n\n";
 
 usage() unless (@ARGV);
 
@@ -304,7 +307,7 @@ or die $tmpl->error();
 
 ####    Info
 
-print "\n; #### Converted from OpenStreetMap data with  osm2mp $version  (" . strftime ("%Y-%m-%d %H:%M:%S", localtime) . ")\n\n\n";
+print "\n; #### Converted from OpenStreetMap data with  osm2mp $VERSION  (" . strftime ("%Y-%m-%d %H:%M:%S", localtime) . ")\n\n\n";
 
 
 my ($infile) = @ARGV;
@@ -753,7 +756,7 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
                 type    => "Rel",
                 id      => $mpid,
                 tag     => $mp->{tags},
-                latlon  => ( join q{,}, centroid( map { [ split q{,}, $node{$_} ] } @{ $ampoly->{outer}->[0] } ) ),
+                latlon  => ( join q{,}, polygon_centroid( map { [ split q{,}, $node{$_} ] } @{ $ampoly->{outer}->[0] } ) ),
             } );
     }
 
@@ -942,7 +945,7 @@ while ( my $line = decode 'utf8', <IN> ) {
             process_config( $config{nodes}, {
                     type    => "Way",
                     id      => $wayid,
-                    latlon  => ( join q{,}, centroid( map { [ split q{,}, $node{$_} ] } @chain ) ),
+                    latlon  => ( join q{,}, polygon_centroid( map { [ split q{,}, $node{$_} ] } @chain ) ),
                     tag     => \%waytag,
                 } );
         }
@@ -1940,7 +1943,7 @@ Usage:  osm2mp.pl [options] file.osm > file.mp
 
 Available options [defaults]:
 
- --config <file>           configuration file   [$config]
+ --config <file>           configuration file   [ @$config ]
  --mapid <id>              map id               [$mapid]
  --mapname <name>          map name             [$mapname]
 
@@ -2021,35 +2024,6 @@ sub segment_intersection {
     return [ $p11->[0] + ( $p12->[0] - $p11->[0] ) * $Ub,
              $p11->[1] + ( $p12->[1] - $p11->[1] ) * $Ub ];
 }
-
-
-sub centroid {
-
-    my $slat = 0;
-    my $slon = 0;
-    my $ssq  = 0;
-
-    for my $i ( 1 .. $#_-1 ) {
-        my $tlon = ( $_[0]->[0] + $_[$i]->[0] + $_[$i+1]->[0] ) / 3;
-        my $tlat = ( $_[0]->[1] + $_[$i]->[1] + $_[$i+1]->[1] ) / 3;
-
-        my $tsq = ( ( $_[$i]  ->[0] - $_[0]->[0] ) * ( $_[$i+1]->[1] - $_[0]->[1] ) 
-                  - ( $_[$i+1]->[0] - $_[0]->[0] ) * ( $_[$i]  ->[1] - $_[0]->[1] ) );
-        
-        $slat += $tlat * $tsq;
-        $slon += $tlon * $tsq;
-        $ssq  += $tsq;
-    }
-
-    if ( $ssq == 0 ) {
-        return ( 
-            ((min map { $_->[0] } @_) + (max map { $_->[0] } @_)) / 2,
-            ((min map { $_->[1] } @_) + (max map { $_->[1] } @_)) / 2 );
-    }
-    return ( $slon/$ssq , $slat/$ssq );
-}
-
-
 
 
 sub FindCity {
@@ -2518,7 +2492,7 @@ sub WritePolygon {
 
     if ( ref $hlev ) {
         my $square = sum map { Math::Polygon::Calc::polygon_area( @$_ ) 
-                                * cos( [centroid( @{$param{areas}->[0]} )]->[1] / 180 * 3.14159 )
+                                * cos( [polygon_centroid( @{$param{areas}->[0]} )]->[1] / 180 * 3.14159 )
                                 * (40000/360)**2 } @{$param{areas}};
         $hlev = $llev + last_index { $square >= $_ } @$hlev;
         return if $hlev < $llev;
