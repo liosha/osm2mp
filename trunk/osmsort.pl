@@ -1,51 +1,83 @@
 #!/usr/bin/perl
 
+########
+# $Id$
+# $Revision$
+# $Author$
+# $Date$
 
-my $osm;
-my %nod;
-my %way;
-my %rel;
 
-my $obj;
+use 5.010;
+use strict;
+use warnings;
+use autodie;
 
-my ($minlat, $minlon, $maxlat, $maxlon) = (90,180,-90,-180);
+use Readonly;
+#use Data::Dump 'dd';
 
-while (<>) {
+our $VERSION = 0.02;
 
-#    if ( /<osm/ )                       { $osm = "";     $obj = \$osm;}
-    if ( /<node.*\bid=['"]([^'"]+)['"]/ )        { $nod{$1} = ""; $obj = \$nod{$1}; }
-    if ( /<way.*\bid=['"]([^'"]+)['"]/ )         { $way{$1} = ""; $obj = \$way{$1}; }
-    if ( /<relation.*\bid=['"]([^'"]+)['"]/ )    { $rel{$1} = ""; $obj = \$rel{$1}; }
 
-    if ( /<bounds?/ )   {
-        my ($minlt, $minln, $maxlt, $maxln);
-        if ( /\<bounds/ ) {
-            ($minlt, $minln, $maxlt, $maxln) 
-                = ( /minlat=["'](\-?\d+\.?\d*)["'] minlon=["'](\-?\d+\.?\d*)["'] maxlat=["'](\-?\d+\.?\d*)["'] maxlon=["'](\-?\d+\.?\d*)["']/ );
-        } 
-        else {
-            ($minlt, $minln, $maxlt, $maxln) 
-                = ( /box=["'](\-?\d+\.?\d*),(\-?\d+\.?\d*),(\-?\d+\.?\d*),(\-?\d+\.?\d*)["']/ );
+Readonly my $INFINITY => 200;
+
+my %obj;
+
+my @otypes = qw{ node way relation };
+my %otype_re = map { $_ => qr{ < $_ .*? \bid= (?<q>['"]) (?<id>.*?) \k<q> }xms } @otypes;
+
+my $current_obj;
+my ( $minlat, $minlon, $maxlat, $maxlon ) = ( $INFINITY, $INFINITY, -$INFINITY, -$INFINITY );
+
+while ( my $line = <> ) {
+
+    next if index( $line, '<osm'  ) >= 0;
+    next if index( $line, '</osm' ) >= 0;
+    next if index( $line, '<?xml' ) >= 0;
+
+    if ( index( $line, '<bound' ) >= 0 ) {
+        my %cap;
+        if ( index( $line, '<bounds' ) >= 0 ) {
+            $line =~
+                m{  \bminlat= (?<q>['"]) (?<minlat>.*?) \k<q>
+                .*? \bminlon= \k<q>      (?<minlat>.*?) \k<q>
+                .*? \bmaxlat= \k<q>      (?<minlat>.*?) \k<q>
+                .*? \bmaxlon= \k<q>      (?<minlat>.*?) \k<q> }xms;
+            %cap = %+;
         }
-        $minlat = $minlt    if $minlt < $minlat;
-        $minlon = $minln    if $minln < $minlon;
-        $maxlat = $maxlt    if $maxlt > $maxlat;
-        $maxlon = $maxln    if $maxln > $maxlon;
+        else {
+            $line =~ m{ \bbox= (?<q>['"]) (?<minlon>.*?), (?<minlat>.*?), (?<maxlon>.*?), (?<maxlat>.*?) \k<q> }xms;
+            %cap = %+;
+        }
+
+        if ( $cap{minlat} < $minlat )   {  $minlat = $cap{minlat}  }
+        if ( $cap{minlon} < $minlon )   {  $minlon = $cap{minlon}  }
+        if ( $cap{maxlat} > $maxlat )   {  $maxlat = $cap{maxlat}  }
+        if ( $cap{maxlon} > $maxlon )   {  $maxlon = $cap{maxlon}  }
+
         next;
     }
 
-    if ( /<\/?osm/ )                    { next; }
-    if ( /<\?xml/ )                     { next; }
+    for my $type ( @otypes ) {
+        if ( $line =~ $otype_re{$type} ) {
+            $current_obj = \( $obj{$type}->{ $+{id} } = q{} );
+            last;
+        }
+    }
 
-    ${$obj} .= $_;
+    next unless $current_obj;
+
+    ${$current_obj} .= $line;
 }
 
-print "<?xml version='1.0' standalone='yes'?>\n";
-#print $osm;
-print "<osm version=\"0.6\" generator=\"osmsort.pl\">\n";
-print "  <bound box='$minlat,$minlon,$maxlat,$maxlon' origin='http://www.openstreetmap.org/api/0.6'/>\n"
-    if $minlat < $maxlat;
-print @nod{sort {$a<=>$b} keys %nod};
-print @way{sort {$a<=>$b} keys %way};
-print @rel{sort {$a<=>$b} keys %rel};
-print "</osm>\n";
+say q{<?xml version="1.0" standalone="yes"?>};
+say qq{<osm version="0.6" generator="osmsort.pl $VERSION">};
+
+if ( $minlat < $maxlat ) {
+    say qq{  <bound box="$minlat,$minlon,$maxlat,$maxlon" origin="http://www.openstreetmap.org/api/0.6"/>};
+}
+
+for my $type ( @otypes ) {
+    print @{ $obj{$type} }{ sort { $a <=> $b } keys %{ $obj{$type} } };
+}
+
+say q{</osm>};
