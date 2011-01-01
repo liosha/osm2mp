@@ -26,7 +26,7 @@ our $VERSION = '0.90';
 ##
 
 
-use 5.0100;
+use 5.010;
 use strict;
 
 use POSIX;
