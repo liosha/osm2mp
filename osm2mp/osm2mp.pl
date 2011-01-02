@@ -14,6 +14,7 @@
 ##    * Template-toolkit
 ##    * Getopt::Long
 ##    * YAML  
+##    * Encode::Locale
 ##    * Text::Unidecode
 ##    * List::MoreUtils
 ##    * Math::Polygon
@@ -41,6 +42,7 @@ use Getopt::Long;
 use File::Spec;
 
 use Encode;
+use Encode::Locale; 
 use Text::Unidecode;
 
 use Math::Polygon;
@@ -135,6 +137,7 @@ my $poi_rtree = Tree::R->new();
 # output filehandle
 our $out = *STDOUT{IO};
 
+for ( @ARGV ) {   $_ = decode 'locale', $_   }
 
 GetOptions (
     'config=s@'         => \$config,
