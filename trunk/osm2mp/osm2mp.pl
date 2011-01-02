@@ -206,13 +206,10 @@ $codepage = "cp$codepagenum"    if $codepagenum =~ /^\d+$/;
 
 binmode $out, ":encoding($codepage)";
 
-our %cmap;
+my $cmap;
 if ( $ttable ) {
-    open my $tt, '<', $ttable;
-    my $code = '%cmap = ( ' . join( q{}, <$tt> ) . " );";
-    close $tt;
-
-    eval $code;
+    $cmap = do $ttable;
+    die unless $cmap;
 }
 
 my %transport_code = (
@@ -1795,14 +1792,11 @@ print {$out} "\n; ### That's all, folks!\n\n";
 sub convert_string {            # String
 
     my $str = shift @_;
-#    $str = decode('utf8', $str) unless @_;
     return $str     unless $str;
 
     
-    unless ( $translit ) {
-        for my $repl ( keys %cmap ) {
-            $str =~ s/$repl/$cmap{$repl}/g;
-        }
+    if ( $cmap ) {
+        $cmap->( $str );
     }
     
     $str = unidecode($str)      if $translit;

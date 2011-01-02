@@ -71,7 +71,7 @@
 ---
 
 label:          [ name, loc_name, operator ]
-house:          [ addr:housenumber, addr:housename, name ]
+house:          [ addr:housenumber, addr:housename ]
 entrance:       [ name, ref ]
 place:          [ addr:city, place_name, name ]
 suburb:         [ addr:suburb, place_name, name ]
