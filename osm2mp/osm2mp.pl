@@ -4,7 +4,10 @@
 ##  osm2mp.pl - OpenStreetMap to 'polish' format converter
 ##
 
-our $VERSION = '0.90';
+# $Id$
+# $Rev$
+# $Author$
+# $Date$
 
 ##
 ##  Required packages: 
@@ -28,6 +31,8 @@ our $VERSION = '0.90';
 
 use 5.010;
 use strict;
+#use warnings;
+use autodie;
 
 use POSIX;
 use YAML;
@@ -50,6 +55,8 @@ use List::MoreUtils qw{ all none any first_index last_index uniq };
 use Data::Dump 'dd';
 
 
+
+our $VERSION = '0.90';
 
 
 
@@ -118,11 +125,11 @@ my %node;
 my %waychain;
 
 my %city;
-my $city_rtree = new Tree::R;
+my $city_rtree = Tree::R->new();
 my %suburb;
 
 my %poi;
-my $poi_rtree = new Tree::R;
+my $poi_rtree = Tree::R->new();
 
 
 # output filehandle
@@ -196,9 +203,9 @@ $codepage = "cp$codepagenum"    if $codepagenum =~ /^\d+$/;
 
 our %cmap;
 if ( $ttable ) {
-    open TT, '<', $ttable;
-    my $code = '%cmap = ( ' . join( q{}, <TT> ) . " );";
-    close TT;
+    open my $tt, '<', $ttable;
+    my $code = '%cmap = ( ' . join( q{}, <$tt> ) . " );";
+    close $tt;
 
     eval $code;
 }
@@ -222,15 +229,15 @@ $transport_mode = $transport_code{ $transport_mode }
 
 my %country_code;
 if ( $country_list ) {
-    open CL, '<:encoding(utf8)', $country_list;
-    while ( my $line = <CL> ) {
+    open my $cl, '<:encoding(utf8)', $country_list;
+    while ( my $line = <$cl> ) {
         chomp $line;
         next if $line =~ /^#/;
         next if $line =~ /^\s+$/;
         my ($code, $name) = split /\s\s\s+/, $line;
         $country_code{uc $code} = $name;
     }
-    close CL;
+    close $cl;
 }
 
 
@@ -316,7 +323,7 @@ print {$out} "\n; #### Converted from OpenStreetMap data with  osm2mp $VERSION  
 
 
 my ($infile) = @ARGV;
-open IN, '<', $infile;
+open my $in, '<', $infile;
 print STDERR "Processing file $infile\n\n";
 
 
@@ -340,11 +347,12 @@ if ($bpolyfile) {
     $bounds = 1;
     print STDERR "Initialising bounds...    ";
 
-    open (PF, $bpolyfile) 
-        or die "Could not open file: $bpolyfile: $!";
+    $boundtree = Math::Polygon::Tree->new( $bpolyfile );
+
+    open my $pf, '<', $bpolyfile;
 
     ## ??? need advanced polygon?
-    while (<PF>) {
+    while (<$pf>) {
         if (/^\d/) {
             @bound = ();
         } 
@@ -353,11 +361,10 @@ if ($bpolyfile) {
         }
         elsif (/^END/) {
             @bound = reverse @bound     if  Math::Polygon->new( @bound )->isClockwise();
-            $boundtree = Math::Polygon::Tree->new( \@bound );
             last;
         }
     }
-    close (PF);
+    close $pf;
     printf STDERR "%d segments\n", scalar @bound;
 }
 
@@ -369,7 +376,7 @@ my ( $waypos, $relpos ) = ( 0, 0 );
 
 print STDERR "Loading nodes...          ";
 
-while ( my $line = <IN> ) {
+while ( my $line = <$in> ) {
 
     if ( $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/ ) {
         $node{$1} = "$2,$3";
@@ -394,7 +401,7 @@ while ( my $line = <IN> ) {
 
     last    if $line =~ /<way/;
 }
-continue { $waypos = tell IN }
+continue { $waypos = tell $in }
 
 
 printf STDERR "%d loaded\n", scalar keys %node;
@@ -439,14 +446,14 @@ my %reltag;
 my %relmember;
 
 
-while ( <IN> ) {
+while ( <$in> ) {
     last if /<relation/;
 }
-continue { $relpos = tell IN }
-seek IN, $relpos, 0;
+continue { $relpos = tell $in }
+seek $in, $relpos, 0;
 
 
-while ( my $line = decode 'utf8', <IN> ) {
+while ( my $line = decode 'utf8', <$in> ) {
 
     if ( $line =~ /<relation/ ) {
         ($relid)    =  $line =~ / id=["']([^"']+)["']/;
@@ -669,9 +676,9 @@ my %waytag;
 my @chain;
 my $dupcount;
 
-seek IN, $waypos, 0;
+seek $in, $waypos, 0;
 
-while ( my $line = decode 'utf8', <IN> ) {
+while ( my $line = decode 'utf8', <$in> ) {
 
     if ( $line =~/<way / ) {
         ($wayid)  = $line =~ / id=["']([^"']+)["']/;
@@ -808,9 +815,9 @@ my $countpoi = 0;
 my $nodeid;
 my %nodetag;
 
-seek IN, 0, 0;
+seek $in, 0, 0;
 
-while ( my $line = decode 'utf8', <IN> ) {
+while ( my $line = decode 'utf8', <$in> ) {
 
     if ( $line =~ /<node/ ) {
         ($nodeid)  =  $line =~ / id=["']([^"']+)["']/;
@@ -881,9 +888,9 @@ my $city;
 my @chainlist;
 my $inbounds;
 
-seek IN, $waypos, 0;
+seek $in, $waypos, 0;
 
-while ( my $line = decode 'utf8', <IN> ) {
+while ( my $line = decode 'utf8', <$in> ) {
 
     if ( $line =~ /<way/ ) {
         ($wayid)  =  $line =~ / id=["']([^"']+)["']/;
@@ -1770,6 +1777,10 @@ print {$out} "\n; ### That's all, folks!\n\n";
 
 
 
+#### The end
+
+
+
 
 
 
@@ -2014,12 +2025,12 @@ sub segment_intersection {
     my $Ca = ($p12->[1]-$p11->[1]) * ($p21->[0]-$p11->[0]) - ($p21->[1]-$p11->[1]) * ($p12->[0]-$p11->[0]);
     my $Cb = ($p21->[1]-$p11->[1]) * ($p21->[0]-$p22->[0]) - ($p21->[1]-$p22->[1]) * ($p21->[0]-$p11->[0]);
 
-    return undef    if  $Z == 0;
+    return  if  $Z == 0;
 
     my $Ua = $Ca / $Z;
     my $Ub = $Cb / $Z;
 
-    return undef    if  $Ua < 0  ||  $Ua > 1  ||  $Ub < 0  ||  $Ub > 1;
+    return  if  $Ua < 0  ||  $Ua > 1  ||  $Ub < 0  ||  $Ub > 1;
 
     return [ $p11->[0] + ( $p12->[0] - $p11->[0] ) * $Ub,
              $p11->[1] + ( $p12->[1] - $p11->[1] ) * $Ub ];
@@ -2406,7 +2417,7 @@ sub AddRoad {
         push @ref, $tag{'int_ref'}          if exists $tag{'int_ref'};
         
         if ( @ref ) {
-            my $ref = join q{,}, sort( uniq( map { s/[\s\-]+//g; split /[,;]/, $_ } @ref ) );
+            my $ref = join q{-}, sort( uniq( map { my $s=$_; $s =~ tr/ \-//; split /[,;]/, $s } @ref ) );
             $param{name} = '~[0x06]' . $ref . ( $param{name} ? q{ } . $param{name} : q{} );
         }
     }
@@ -3030,7 +3041,7 @@ sub merge_polygon_chains {
             return \@c2;
         }
     }
-    return undef;
+    return;
 }
 
 
