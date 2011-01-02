@@ -201,6 +201,8 @@ $codepage = 'utf8'  unless defined $codepage;
 my $codepagenum = ( $codepage =~ /^cp\-?(\d+)$/i ) ? $1 : $codepage;
 $codepage = "cp$codepagenum"    if $codepagenum =~ /^\d+$/;
 
+binmode $out, ":encoding($codepage)";
+
 our %cmap;
 if ( $ttable ) {
     open my $tt, '<', $ttable;
@@ -229,7 +231,7 @@ $transport_mode = $transport_code{ $transport_mode }
 
 my %country_code;
 if ( $country_list ) {
-    open my $cl, '<:encoding(utf8)', $country_list;
+    open my $cl, '<:utf8', $country_list;
     while ( my $line = <$cl> ) {
         chomp $line;
         next if $line =~ /^#/;
@@ -1803,8 +1805,6 @@ sub convert_string {            # String
     $str = unidecode($str)      if $translit;
     $str = uc($str)             if $upcase;
     
-    $str = encode $codepage, $str;
-   
     $str =~ s/\&#(\d+)\;/chr($1)/ge;
     $str =~ s/\&amp\;/\&/gi;
     $str =~ s/\&apos\;/\'/gi;
@@ -1928,7 +1928,7 @@ sub write_turn_restriction {            # \%trest
         print {$out}  "[Sign]\n";
         print {$out}  "SignPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
         print {$out}  "SignRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
-        print {$out}  encode $codepage, "SignParam=T,$tr->{name}\n";
+        print {$out}  "SignParam=T,$tr->{name}\n";
         print {$out}  "[END-Sign]\n\n";
     } 
     else {
@@ -2091,7 +2091,7 @@ sub WritePOI {
     print {$out}  "; $param{comment}\n"            if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        print {$out} encode $codepage, "; $key = $val\n";
+        print {$out} "; $key = $val\n";
     }
 
     my $data;
@@ -2313,10 +2313,10 @@ sub WriteLine {
     my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
     my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
 
-    printf {$out} encode $codepage, "; $param{comment}\n"      if  exists $param{comment};
+    printf {$out} "; $param{comment}\n"      if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        print {$out} encode $codepage, "; $key = $val\n";
+        print {$out} "; $key = $val\n";
     }
 
     print  {$out} "[POLYLINE]\n";
@@ -2546,7 +2546,7 @@ sub WritePolygon {
     print  {$out} "; $param{comment}\n"            if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        print {$out} encode $codepage, "; $key = $val\n";
+        print {$out} "; $key = $val\n";
     }
 
     $countpolygons ++;
