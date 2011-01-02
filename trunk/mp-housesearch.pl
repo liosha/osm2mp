@@ -2,7 +2,7 @@
 
 ########
 # $Id$
-# $Revision$
+# $Rev$
 # $Author$
 # $Date$
 
