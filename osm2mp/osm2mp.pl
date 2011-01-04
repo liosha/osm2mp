@@ -36,7 +36,7 @@ use strict;
 use autodie;
 
 use POSIX;
-use YAML;
+use YAML 0.72;
 use Template;
 use Getopt::Long;
 use File::Spec;
