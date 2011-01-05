@@ -349,7 +349,7 @@ if ($bpolyfile) {
     $bounds = 1;
     print STDERR "Initialising bounds...    ";
 
-    $boundtree = Math::Polygon::Tree->new( $bpolyfile );
+    # $boundtree = Math::Polygon::Tree->new( $bpolyfile );
 
     open my $pf, '<', $bpolyfile;
 
@@ -363,6 +363,7 @@ if ($bpolyfile) {
         }
         elsif (/^END/) {
             @bound = reverse @bound     if  Math::Polygon->new( @bound )->isClockwise();
+            $boundtree = Math::Polygon::Tree->new( \@bound );
             last;
         }
     }
@@ -531,23 +532,27 @@ while ( my $line = decode 'utf8', <$in> ) {
                 next;
             }
 
-            $counttrest ++;
-            $trest{$relid} = { 
-                node    => $relmember{'node:via'}->[0],
-                type    => ($reltag{'restriction'} =~ /^only_/) ? 'only' : 'no',
-                fr_way  => $relmember{'way:from'}->[0],
-                fr_dir  => 0,
-                fr_pos  => -1,
-                to_way  => $relmember{'way:to'}->[0],
-                to_dir  => 0,
-                to_pos  => -1,
-            };
-
             my @acc = ( 0,0,0,0,0,1,0,0 );      # foot
             @acc = CalcAccessRules( { map { $_ => 'no' } split( /\s*[,;]\s*/, $reltag{'except'} ) }, \@acc )
                 if  exists $reltag{'except'};
-            $trest{$relid}->{param} = join q{,}, @acc
-                if  any { $_ } @acc;
+
+            if ( any { !$_ } @acc ) {
+
+                $counttrest ++;
+                $trest{$relid} = { 
+                    node    => $relmember{'node:via'}->[0],
+                    type    => ($reltag{'restriction'} =~ /^only_/) ? 'only' : 'no',
+                    fr_way  => $relmember{'way:from'}->[0],
+                    fr_dir  => 0,
+                    fr_pos  => -1,
+                    to_way  => $relmember{'way:to'}->[0],
+                    to_dir  => 0,
+                    to_pos  => -1,
+                };
+
+                $trest{$relid}->{param} = join q{,}, @acc
+                    if  any { $_ } @acc;
+            }
 
             push @{$nodetr{ $relmember{'node:via'}->[0] }}, $relid;
         }
@@ -1697,13 +1702,14 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
         }
 
         if ( $tr->{type} eq 'only') {
+
             my %newtr = (
-                    node    => $tr->{node},
                     type    => 'no',
-                    fr_way  => $tr->{fr_way},
-                    fr_dir  => $tr->{fr_dir},
-                    fr_pos  => $tr->{fr_pos}
                 );
+            for my $key ( qw{ node fr_way fr_dir fr_pos param } ) {
+                next unless exists $tr->{$key};
+                $newtr{$key} = $tr->{$key};
+            }
 
             for my $roadid ( @{$nodeways{ $trest{$relid}->{node} }} ) {
                 $newtr{to_way} = $roadid;
