@@ -1,5 +1,8 @@
 --- ways
 ---
+
+
+# Interpolated houses
 - condition:
     - addr:interpolation = all|even|odd
     - only_way
@@ -7,6 +10,8 @@
     - action: process_interpolation
       type: 0x6100
       contacts: yes        
+
+
 
 # Railways
 - id: railway

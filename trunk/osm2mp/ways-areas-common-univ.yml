@@ -41,6 +41,7 @@
     - or:
         - landuse = farm|grass|meadow
         - leisure = common
+        - natural = fell
   action:
     - action: write_polygon
       type: 0x18

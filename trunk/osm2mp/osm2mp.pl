@@ -105,7 +105,7 @@ my $marine          = 1;
 my $addressing      = 1;
 my $navitel         = 0;
 my $addrfrompoly    = 1;
-my $addrinterpolation = 0;
+my $addrinterpolation = 1;
 my $makepoi         = 1;
 my $country_list;
 my $defaultcountry  = "Earth";
@@ -2426,7 +2426,7 @@ sub AddRoad {
         push @ref, $tag{'int_ref'}          if exists $tag{'int_ref'};
         
         if ( @ref ) {
-            my $ref = join q{-}, sort( uniq( map { my $s=$_; $s =~ tr/ \-//; split /[,;]/, $s } @ref ) );
+            my $ref = join q{-}, sort( uniq( map { my $s=$_; $s =~ s/\s\-//; split /[,;]/, $s } @ref ) );
             $param{name} = '~[0x06]' . $ref . ( $param{name} ? q{ } . $param{name} : q{} );
         }
     }
@@ -2734,7 +2734,7 @@ sub execute_action {
             print {$out} "; ERROR: Suburb without name $obj->{type}ID=$obj->{id}\n\n";   
         }
         elsif ( $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1] ) {
-            print {$out} "; ERROR: Suburb polygon $obj->{type}ID=$obj->{id} is not closed\n";
+            print {$out} "; ERROR: Suburb polygon $obj->{type}ID=$obj->{id} is not closed\n\n";
         }
         else {
             printf {$out} "; Found suburb: $obj->{type}ID=$obj->{id} - %s\n", convert_string( $param{name} );
@@ -2756,14 +2756,19 @@ sub execute_action {
     ##  Create interpolated objects
     if ( $addrinterpolation && $param{action} eq 'process_interpolation' ) {
 
-        #print STDERR Dumper $action, $obj, $condition;
-
         my @chain = grep { defined $interpolation_node{$_} && exists $interpolation_node{$_}->{'addr:housenumber'} } @{ $obj->{chain} };
+
         if ( @chain >= 2 ) {
+
+            my $new_action = { %$action, action => 'write_poi' };
+
             for my $i ( 0 .. $#chain-1 ) {
                 my ( $node1, $node2 ) = @chain[ $i, $i+1 ];
                 my ( $house1, $house2 ) = map { $interpolation_node{$_}->{'addr:housenumber'} } ( $node1, $node2 );
-                my %tag = ( %{$interpolation_node{$node1}}, %{$interpolation_node{$node2}}, %{$obj->{tag}} );
+
+                next if $house1 == $house2;
+
+                my %tag = ( %{$interpolation_node{$node2}}, %{$interpolation_node{$node1}}, %{$obj->{tag}} );
 
                 my $step = ( $tag{'addr:interpolation'} eq 'all' ? 1 : 2 );
                 if ( $house1 > $house2 )    { $step *= -1 }
@@ -2774,12 +2779,11 @@ sub execute_action {
                 my $steplat = ($lat2-$lat1) / ($house2-$house1);
                 my $steplon = ($lon2-$lon1) / ($house2-$house1);
 
-                for my $j ( 1 .. ($house2-$house1)/$step-1 ) {
+                for my $j ( 0 .. ($house2-$house1)/$step ) {
                     my $chouse = $house1 + $step * $j; 
                     my $clat = $lat1 + $steplat * $j * $step; 
                     my $clon = $lon1 + $steplon * $j * $step; 
 
-                    my $new_action = { %$action, action => 'write_poi' };
                     my $new_obj = { 
                         id      => $obj->{id},
                         latlon  => join( q{,}, $clat, $clon ),
@@ -2787,12 +2791,11 @@ sub execute_action {
                     };
 
                     execute_action( $new_action, $new_obj, $condition );
-
-                    #say STDERR " $chouse $clat $clon ";
                 }
-
-                #print STDERR Dumper( $lat1, $lon1, \%tag );
             }
+        }
+        else {
+            print {$out} "; ERROR: Wrong interpolation on WayID=$obj->{id}\n\n";
         }
     }
 
