@@ -391,7 +391,7 @@
       contacts: yes
 
 - condition:
-    - shop = mall
+    - shop = mall|hypermarket
   action:
     - action: write_poi
       type: 0x2E04
@@ -752,4 +752,16 @@
   action:
     - action: write_poi
       type: 0x6100
+
+
+- condition:
+    - building = *
+    - building != no
+    - addr:housenumber = *
+    - only_node
+  action:
+    - action: write_poi
+      type: 0x6100
+      Label: %house
+      contacts: yes
 
