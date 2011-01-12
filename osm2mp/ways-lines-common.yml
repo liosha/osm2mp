@@ -1,6 +1,12 @@
 --- ways
 ---
-
+- condition:
+    - addr:interpolation = all|even|odd
+    - only_way
+  action:
+    - action: process_interpolation
+      type: 0x6100
+      contacts: yes        
 
 # Railways
 - id: railway

@@ -5,9 +5,6 @@
 ##
 
 # $Id$
-# $Rev$
-# $Author$
-# $Date$
 
 ##
 ##  Required packages: 
@@ -55,6 +52,7 @@ use List::MoreUtils qw{ all none any first_index last_index uniq };
 
 # debug
 use Data::Dump 'dd';
+use Data::Dumper;
 
 
 
@@ -107,6 +105,7 @@ my $marine          = 1;
 my $addressing      = 1;
 my $navitel         = 0;
 my $addrfrompoly    = 1;
+my $addrinterpolation = 0;
 my $makepoi         = 1;
 my $country_list;
 my $defaultcountry  = "Earth";
@@ -129,6 +128,8 @@ my %waychain;
 my %city;
 my $city_rtree = Tree::R->new();
 my %suburb;
+
+my %interpolation_node;
 
 my %poi;
 my $poi_rtree = Tree::R->new();
@@ -189,6 +190,7 @@ GetOptions (
     'addressing!'       => \$addressing,
     'navitel!'          => \$navitel,
     'addrfrompoly!'     => \$addrfrompoly,
+    'addrinterpolation!'=> \$addrinterpolation,
     'makepoi!'          => \$makepoi,
     'poiregion!'        => \$poiregion,
     'poicontacts!'      => \$poicontacts,
@@ -857,6 +859,11 @@ while ( my $line = decode 'utf8', <$in> ) {
             $entrance{$nodeid} = name_from_list( 'entrance', \%nodetag);
         }
 
+        ##  Interpolation nodes
+        if ( $addrinterpolation  &&  exists $interpolation_node{$nodeid} ) {
+            $interpolation_node{$nodeid} = { %nodetag };
+        }
+
         ##  POI
         process_config( $config{nodes}, {
                 type    => 'Node',
@@ -874,7 +881,6 @@ printf STDERR "                          %d POIs loaded\n", sum map { scalar @$_
     if $addrfrompoly;
 printf STDERR "                          %d barriers loaded\n", scalar keys %barrier
     if $barriers;
-
 
 
 
@@ -2693,7 +2699,7 @@ sub execute_action {
     my %objinfo = map { $_ => $param{$_} } grep { /^_*[A-Z]/ } keys %param;
 
     ##  Load area as city
-    if ( $param{type} eq 'load_city' ) {
+    if ( $param{action} eq 'load_city' ) {
 
         if ( !$param{name} ) {
             print {$out} "; ERROR: City without name $obj->{type}ID=$obj->{id}\n\n";   
@@ -2722,7 +2728,7 @@ sub execute_action {
     }
 
     ##  Load area as suburb
-    if ( $param{type} eq 'load_suburb' ) {
+    if ( $param{action} eq 'load_suburb' ) {
 
         if ( !$param{name} ) {
             print {$out} "; ERROR: Suburb without name $obj->{type}ID=$obj->{id}\n\n";   
@@ -2742,8 +2748,57 @@ sub execute_action {
         }
     }
 
+    ##  Load interpolation nodes
+    if ( $addrinterpolation && $param{action} eq 'load_interpolation' ) {
+        @interpolation_node{ @{ $obj->{outer}->[0] } } = undef;
+    }
+
+    ##  Create interpolated objects
+    if ( $addrinterpolation && $param{action} eq 'process_interpolation' ) {
+
+        #print STDERR Dumper $action, $obj, $condition;
+
+        my @chain = grep { defined $interpolation_node{$_} && exists $interpolation_node{$_}->{'addr:housenumber'} } @{ $obj->{chain} };
+        if ( @chain >= 2 ) {
+            for my $i ( 0 .. $#chain-1 ) {
+                my ( $node1, $node2 ) = @chain[ $i, $i+1 ];
+                my ( $house1, $house2 ) = map { $interpolation_node{$_}->{'addr:housenumber'} } ( $node1, $node2 );
+                my %tag = ( %{$interpolation_node{$node1}}, %{$interpolation_node{$node2}}, %{$obj->{tag}} );
+
+                my $step = ( $tag{'addr:interpolation'} eq 'all' ? 1 : 2 );
+                if ( $house1 > $house2 )    { $step *= -1 }
+
+                my ($lat1, $lon1) = split q{,}, $node{$node1};
+                my ($lat2, $lon2) = split q{,}, $node{$node2};
+
+                my $steplat = ($lat2-$lat1) / ($house2-$house1);
+                my $steplon = ($lon2-$lon1) / ($house2-$house1);
+
+                for my $j ( 1 .. ($house2-$house1)/$step-1 ) {
+                    my $chouse = $house1 + $step * $j; 
+                    my $clat = $lat1 + $steplat * $j * $step; 
+                    my $clon = $lon1 + $steplon * $j * $step; 
+
+                    my $new_action = { %$action, action => 'write_poi' };
+                    my $new_obj = { 
+                        id      => $obj->{id},
+                        latlon  => join( q{,}, $clat, $clon ),
+                        tag     => { %tag, 'addr:housenumber' => $chouse, },
+                    };
+
+                    execute_action( $new_action, $new_obj, $condition );
+
+                    #say STDERR " $chouse $clat $clon ";
+                }
+
+                #print STDERR Dumper( $lat1, $lon1, \%tag );
+            }
+        }
+    }
+
     ##  Write POI
     if ( $param{action} eq 'write_poi' ) {
+        #print STDERR Dumper $action, $obj, $condition;
         my %tag = %{ $obj->{tag} };
 
         return  unless  !$bounds 
