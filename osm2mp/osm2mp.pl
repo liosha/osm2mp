@@ -2780,6 +2780,9 @@ sub execute_action {
                 my $steplon = ($lon2-$lon1) / ($house2-$house1);
 
                 for my $j ( 0 .. ($house2-$house1)/$step ) {
+
+                    next if $i > 0 && $j == 0;
+
                     my $chouse = $house1 + $step * $j; 
                     my $clat = $lat1 + $steplat * $j * $step; 
                     my $clon = $lon1 + $steplon * $j * $step; 
