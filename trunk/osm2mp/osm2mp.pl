@@ -56,7 +56,7 @@ use Data::Dumper;
 
 
 
-our $VERSION = '0.90';
+our $VERSION = '0.90_1';
 
 
 
@@ -249,7 +249,7 @@ if ( $country_list ) {
 
 ####    Action
 
-print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2010  liosha, xliosha\@gmail.com\n\n";
+print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2011  liosha, xliosha\@gmail.com\n\n";
 
 usage() unless (@ARGV);
 
@@ -1803,9 +1803,8 @@ print {$out} "\n; ### That's all, folks!\n\n";
 
 sub convert_string {            # String
 
-    my $str = shift @_;
+    my ($str) = @_;
     return $str     unless $str;
-
     
     if ( $cmap ) {
         $cmap->( $str );
@@ -1847,8 +1846,10 @@ sub name_from_list {
 
 sub fix_close_nodes {                # NodeID1, NodeID2
 
-    my ($lat1, $lon1) = split q{,}, $node{$_[0]};
-    my ($lat2, $lon2) = split q{,}, $node{$_[1]};
+    my ($id0, $id1) = @_;
+
+    my ($lat1, $lon1) = split q{,}, $node{$id0};
+    my ($lat2, $lon2) = split q{,}, $node{$id1};
 
     my ($clat, $clon) = ( ($lat1+$lat2)/2, ($lon1+$lon2)/2 );
     my ($dlat, $dlon) = ( ($lat2-$lat1),   ($lon2-$lon1)   );
@@ -1861,16 +1862,16 @@ sub fix_close_nodes {                # NodeID1, NodeID2
     # fixing
     if ( $res ) {
         if ( $dlon == 0 ) {
-            $node{$_[0]} = ($clat - $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) )) . q{,} . $clon;
-            $node{$_[1]} = ($clat + $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) )) . q{,} . $clon;
+            $node{$id0} = ($clat - $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) )) . q{,} . $clon;
+            $node{$id1} = ($clat + $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) )) . q{,} . $clon;
         }
         else {
             my $azim  = $dlat / $dlon;
             my $ndlon = sqrt( $ldist**2 / ($klon**2 + $azim**2) ) / 2;
             my $ndlat = $ndlon * abs($azim);
 
-            $node{$_[0]} = ($clat - $ndlat * ($dlat <=> 0)) . q{,} . ($clon - $ndlon * ($dlon <=> 0));
-            $node{$_[1]} = ($clat + $ndlat * ($dlat <=> 0)) . q{,} . ($clon + $ndlon * ($dlon <=> 0));
+            $node{$id0} = ($clat - $ndlat * ($dlat <=> 0)) . q{,} . ($clon - $ndlon * ($dlon <=> 0));
+            $node{$id1} = ($clat + $ndlat * ($dlat <=> 0)) . q{,} . ($clon + $ndlon * ($dlon <=> 0));
         }
     }
     return $res;
@@ -1880,9 +1881,11 @@ sub fix_close_nodes {                # NodeID1, NodeID2
 
 sub lcos {                      # NodeID1, NodeID2, NodeID3
 
-    my ($lat1, $lon1) = split q{,}, $node{$_[0]};
-    my ($lat2, $lon2) = split q{,}, $node{$_[1]};
-    my ($lat3, $lon3) = split q{,}, $node{$_[2]};
+    my ($node0, $node1, $node2) = @_;
+
+    my ($lat1, $lon1) = split q{,}, $node0;
+    my ($lat2, $lon2) = split q{,}, $node1;
+    my ($lat3, $lon3) = split q{,}, $node2;
 
     my $klon = cos( ($lat1+$lat2+$lat3) / 3 * 3.14159 / 180 );
 
@@ -1909,7 +1912,8 @@ sub speed_code {
 
 
 sub is_inside_bounds {                  # $latlon
-    return $boundtree->contains( [ reverse split q{,}, $_[0] ] );
+    my ($node) = @_;
+    return $boundtree->contains( [ reverse split q{,}, $node ] );
 }
 
 
@@ -1947,6 +1951,8 @@ sub write_turn_restriction {            # \%trest
         print {$out}  "RestrParam=$tr->{param}\n"     if $tr->{param};
         print {$out}  "[END-Restrict]\n\n";
     }
+
+    return;
 }
 
 
@@ -2074,15 +2080,17 @@ sub FindSuburb {
 
 
 sub AddPOI {
-    if ( $addrfrompoly && exists $_[0]->{nodeid} && exists $_[0]->{add_contacts} ) {
-        my $id = $_[0]->{nodeid};
+    my ($obj) = @_;
+    if ( $addrfrompoly && exists $obj->{nodeid} && exists $obj->{add_contacts} ) {
+        my $id = $obj->{nodeid};
         my @bbox = ( reverse split q{,}, $node{$id} ) x 2;
-        push @{$poi{$id}}, $_[0];
+        push @{$poi{$id}}, $obj;
         $poi_rtree->insert( $id, @bbox );
     }
     else {
-        WritePOI( @_ );
+        return WritePOI( @_ );
     }
+    return;
 }
 
 
@@ -2263,6 +2271,7 @@ sub WritePOI {
     }
 
     print  {$out} "[END]\n\n";
+    return;
 }
 
 
@@ -2284,6 +2293,8 @@ sub AddBarrier {
     $barrier{$param{nodeid}}->{type}  = $param{tags}->{'barrier'};
     $barrier{$param{nodeid}}->{param} = join q{,}, @acc
         if  any { $_ } @acc;
+
+    return;
 }
 
 
@@ -2352,6 +2363,7 @@ sub WriteLine {
         printf {$out} "$key=%s\n", convert_string( $param{$key} );
     }
     print  {$out} "[END]\n\n\n";
+    return;
 }
 
 
@@ -2492,6 +2504,7 @@ sub AddRoad {
             $trest{$relid}->{to_pos} = $#{ $param{chain} };
         }
     }
+    return;
 }
 
 
@@ -2619,6 +2632,7 @@ sub WritePolygon {
     }
 
     print {$out} "[END]\n\n\n";
+    return;
 }
 
 
@@ -2679,6 +2693,7 @@ sub condition_matches {
     if ( my ( $type ) = $condition =~ 'no_(\w+)' ) {
         return (uc $obj->{type}) ne (uc $type);
     }
+    return;
 }
 
 
@@ -2980,6 +2995,7 @@ sub execute_action {
             delete $poi{$id};
         }
     }
+    return;
 }
 
 
@@ -2999,9 +3015,8 @@ sub process_config {
         for my $cfg_action ( @{ $cfg_item->{action} } ) {
             execute_action( $cfg_action, $obj, $cfg_item->{condition} );
         }
-
-        # return;
     }
+    return;
 }
 
 
