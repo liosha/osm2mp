@@ -229,7 +229,7 @@ my %transport_code = (
     truck       => 7,
 );
 $transport_mode = $transport_code{ $transport_mode }
-    if exists  $transport_code{ $transport_mode };
+    if defined $transport_mode && exists $transport_code{ $transport_mode };
 
 my %country_code;
 if ( $country_list ) {
@@ -836,6 +836,7 @@ while ( my $line = decode 'utf8', <$in> ) {
 
     if ( $line =~ /<tag/ ) {
         my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
+        next unless $key; #bug!
         $nodetag{$key}   =  $val        unless exists $config{skip_tags}->{$key};
         next;
     }
@@ -919,7 +920,7 @@ while ( my $line = decode 'utf8', <$in> ) {
 
     if ( $line =~ /<nd/ ) {
         my ($ref)  =  $line =~ / ref=["']([^"']*)["']/;
-        if ( $node{$ref}  &&  $ref ne $chain[-1] ) {
+        if ( $node{$ref}  &&  ( !@chain || $ref ne $chain[-1] ) ) {
             push @chain, $ref;
             if ($bounds) {
                 my $in = is_inside_bounds( $node{$ref} );
@@ -1836,6 +1837,8 @@ sub name_from_list {
 
     my $key = first { exists $tag_ref->{$_} } @{$taglist{$list_name}};
 
+    return unless $key;
+
     my $name;
     $name = $tag_ref->{$key}            if  $key;
     $name = $country_code{uc $name}     if  $list_name eq 'country'  &&  exists $country_code{uc $name};
@@ -2148,9 +2151,9 @@ sub WritePOI {
 
     # contact information: address, phone
     if ( $poicontacts  &&  $param{add_contacts} ) {
-        my $city;
-        $city = $city{ FindCity( $param{nodeid} || $param{latlon} ) };
-        if ( $city ) {
+        my $cityid = FindCity( $param{nodeid} || $param{latlon} );
+        if ( $cityid ) {
+            my $city = $city{ $cityid };
             printf {$out} "CityName=%s\n", convert_string( $city->{name} );
             printf {$out} "RegionName=%s\n", convert_string( $city->{region} )        if  $city->{region};
             printf {$out} "CountryName=%s\n", convert_string( $city->{country} )      if  $city->{country};
@@ -2266,7 +2269,7 @@ sub WritePOI {
 
     # other parameters - capital first letter!
     for my $key ( grep { /^_*[A-Z]/ } keys %param ) {
-        next    if  $param{$key} eq q{};
+        next    if !defined $param{$key} || $param{$key} eq q{};
         printf {$out} "$key=%s\n", convert_string($param{$key}, 1);
     }
 
@@ -2309,7 +2312,7 @@ sub CalcAccessRules {
         next unless exists $yesno{$tag{$rule->{key}}};
 
         my $val = 1-$yesno{$tag{$rule->{key}}};
-        $val = 1-$val   if $rule->{mode} == -1;
+        $val = 1-$val   if $rule->{mode} && $rule->{mode} == -1;
 
         my @rule = split q{,}, $rule->{val};
         for my $i ( 0 .. 7 ) {
@@ -2359,7 +2362,7 @@ sub WriteLine {
     # the rest tags (capitals!)
     for my $key ( sort keys %param ) {
         next unless $key =~ /^_*[A-Z]/;
-        next if $param{$key} eq q{};
+        next if !$param{$key} || $param{$key} eq q{};
         printf {$out} "$key=%s\n", convert_string( $param{$key} );
     }
     print  {$out} "[END]\n\n\n";
@@ -2389,15 +2392,15 @@ sub AddRoad {
         $param{chain}->[ ceil $#{$param{chain}}*2/3 ] );
     
     # calculate speed class
-    if ( $tag{'maxspeed'} > 0 ) {
+    if ( $tag{'maxspeed'} && $tag{'maxspeed'} > 0 ) {
        $tag{'maxspeed'} *= 1.61      if  $tag{'maxspeed'} =~ /mph$/i;
        $rp[0]  = speed_code( $tag{'maxspeed'} * 0.9 );
     }
-    if ( $tag{'maxspeed:practical'} > 0 ) {
+    if ( $tag{'maxspeed:practical'} && $tag{'maxspeed:practical'} > 0 ) {
        $tag{'maxspeed:practical'} *= 1.61        if  $tag{'maxspeed:practical'} =~ /mph$/i;
        $rp[0]  = speed_code( $tag{'maxspeed:practical'} * 0.9 );
     }
-    if ( $tag{'avgspeed'} > 0 ) {
+    if ( $tag{'avgspeed'} && $tag{'avgspeed'} > 0 ) {
        $tag{'avgspeed'} *= 1.61        if  $tag{'avgspeed'} =~ /mph$/i;
        $rp[0]  = speed_code( $tag{'avgspeed'} );
     }
@@ -2520,8 +2523,8 @@ sub WritePolygon {
 
 
     #   select endlevel
-    my $llev  =  $param{level_l};
-    my $hlev  =  $param{level_h};
+    my $llev  =  $param{level_l} // 0;
+    my $hlev  =  $param{level_h} // 0;
 
     if ( ref $hlev ) {
         my $square = sum map { Math::Polygon::Calc::polygon_area( @$_ ) 
@@ -2703,9 +2706,10 @@ sub execute_action {
 
     my %param = %{ $action };
 
-    $param{name} = '%label'     unless exists $param{name};
+    $param{name} //= '%label';
     for my $key ( keys %param ) {
-        $param{$key} =~ s/%(\w+)/ name_from_list( $1, $obj->{tag} ) /ge;
+        next unless defined $param{$key};
+        $param{$key} =~ s[%(\w+)][ name_from_list( $1, $obj->{tag} ) // q{} ]ge;
     }
     
     $param{region} .= q{ }. $obj->{tag}->{'addr:district'}
