@@ -12,7 +12,6 @@
 ##    * Getopt::Long
 ##    * YAML
 ##    * Encode::Locale
-##    * Text::Unidecode
 ##    * List::MoreUtils
 ##    * Math::Polygon
 ##    * Math::Polygon::Tree
@@ -40,7 +39,6 @@ use File::Spec;
 
 use Encode;
 use Encode::Locale;
-use Text::Unidecode;
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
@@ -70,8 +68,8 @@ my $mapname         = 'OSM';
 
 my $codepage        = '1251';
 my $upcase          = 0;
-my $translit        = 0;
 my $ttable          = q{};
+my $text_filter     = q{};
 
 my $oneway          = 1;
 my $routing         = 1;
@@ -115,7 +113,7 @@ my $defaultcity;
 my $poiregion       = 1;
 my $poicontacts     = 1;
 
-my $transport_mode  = undef;
+my $transport_mode;
 
 
 ####    Global vars
@@ -150,8 +148,10 @@ GetOptions (
     'codepage=s'        => \$codepage,
     'nocodepage'        => sub { undef $codepage },
     'upcase!'           => \$upcase,
-    'translit!'         => \$translit,
     'ttable=s'          => \$ttable,
+    'textfilter=s'      => sub { require "PerlIO/via/$_[1].pm"; $text_filter .= ":via($_[1])"; },
+    # for backward compatibility
+    'translit!'         => sub { require "PerlIO/via/Unidecode.pm"; $text_filter .= ":via(Unidecode)"; },,
 
     'oneway!'           => \$oneway,
     'routing!'          => \$routing,
@@ -207,7 +207,7 @@ $codepage = 'utf8'  unless defined $codepage;
 my $codepagenum = ( $codepage =~ /^cp\-?(\d+)$/i ) ? $1 : $codepage;
 $codepage = "cp$codepagenum"    if $codepagenum =~ /^\d+$/;
 
-binmode $out, ":encoding($codepage)";
+binmode $out, "encoding($codepage)$text_filter:utf8";
 
 my $cmap;
 if ( $ttable ) {
@@ -1808,7 +1808,6 @@ sub convert_string {            # String
         $cmap->( $str );
     }
 
-    $str = unidecode($str)      if $translit;
     $str = uc($str)             if $upcase;
 
     $str =~ s/\&#(\d+)\;/chr($1)/ge;
@@ -1963,11 +1962,11 @@ sub usage  {
     my @onoff = ( "off", "on");
 
     my $usage = <<"END_USAGE";
-Usage:  osm2mp.pl [options] file.osm > file.mp
+Usage:  osm2mp.pl [options] file.osm
 
 Available options [defaults]:
 
- --output <file>           output to file
+ --output <file>           output to file       [stdout]
  --config <file>           configuration file   [ @$config ]
 
  --mapid <id>              map id               [$mapid]
@@ -1975,7 +1974,8 @@ Available options [defaults]:
 
  --codepage <num>          codepage number                   [$codepage]
  --upcase                  convert all labels to upper case  [$onoff[$upcase]]
- --translit                tranliterate labels               [$onoff[$translit]]
+ --textfilter <layer>      use extra output filter PerlIO::via::<layer>
+ --translit                same as --textfilter Unidecode
  --ttable <file>           character conversion table
  --roadshields             shields with road numbers         [$onoff[$roadshields]]
  --namelist <key>=<list>   comma-separated list of tags to select names
@@ -2594,7 +2594,7 @@ sub WritePolygon {
         if ( $housenumber ) {
 
             my $cityid = FindCity( $plist[0]->[0] );
-            my $city = $city{$cityid} if $cityid;
+            my $city = $cityid ? $city{$cityid} : undef;
 
             my $street = $tag{'addr:street'};
             $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
@@ -3094,7 +3094,10 @@ sub report {
 
     # should be extended
     print {$out} "; $type: $msg\n\n";
+    return;
 }
+
+__END__
 
 sub merge_polygon_chains {
 
