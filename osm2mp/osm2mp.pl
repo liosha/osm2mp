@@ -494,7 +494,7 @@ while ( my $line = decode 'utf8', <$in> ) {
                 if exists $relmember{'way:enclave'};
 
             unless ( exists $relmember{'way:outer'} ) {
-                print {$out} "; ERROR: Multipolygon RelID=$relid doesn't have OUTER way\n";
+                report( "Multipolygon RelID=$relid doesn't have OUTER way" );
                 next;
             }
 
@@ -516,22 +516,22 @@ while ( my $line = decode 'utf8', <$in> ) {
         # turn restrictions
         if ( $routing  &&  $restrictions  &&  $reltag{'type'} eq 'restriction' ) {
             unless ( $relmember{'way:from'} ) {
-                print {$out} "; ERROR: Turn restriction RelID=$relid doesn't have FROM way\n";
+                report( "Turn restriction RelID=$relid doesn't have FROM way" );
                 next;
             }
             if ( $relmember{'way:via'} ) {
-                print {$out} "; WARNING: VIA ways is still not supported (RelID=$relid)\n";
+                report( "VIA ways is still not supported (RelID=$relid)", 'WARNING' );
                 next;
             }
             unless ( $relmember{'node:via'} ) {
-                print {$out} "; ERROR: Turn restriction RelID=$relid doesn't have VIA node\n";
+                report( "Turn restriction RelID=$relid doesn't have VIA node" );
                 next;
             }
             if ( $reltag{'restriction'} eq 'no_u_turn'  &&  !$relmember{'way:to'} ) {
                 $relmember{'way:to'} = $relmember{'way:from'};
             }
             unless ( $relmember{'way:to'} ) {
-                print {$out} "; ERROR: Turn restriction RelID=$relid doesn't have TO way\n";
+                report( "Turn restriction RelID=$relid doesn't have TO way" );
                 next;
             }
 
@@ -563,11 +563,11 @@ while ( my $line = decode 'utf8', <$in> ) {
         # destination signs
         if ( $routing  &&  $destsigns  &&  $reltag{'type'} eq 'destination_sign' ) {
             unless ( $relmember{'way:from'} ) {
-                print {$out} "; ERROR: Destination sign RelID=$relid has no FROM ways\n";
+                report( "Destination sign RelID=$relid has no FROM ways" );
                 next;
             }
             unless ( $relmember{'way:to'} ) {
-                print {$out} "; ERROR: Destination sign RelID=$relid doesn't have TO way\n";
+                report( "Destination sign RelID=$relid doesn't have TO way" );
                 next;
             }
 
@@ -575,13 +575,13 @@ while ( my $line = decode 'utf8', <$in> ) {
             $node = $relmember{'node:sign'}->[0]            if $relmember{'node:sign'};
             $node = $relmember{'node:intersection'}->[0]    if $relmember{'node:intersection'};
             unless ( $node ) {
-                print {$out} "; ERROR: Destination sign RelID=$relid doesn't have SIGN or INTERSECTION node\n";
+                report( "Destination sign RelID=$relid doesn't have SIGN or INTERSECTION node" );
                 next;
             }
 
             my $name = name_from_list( 'destination', \%reltag );
             unless ( $name ) {
-                print {$out} "; ERROR: Destination sign RelID=$relid doesn't have label tag\n";
+                report( "Destination sign RelID=$relid doesn't have label tag" );
                 next;
             }
 
@@ -705,7 +705,7 @@ while ( my $line = decode 'utf8', <$in> ) {
                 push @chain, $ref;
             }
             else {
-                print {$out} "; ERROR: WayID=$wayid has dupes at ($node{$ref})\n";
+                report( "WayID=$wayid has dupes at ($node{$ref})" );
                 $dupcount ++;
             }
         }
@@ -947,7 +947,7 @@ while ( my $line = decode 'utf8', <$in> ) {
         push @chainlist, $#chain    unless ($#chainlist % 2);
 
         if ( scalar @chain < 2 ) {
-            print {$out} "; ERROR: WayID=$wayid has too few nodes at ($node{$chain[0]})\n";
+            report( "WayID=$wayid has too few nodes at ($node{$chain[0]})" );
             next;
         }
 
@@ -1135,9 +1135,8 @@ if ( $shorelines ) {
 
         if ( $chain_ref->[0] ne $chain_ref->[-1] ) {
 
-            printf {$out} "; %s: Possible coastline break at (%s) or (%s)\n\n",
-                    ( $bounds ? 'ERROR' : 'WARNING' ),
-                    @node{ @$chain_ref[0,-1] }
+            report( sprintf( "Possible coastline break at (%s) or (%s)", @node{ @$chain_ref[0,-1] } ),
+                    ( $bounds ? 'ERROR' : 'WARNING' ) )
                 unless  $#$chain_ref < 3;
 
             next;
@@ -1145,7 +1144,7 @@ if ( $shorelines ) {
 
         # filter huge polygons to avoid cgpsmapper's crash
         if ( $hugesea && scalar @$chain_ref > $hugesea ) {
-            printf {$out} "; WARNING: skipped too big coastline $loop (%d nodes)\n", scalar @$chain_ref;
+            report( sprintf( "Skipped too big coastline $loop (%d nodes)", scalar @$chain_ref ), 'WARNING' );
             next;
         }
 
@@ -1262,7 +1261,7 @@ if ( $routing ) {
                 @list  =  sort {  lcos( $p1->[-2], $p1->[-1], $road{$b}->{chain}->[1] )
                               <=> lcos( $p1->[-2], $p1->[-1], $road{$a}->{chain}->[1] )  }  @list;
 
-                printf {$out} "; FIX: Road WayID=$r1 may be merged with %s at (%s)\n", join ( q{, }, @list ), $node{$p1->[-1]};
+                report( sprintf( "Road WayID=$r1 may be merged with %s at (%s)", join( q{, }, @list ), $node{$p1->[-1]} ), 'FIX' );
 
                 my $r2 = $list[0];
 
@@ -1270,16 +1269,16 @@ if ( $routing ) {
                 if ( $restrictions  ||  $destsigns ) {
                     while ( my ($relid, $tr) = each %trest )  {
                         if ( $tr->{fr_way} eq $r2 )  {
-                            print {$out} "; FIX: RelID=$relid FROM moved from WayID=$r2($tr->{fr_pos})";
+                            my $msg = "RelID=$relid FROM moved from WayID=$r2($tr->{fr_pos})";
                             $tr->{fr_way}  = $r1;
                             $tr->{fr_pos} += $#{$road{$r1}->{chain}};
-                            print {$out} " to WayID=$r1($tr->{fr_pos})\n";
+                            report( "$msg to WayID=$r1($tr->{fr_pos})", 'FIX' );
                         }
                         if ( $tr->{to_way} eq $r2 )  {
-                            print {$out} "; FIX: RelID=$relid TO moved from WayID=$r2($tr->{to_pos})";
+                            my $msg = "RelID=$relid TO moved from WayID=$r2($tr->{to_pos})";
                             $tr->{to_way}  = $r1;
                             $tr->{to_pos} += $#{$road{$r1}->{chain}};
-                            print {$out} " to WayID=$r1($tr->{to_pos})\n";
+                            report( "$msg to WayID=$r1($tr->{to_pos})", 'FIX' );
                         }
                     }
                 }
@@ -1375,7 +1374,7 @@ if ( $routing ) {
         }
 
         for my $road ( keys %roadseg ) {
-            printf {$out} "; ERROR: Roads $road have $roadseg{$road} duplicate segments near ($roadpos{$road})\n";
+            report( "Roads $road have $roadseg{$road} duplicate segments near ($roadpos{$road})" );
         }
 
         printf STDERR "$countdupsegs segments, %d roads\n", scalar keys %roadseg;
@@ -1418,10 +1417,7 @@ if ( $routing ) {
                         my $bnode = $road->{chain}->[$break];
                         $nodid{ $bnode }  =  $nodcount++;
                         $nodeways{ $bnode } = [ $roadid ];
-                        printf {$out} "; FIX: Added NodID=%d for NodeID=%s at (%s)\n",
-                            $nodid{ $bnode },
-                            $bnode,
-                            $node{ $bnode };
+                        report( sprintf( "Added NodID=%d for NodeID=%s at (%s)", $nodid{$bnode}, $bnode, $node{$bnode} ), 'FIX' );
                     }
                     $rnod = 2;
                 }
@@ -1448,12 +1444,12 @@ if ( $routing ) {
 
             #   split
             if ( @breaks ) {
-                printf {$out} "; FIX: WayID=$roadid is splitted at %s\n", join( q{, }, @breaks );
+                report( sprintf( "WayID=$roadid is splitted at %s", join( q{, }, @breaks ) ), 'FIX' );
                 push @breaks, $#{$road->{chain}};
 
                 for my $i ( 0 .. $#breaks - 1 ) {
                     my $id = $roadid.'/'.($i+1);
-                    printf {$out} "; FIX: Added road %s, nodes from %d to %d\n", $id, $breaks[$i], $breaks[$i+1];
+                    report( sprintf( "Added road %s, nodes from %d to %d\n", $id, $breaks[$i], $breaks[$i+1] ), 'FIX' );
 
                     $road{$id} = { %{$road{$roadid}} };
                     $road{$id}->{chain} = [ @{$road->{chain}}[$breaks[$i] .. $breaks[$i+1]] ];
@@ -1469,18 +1465,18 @@ if ( $routing ) {
                             if (  $tr->{to_way} eq $roadid
                               &&  $tr->{to_pos} >  $breaks[$i]   - (1 + $tr->{to_dir}) / 2
                               &&  $tr->{to_pos} <= $breaks[$i+1] - (1 + $tr->{to_dir}) / 2 ) {
-                                print {$out} "; FIX: Turn restriction RelID=$relid TO moved from $roadid($tr->{to_pos})";
+                                my $msg = "Turn restriction RelID=$relid TO moved from $roadid($tr->{to_pos})";
                                 $tr->{to_way}  =  $id;
                                 $tr->{to_pos}  -= $breaks[$i];
-                                print {$out} " to $id($tr->{to_pos})\n";
+                                report( "$msg to $id($tr->{to_pos})", 'FIX' );
                             }
                             if (  $tr->{fr_way} eq $roadid
                               &&  $tr->{fr_pos} >  $breaks[$i]   + ($tr->{fr_dir} - 1) / 2
                               &&  $tr->{fr_pos} <= $breaks[$i+1] + ($tr->{fr_dir} - 1) / 2 ) {
-                                print {$out} "; FIX: Turn restriction RelID=$relid FROM moved from $roadid($tr->{fr_pos})";
+                                my $msg = "Turn restriction RelID=$relid FROM moved from $roadid($tr->{fr_pos})";
                                 $tr->{fr_way} =  $id;
                                 $tr->{fr_pos} -= $breaks[$i];
-                                print {$out} " to $id($tr->{fr_pos})\n";
+                                report( "$msg to $id($tr->{fr_pos})", 'FIX' );
                             }
                         }
                     }
@@ -1569,7 +1565,7 @@ if ( $routing ) {
             for my $node ( grep { $_ ne $cnode && $nodid{$_} } @{$road->{chain}}[1..$#{$road->{chain}}] ) {
                 if ( fix_close_nodes( $cnode, $node ) ) {
                     $countclose ++;
-                    print {$out} "; ERROR: Too close nodes $cnode and $node, WayID=$roadid near (${node{$node}})\n";
+                    report( "Too close nodes $cnode and $node, WayID=$roadid near (${node{$node}})" );
                 }
                 $cnode = $node;
             }
@@ -1688,11 +1684,11 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
     while ( my ($relid, $tr) = each %trest ) {
 
         unless ( $tr->{fr_dir} ) {
-            print {$out} "; ERROR: RelID=$relid FROM road does'n have VIA end node\n";
+            report( "RelID=$relid FROM road does'n have VIA end node" );
             next;
         }
         unless ( $tr->{to_dir} ) {
-            print {$out} "; ERROR: RelID=$relid TO road does'n have VIA end node\n";
+            report( "RelID=$relid TO road does'n have VIA end node" );
             next;
         }
 
@@ -2732,16 +2728,16 @@ sub execute_action {
     if ( $param{action} eq 'load_city' ) {
 
         if ( !$param{name} ) {
-            print {$out} "; ERROR: City without name $obj->{type}ID=$obj->{id}\n\n";
+            report( "City without name $obj->{type}ID=$obj->{id}" );
         }
         elsif ( $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1] ) {
-            print {$out} "; ERROR: City polygon $obj->{type}ID=$obj->{id} is not closed\n";
+            report( "City polygon $obj->{type}ID=$obj->{id} is not closed" );
         }
         else {
-            printf {$out} "; Found city: $obj->{type}ID=$obj->{id} - %s [ %s, %s ]\n\n",
+            report( sprintf( "Found city: $obj->{type}ID=$obj->{id} - %s [ %s, %s ]",
                 convert_string( $param{name}),
                 convert_string( $param{country} ),
-                convert_string( $param{region} );
+                convert_string( $param{region} ) ), 'INFO' );
             my $cityid = $obj->{type} . $obj->{id};
             $city{ $cityid } = {
                 name        =>  $param{name},
@@ -2761,13 +2757,13 @@ sub execute_action {
     if ( $param{action} eq 'load_suburb' ) {
 
         if ( !$param{name} ) {
-            print {$out} "; ERROR: Suburb without name $obj->{type}ID=$obj->{id}\n\n";
+            report( "Suburb without name $obj->{type}ID=$obj->{id}" );
         }
         elsif ( $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1] ) {
-            print {$out} "; ERROR: Suburb polygon $obj->{type}ID=$obj->{id} is not closed\n\n";
+            report( "Suburb polygon $obj->{type}ID=$obj->{id} is not closed" );
         }
         else {
-            printf {$out} "; Found suburb: $obj->{type}ID=$obj->{id} - %s\n", convert_string( $param{name} );
+            report( sprintf( "Found suburb: $obj->{type}ID=$obj->{id} - %s", convert_string( $param{name} ) ), 'INFO' );
             $suburb{ $obj->{type} . $obj->{id} } = {
                 name        =>  $param{name},
                 bound       =>  Math::Polygon::Tree->new(
@@ -2819,7 +2815,7 @@ sub execute_action {
 
                     my $new_obj = {
                         id      => $obj->{id},
-                        type    => 'InterpolatedWay',
+                        type    => 'Way',
                         latlon  => join( q{,}, $clat, $clon ),
                         tag     => { %tag, 'addr:housenumber' => $chouse, },
                     };
@@ -2829,7 +2825,7 @@ sub execute_action {
             }
         }
         else {
-            print {$out} "; ERROR: Wrong interpolation on WayID=$obj->{id}\n\n";
+            report( "Wrong interpolation on WayID=$obj->{id}" );
         }
     }
 
@@ -2964,7 +2960,7 @@ sub execute_action {
 
         if ( $obj->{type} eq 'Way' ) {
             if ( $obj->{chain}->[0] ne $obj->{chain}->[-1] ) {
-                print {$out} "; ERROR: Area WayID=$obj->{id} is not closed at ($node{$obj->{chain}->[0]})\n";
+                report( "Area WayID=$obj->{id} is not closed at ($node{$obj->{chain}->[0]})" );
                 return;
             }
 
@@ -3081,10 +3077,8 @@ sub merge_ampoly {
                     next CONTOUR;
                 }
 
-                printf {$out} "; %s Multipolygon's RelID=$mpid part WayID=$id is not closed\n\n",
-                    ( ( all { exists $waychain{$_} } @$list_ref )
-                        ? "ERROR:"
-                        : "WARNING: Incomplete RelID=$mpid. " );
+                report( "Multipolygon's RelID=$mpid part WayID=$id is not closed",
+                    ( all { exists $waychain{$_} } @$list_ref ) ? 'ERROR' : 'WARNING' );
                 last CONTOUR;
             }
         }
@@ -3093,6 +3087,14 @@ sub merge_ampoly {
     return \%res;
 }
 
+
+sub report {
+    my ( $msg, $type ) = @_;
+    $type //= 'ERROR';
+
+    # should be extended
+    print {$out} "; $type: $msg\n\n";
+}
 
 sub merge_polygon_chains {
 
