@@ -47,7 +47,7 @@ use Tree::R;
 
 use List::Util qw{ first reduce sum min max };
 use List::MoreUtils qw{ all none any first_index last_index uniq };
-use Scalar::Util qw{ looks_like_number };
+#use Scalar::Util qw{ looks_like_number };
 
 # debug
 use Data::Dump 'dd';
@@ -240,6 +240,7 @@ if ( $country_list ) {
         next if $line =~ /^#/;
         next if $line =~ /^\s+$/;
         my ($code, $name) = split /\s\s\s+/, $line;
+        next unless $code;
         $country_code{uc $code} = $name;
     }
     close $cl;
@@ -471,17 +472,22 @@ while ( my $line = decode 'utf8', <$in> ) {
     if ( $line =~ /<member/ ) {
         my ($mtype, $mid, $mrole)  =
             $line =~ / type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']*)["']/;
-        push @{ $relmember{"$mtype:$mrole"} }, $mid;
+        push @{ $relmember{"$mtype:$mrole"} }, $mid     if $mtype;
         next;
     }
 
     if ( $line =~ /<tag/ ) {
         my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        $reltag{$key} = $val    unless exists $config{skip_tags}->{$key};
+        $reltag{$key} = $val    if $key && !exists $config{skip_tags}->{$key};
         next;
     }
 
     if ( $line =~ /<\/relation/ ) {
+
+        if ( !exists $reltag{'type'} ) {
+            report( "No type defined for RelID=$relid" );
+            next;
+        } 
 
         # multipolygon
         if ( $reltag{'type'} eq 'multipolygon'  ||  $reltag{'type'} eq 'boundary' ) {
@@ -515,6 +521,10 @@ while ( my $line = decode 'utf8', <$in> ) {
 
         # turn restrictions
         if ( $routing  &&  $restrictions  &&  $reltag{'type'} eq 'restriction' ) {
+            unless ( exists $reltag{'restriction'} ) {
+                report( "Restriction RelID=$relid type not specified" );
+                $reltag{'restriction'} = 'no_';
+            }
             unless ( $relmember{'way:from'} ) {
                 report( "Turn restriction RelID=$relid doesn't have FROM way" );
                 next;
@@ -620,7 +630,7 @@ while ( my $line = decode 'utf8', <$in> ) {
         # road refs
         if ( $roadshields
                 &&  $reltag{'type'}  eq 'route'
-                &&  $reltag{'route'} eq 'road'
+                &&  $reltag{'route'}  &&  $reltag{'route'} eq 'road'
                 &&  ( exists $reltag{'ref'}  ||  exists $reltag{'int_ref'} )  ) {
             $count_ref_roads ++;
             for my $role ( keys %relmember ) {
@@ -863,7 +873,14 @@ while ( my $line = decode 'utf8', <$in> ) {
 
         ##  Interpolation nodes
         if ( $addrinterpolation  &&  exists $interpolation_node{$nodeid} ) {
-            $interpolation_node{$nodeid} = { %nodetag };
+            if ( exists $nodetag{'addr:housenumber'} ) {
+                if ( looks_like_number($nodetag{'addr:housenumber'}) ) {
+                    $interpolation_node{$nodeid} = { %nodetag };
+                }
+                else {
+                    report( "Wrong house number on NodeID=$nodeid" );
+                }
+            }
         }
 
         ##  POI
@@ -879,7 +896,7 @@ while ( my $line = decode 'utf8', <$in> ) {
 }
 
 printf STDERR "%d POIs written\n", $countpoi;
-printf STDERR "                          %d POIs loaded\n", sum map { scalar @$_ } values %poi
+printf STDERR "                          %d POIs loaded\n", (sum map { scalar @$_ } values %poi) // 0
     if $addrfrompoly;
 printf STDERR "                          %d barriers loaded\n", scalar keys %barrier
     if $barriers;
@@ -935,7 +952,7 @@ while ( my $line = decode 'utf8', <$in> ) {
 
     if ( $line =~ /<tag/ ) {
         my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        $waytag{$key} = $val        unless exists $config{skip_tags}->{$key};
+        $waytag{$key} = $val        if $key && !exists $config{skip_tags}->{$key};
         next;
     }
 
@@ -1091,7 +1108,7 @@ if ( $shorelines ) {
 
         # rotate if sea at $tbound[0]
         my $tmp  =  reduce { $a->{pos} < $b->{pos} ? $a : $b }  grep { $_->{type} ne 'bound' } @tbound;
-        if ( $tmp->{type} eq 'end' ) {
+        if ( $tmp->{type} && $tmp->{type} eq 'end' ) {
             for ( grep { $_->{pos} <= $tmp->{pos} } @tbound ) {
                  $_->{pos} += $pos;
             }
@@ -1117,7 +1134,7 @@ if ( $shorelines ) {
                 } else {
                     push @{$coast{$node->{line}}}, @{$coast{$tmp->{line}}};
                     delete $coast{$tmp->{line}};
-                    for ( grep { $_->{line} eq $tmp->{line} } @tbound ) {
+                    for ( grep { $_->{line} && $tmp->{line} && $_->{line} eq $tmp->{line} } @tbound ) {
                         $_->{line} = $node->{line};
                     }
                 }
@@ -1593,7 +1610,7 @@ if ( $routing ) {
         $rp =~ s/^(.,.),./$1,0/     unless $oneway;
 
         my %objinfo = (
-                comment     => "WayID = $roadid" . $road->{comment},
+                comment     => "WayID = $roadid" . ( $road->{comment} // q{} ),
                 type        => $type,
                 name        => $name,
                 chain       => [ @{$road->{chain}} ],
@@ -2259,7 +2276,7 @@ sub WritePOI {
 
         my $light_type = ( $tag{'light:character'} or $tag{'seamark:light:character'} or 'isophase' );
         ( $light_type ) = split /[\(\. ]/, $light_type;
-        print {$out} "LightType=$light_type{$light_type}\n";
+        print {$out} "LightType=$light_type{$light_type}\n"     if $light_type{$light_type};
 
         for my $sector ( grep { /seamark:light:\d/ } keys %tag ) {
             print {$out} ";;; $sector -> $tag{$sector}\n";
@@ -2391,15 +2408,15 @@ sub AddRoad {
         $param{chain}->[ ceil $#{$param{chain}}*2/3 ] );
 
     # calculate speed class
-    if ( $tag{'maxspeed'} && $tag{'maxspeed'} > 0 ) {
+    if ( $tag{'maxspeed'} && looks_like_number($tag{'maxspeed'}) && $tag{'maxspeed'} > 0 ) {
        $tag{'maxspeed'} *= 1.61      if  $tag{'maxspeed'} =~ /mph$/i;
        $rp[0]  = speed_code( $tag{'maxspeed'} * 0.9 );
     }
-    if ( $tag{'maxspeed:practical'} && $tag{'maxspeed:practical'} > 0 ) {
+    if ( $tag{'maxspeed:practical'} && looks_like_number($tag{'maxspeed:practical'}) && $tag{'maxspeed:practical'} > 0 ) {
        $tag{'maxspeed:practical'} *= 1.61        if  $tag{'maxspeed:practical'} =~ /mph$/i;
        $rp[0]  = speed_code( $tag{'maxspeed:practical'} * 0.9 );
     }
-    if ( $tag{'avgspeed'} && $tag{'avgspeed'} > 0 ) {
+    if ( $tag{'avgspeed'} && looks_like_number($tag{'avgspeed'}) && $tag{'avgspeed'} > 0 ) {
        $tag{'avgspeed'} *= 1.61        if  $tag{'avgspeed'} =~ /mph$/i;
        $rp[0]  = speed_code( $tag{'avgspeed'} );
     }
@@ -2790,7 +2807,7 @@ sub execute_action {
 
             for my $i ( 0 .. $#chain-1 ) {
                 my ( $node1, $node2 ) = @chain[ $i, $i+1 ];
-                my ( $house1, $house2 ) = map { $interpolation_node{$_}->{'addr:housenumber'} } ( $node1, $node2 );
+                my ( $house1, $house2 ) = map { my $x = $interpolation_node{$_}->{'addr:housenumber'}; $x =~ s/^(\d+).*/$1/x; $x } ( $node1, $node2 );
 
                 next if $house1 == $house2;
 
@@ -2831,7 +2848,6 @@ sub execute_action {
 
     ##  Write POI
     if ( $param{action} eq 'write_poi' ) {
-        #print STDERR Dumper $action, $obj, $condition;
         my %tag = %{ $obj->{tag} };
 
         return  unless  !$bounds
@@ -3095,6 +3111,10 @@ sub report {
     # should be extended
     print {$out} "; $type: $msg\n\n";
     return;
+}
+
+sub looks_like_number {
+    return ~~($_[0] =~ /^\d/x);
 }
 
 __END__
