@@ -10,6 +10,7 @@
     - action: process_interpolation
       type: 0x2800
       contacts: yes        
+      Label: %house
 
 
 
