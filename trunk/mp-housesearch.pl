@@ -62,7 +62,7 @@ my $callback = sub {
 
     return
         unless $obj->{name} eq 'POLYGON' && $obj->{attributes}->{Type} eq '0x13'
-            || $obj->{name} eq 'POI'     && $obj->{attributes}->{Type} eq '0x6100';
+            || $obj->{name} eq 'POI'     && $obj->{attributes}->{Type} ~~ [ '0x2800', '0x6100' ];
 
     return
         unless all { exists $obj->{attributes}->{$_} } qw{ HouseNumber StreetDesc CityName };
