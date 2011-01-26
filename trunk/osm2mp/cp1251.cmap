@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use autodie;
 use utf8;
+use charnames ':full';
 
 use Unicode::Normalize;
 use Data::Dumper;
@@ -332,7 +333,15 @@ for my $codepoint ( 0x000 .. 0x2FFF ) {
     #printf " %04X $chr  =>  $cmap{$chr}\n", $codepoint;
 }
 
+sub _convert_symbol {
+    my ($char) = @_;
+    if ( my $name = charnames::viacode(ord $char) ) {
+        return "\\N{$name}";
+    }
+    return sprintf '\x{%04x}', ord $char;
+}
+
 sub {
-    $_[0] =~ s{ (.) }{ $cmap{$1} // $1 }gexms;
+    $_[0] =~ s{ (.) }{ $cmap{$1} // exists $codepage{$1} ? $1 : _convert_symbol($1) }gexms;
     return;
 };
