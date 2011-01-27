@@ -2457,7 +2457,7 @@ sub AddRoad {
         push @ref, $tag{'int_ref'}          if exists $tag{'int_ref'};
 
         if ( @ref ) {
-            my $ref = join q{-}, sort( uniq( map { my $s=$_; $s =~ s/\s\-//; split /[,;]/, $s } @ref ) );
+            my $ref = join q{-}, sort( uniq( map { my $s=$_; $s =~ s/[\s\-]//gx; split /[,;]/, $s } @ref ) );
             $param{name} = '~[0x06]' . $ref . ( $param{name} ? q{ } . $param{name} : q{} );
         }
     }
