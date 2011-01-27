@@ -1,5 +1,7 @@
 package PerlIO::via::PrepareCP1251;
 
+# $Id$
+
 use 5.010;
 use strict;
 use warnings;
@@ -38,7 +40,57 @@ my %cmap = (
     "\x{04E9}" => "\x{043E}",
 );
 
-my $codepage = <<'CP_END';
+my %codepage;
+
+while ( <DATA> ) {
+    next unless my ( $code, $ucode ) = m{ 0x ([0-9A-F]{2}) \s+ 0x ([0-9A-F]{4}) }xms;
+    $codepage{ chr hex $ucode } = chr hex $code;
+}
+
+
+# remove diacritics
+for my $codepoint ( 0x000 .. 0x2FFF ) {
+    my $chr = chr $codepoint;
+    next if exists $codepage{$chr};
+    next if exists $cmap{$chr};
+
+    my $nfd = substr NFD( $chr ), 0, 1;
+    next unless exists $codepage{$nfd};
+
+    $cmap{$chr} = $nfd;
+}
+
+sub _convert_symbol {
+    my ($char) = @_;
+    if ( my $name = charnames::viacode(ord $char) ) {
+        return "\\N{$name}";
+    }
+    return sprintf '\x{%04x}', ord $char;
+}
+
+
+# PerlIO::via interface
+# based on PerlIO::via::QuotedPrint example
+
+sub PUSHED {
+    my ( $class ) = @_;
+    return bless \*PUSHED, $class;
+};
+
+sub WRITE {
+    my ( undef, $line, $handle ) = @_;
+    utf8::decode( $line ); # need to promote things back to UTF8
+    my $out = join q{},
+        map { $cmap{$_} // exists $codepage{$_} ? $_ : _convert_symbol($_) }
+        split m//, $line;
+    # utf8::downgrade($x);
+    return ( print {$handle} $out ) ? length($line) : -1;
+}
+
+1;
+
+
+__DATA__
 #
 #    Name:     cp1251 to Unicode table
 #    Unicode version: 2.0
@@ -313,66 +365,4 @@ my $codepage = <<'CP_END';
 0xFD    0x044D  #CYRILLIC SMALL LETTER E
 0xFE    0x044E  #CYRILLIC SMALL LETTER YU
 0xFF    0x044F  #CYRILLIC SMALL LETTER YA
-CP_END
-
-
-my %codepage;
-
-open my $cpfile, '<', \$codepage;
-while ( <$cpfile> ) {
-    next unless   my ( $code, $ucode ) = m{ 0x ([0-9A-F]{2}) \s+ 0x ([0-9A-F]{4}) }xms;
-    $codepage{ chr hex $ucode } = chr hex $code;
-}
-
-close $cpfile;
-
-
-#binmode STDOUT, ':utf8';
-
-# remove diacritics
-for my $codepoint ( 0x000 .. 0x2FFF ) {
-    my $chr = chr $codepoint;
-    next if exists $codepage{$chr};
-    next if exists $cmap{$chr};
-
-    my $nfd = substr NFD( $chr ), 0, 1;
-    next unless exists $codepage{$nfd};
-
-    $cmap{$chr} = $nfd;
-
-    #printf " %04X $chr  =>  $cmap{$chr}\n", $codepoint;
-}
-
-sub _convert_symbol {
-    my ($char) = @_;
-    if ( my $name = charnames::viacode(ord $char) ) {
-        return "\\N{$name}";
-    }
-    return sprintf '\x{%04x}', ord $char;
-}
-
-
-# PerlIO::via interface
-# based on PerlIO::via::QuotedPrint example
-
-sub PUSHED {
-    return bless \*PUSHED, $_[0];
-};
-
-sub FILL {
-    # transparent for input
-    return readline $_[1];
-}
-
-sub WRITE {
-    my ( undef, $line, $handle ) = @_;
-    utf8::decode( $line ); # need to promote things back to UTF8
-    my $out = join q{},
-        map { $cmap{$_} // exists $codepage{$_} ? $_ : _convert_symbol($_) }
-        split m//, $line;
-    # utf8::downgrade($x);
-    return ( print {$handle} $out ) ? length($line) : -1;
-}
-
-1;
 
