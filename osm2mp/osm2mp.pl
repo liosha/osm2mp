@@ -2645,11 +2645,13 @@ sub WritePolygon {
     }
 
     ## Rusa - floors
-    if ( $tag{'building:levels'} && looks_like_number($tag{'building:levels'}) ) {
-        printf {$out} "Floors=%d\n",  0 + $tag{'building:levels'};
+    if ( my $levels = $tag{'building:levels'} ) {
+        $levels =~ s/\D.*//x;
+        printf {$out} "Floors=%d\n",  0 + $levels;
     }
-    if ( $tag{'building:height'} && looks_like_number($tag{'building:height'}) ) {
-        printf {$out} "Floors=%d\n",  3 * $tag{'building:height'};
+    if ( my $height = $tag{'building:height'} // $tag{'height'} ) {
+        $height =~ s/\D.*//x;
+        printf {$out} "Floors=%d\n",  3 * $height;
     }
 
     for my $key ( keys %param ) {
