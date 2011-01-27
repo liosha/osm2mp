@@ -1,4 +1,3 @@
-
 package PerlIO::via::PrepareCP1251;
 
 use 5.010;
@@ -366,11 +365,13 @@ sub FILL {
 }
 
 sub WRITE {
-    my ( $line, $handle ) = @_;
+    my ( undef, $line, $handle ) = @_;
     utf8::decode( $line ); # need to promote things back to UTF8
-    $line =~ s{ (.) }{ $cmap{$1} // exists $codepage{$1} ? $1 : _convert_symbol($1) }gexms;
+    my $out = join q{},
+        map { $cmap{$_} // exists $codepage{$_} ? $_ : _convert_symbol($_) }
+        split m//, $line;
     # utf8::downgrade($x);
-    return ( print {$handle} $line ) ? length($_[1]) : -1;
+    return ( print {$handle} $out ) ? length($line) : -1;
 }
 
 1;
