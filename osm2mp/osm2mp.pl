@@ -31,6 +31,9 @@ use strict;
 use warnings;
 use autodie;
 
+use FindBin qw{ $Bin };
+use lib $Bin;
+
 use POSIX;
 use YAML 0.72;
 use Template;
@@ -135,7 +138,7 @@ my $poi_rtree = Tree::R->new();
 
 
 # output filehandle
-our $out = *STDOUT{IO};
+my $out = *STDOUT{IO};
 
 for ( @ARGV ) {   $_ = decode 'locale', $_   }
 
@@ -149,9 +152,9 @@ GetOptions (
     'nocodepage'        => sub { undef $codepage },
     'upcase!'           => \$upcase,
     'ttable=s'          => \$ttable,
-    'textfilter=s'      => sub { require "PerlIO/via/$_[1].pm"; $text_filter .= ":via($_[1])"; },
+    'textfilter=s'      => sub { eval { require "$_[1].pm" } or require "PerlIO/via/$_[1].pm"; $text_filter .= ":via($_[1])"; },
     # for backward compatibility
-    'translit!'         => sub { require "PerlIO/via/Unidecode.pm"; $text_filter .= ":via(Unidecode)"; },,
+    'translit!'         => sub { push @ARGV, '--textfilter', 'Unidecode' },
 
     'oneway!'           => \$oneway,
     'routing!'          => \$routing,
@@ -199,7 +202,7 @@ GetOptions (
     'namelist=s%'       => sub { $taglist{$_[1]} = [ split /[ ,]+/, $_[2] ] },
 
     # deprecated
-    'nametaglist=s'     => sub { $taglist{label} = [ split /[ ,]+/, $_[1] ] },
+    'nametaglist=s'     => sub { push @ARGV, '--namelist', "label=$_[1]" },
 );
 
 
@@ -2698,7 +2701,7 @@ sub condition_matches {
         $_[0] = {
             tag => $key,
             neg => $neg,
-            re  => ( $val eq q{*} ? q{} : qr/^($val)$/xms ),
+            re  => ( $val eq q{*} ? q{} : qr/^(?:$val)$/xms ),
         };
         return &condition_matches;
     }
