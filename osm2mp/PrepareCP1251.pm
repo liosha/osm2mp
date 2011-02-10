@@ -81,7 +81,7 @@ sub WRITE {
     my ( undef, $line, $handle ) = @_;
     utf8::decode( $line ); # need to promote things back to UTF8
     my $out = join q{},
-        map { $cmap{$_} // exists $codepage{$_} ? $_ : _convert_symbol($_) }
+        map { $cmap{$_} // ( exists $codepage{$_} ? $_ : _convert_symbol($_) ) }
         split m//, $line;
     # utf8::downgrade($x);
     return ( print {$handle} $out ) ? length($line) : -1;
