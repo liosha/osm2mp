@@ -100,13 +100,22 @@
       level_l: 2
       level_h: 4
 
-- condition:
+- id: park
+  condition:
     - leisure = garden|park
+    - landuse != forest
   action:
     - action: write_polygon
       type: 0x17
-      level_l: 0
       level_h: 2
+
+- id: forest
+  condition:
+    - landuse = forest
+  action:
+    - action: write_polygon
+      type: 0x17
+      level_h: 3
 
 - condition:
     - leisure = stadium|pitch
