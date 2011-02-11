@@ -37,6 +37,25 @@
     - action: write_polygon
       type: 0x07
 
+- id: park
+  condition:
+    - leisure = garden|park
+    - landuse != forest
+    - natural != wood
+  action:
+    - action: write_polygon
+      type: 0x17
+      level_h: 2
+
+- id: forest
+  condition:
+    - landuse = forest
+    - natural != wood
+  action:
+    - action: write_polygon
+      type: 0x17
+      level_h: 3
+
 - condition:
     - or:
         - landuse = farm|grass|meadow
@@ -70,7 +89,7 @@
       level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
 
 - condition:
-    - landuse = allotments
+    - landuse = allotments|orchard
   action:
     - action: write_polygon
       type: 0x4e
@@ -81,13 +100,6 @@
   action:
     - action: write_polygon
       type: 0x4f
-      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
-
-- condition:
-    - landuse = forest
-  action:
-    - action: write_polygon
-      type: 0x50
       level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
 
 - condition:
