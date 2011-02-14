@@ -2659,7 +2659,7 @@ sub WritePolygon {
 
     for my $key ( keys %param ) {
         next unless $key =~ /^_*[A-Z]/;
-        next if $param{$key} eq q{};
+        next if !defined $param{$key} || $param{$key} eq q{};
         printf {$out} "$key=%s\n", convert_string($param{$key});
     }
 
