@@ -39,9 +39,9 @@ while ( my $line = <> ) {
         if ( index( $line, '<bounds' ) >= 0 ) {
             $line =~
                 m{  \bminlat= (?<q>['"]) (?<minlat>.*?) \k<q>
-                .*? \bminlon= \k<q>      (?<minlat>.*?) \k<q>
-                .*? \bmaxlat= \k<q>      (?<minlat>.*?) \k<q>
-                .*? \bmaxlon= \k<q>      (?<minlat>.*?) \k<q> }xms;
+                .*? \bminlon= \k<q>      (?<minlon>.*?) \k<q>
+                .*? \bmaxlat= \k<q>      (?<maxlat>.*?) \k<q>
+                .*? \bmaxlon= \k<q>      (?<maxlon>.*?) \k<q> }xms;
             %cap = %+;
         }
         else {
