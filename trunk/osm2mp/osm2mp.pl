@@ -37,7 +37,7 @@ use lib $Bin;
 use POSIX;
 use YAML 0.72;
 use Template;
-use Getopt::Long;
+use Getopt::Long qw{ :config pass_through };
 use File::Spec;
 
 use Encode;
@@ -66,10 +66,9 @@ our $VERSION = '0.90_1';
 
 my $config          = [ 'garmin.yml' ];
 
-my $mapid           = '88888888';
-my $mapname         = 'OSM';
-
 my $codepage        = '1251';
+my $mp_opts         = {};
+
 my $upcase          = 0;
 my $ttable          = q{};
 my $text_filter     = q{};
@@ -110,8 +109,7 @@ my $addrfrompoly    = 1;
 my $addrinterpolation = 1;
 my $makepoi         = 1;
 my $country_list;
-my $defaultcountry  = "Earth";
-my $defaultregion   = "OSM";
+
 my $defaultcity;
 my $poiregion       = 1;
 my $poicontacts     = 1;
@@ -140,128 +138,20 @@ my $poi_rtree = Tree::R->new();
 # output filehandle
 my $out = *STDOUT{IO};
 
-for ( @ARGV ) {   $_ = decode 'locale', $_   }
 
-GetOptions (
-    'config=s@'         => \$config,
-    'output|o=s'        => sub { open $out, '>', $_[1] },
-
-    'mapid=s'           => \$mapid,
-    'mapname=s'         => \$mapname,
-    'codepage=s'        => \$codepage,
-    'nocodepage'        => sub { undef $codepage },
-    'upcase!'           => \$upcase,
-    'ttable=s'          => \$ttable,
-    'textfilter=s'      => sub { eval { require "$_[1].pm" } or require "PerlIO/via/$_[1].pm"; $text_filter .= ":via($_[1])"; },
-    # for backward compatibility
-    'translit!'         => sub { push @ARGV, '--textfilter', 'Unidecode' },
-
-    'oneway!'           => \$oneway,
-    'routing!'          => \$routing,
-    'mergeroads!'       => \$mergeroads,
-    'mergecos=f'        => \$mergecos,
-    'detectdupes!'      => \$detectdupes,
-    'splitroads!'       => \$splitroads,
-    'maxroadnodes=f'    => \$maxroadnodes,
-    'fixclosenodes!'    => \$fixclosenodes,
-    'fixclosedist=f'    => \$fixclosedist,
-    'restrictions!'     => \$restrictions,
-    'barriers!'         => \$barriers,
-    'disableuturns!'    => \$disableuturns,
-    'destsigns!'        => \$destsigns,
-    'roadshields!'      => \$roadshields,
-    'transportstops!'   => \$transportstops,
-    'streetrelations!'  => \$streetrelations,
-    'interchange3d!'    => \$interchange3d,
-    'transport=s'       => \$transport_mode,
-    'notransport'       => sub { undef $transport_mode },
-
-    'defaultcountry=s'  => \$defaultcountry,
-    'defaultregion=s'   => \$defaultregion,
-    'defaultcity=s'     => \$defaultcity,
-    'countrylist=s'     => \$country_list,
-
-    'bbox=s'            => \$bbox,
-    'bpoly=s'           => \$bpolyfile,
-    'osmbbox!'          => \$osmbbox,
-    'background!'       => \$background,
-    'lessgpc!'          => \$lessgpc,
-    'shorelines!'       => \$shorelines,
-    'hugesea=i'         => \$hugesea,
-    'waterback!'        => \$waterback,
-    'marine!'           => \$marine,
-
-    'addressing!'       => \$addressing,
-    'navitel!'          => \$navitel,
-    'addrfrompoly!'     => \$addrfrompoly,
-    'addrinterpolation!'=> \$addrinterpolation,
-    'makepoi!'          => \$makepoi,
-    'poiregion!'        => \$poiregion,
-    'poicontacts!'      => \$poicontacts,
-
-    'namelist=s%'       => sub { $taglist{$_[1]} = [ split /[ ,]+/, $_[2] ] },
-
-    # deprecated
-    'nametaglist=s'     => sub { push @ARGV, '--namelist', "label=$_[1]" },
-);
-
-
-$codepage = 'utf8'  unless defined $codepage;
-my $codepagenum = ( $codepage =~ /^cp\-?(\d+)$/i ) ? $1 : $codepage;
-$codepage = "cp$codepagenum"    if $codepagenum =~ /^\d+$/;
-
-binmode $out, "encoding($codepage)$text_filter:utf8";
-
-my $cmap;
-if ( $ttable ) {
-    $cmap = do $ttable;
-    die unless $cmap;
-}
-
-my %transport_code = (
-    emergency   => 0,
-    police      => 0,
-    delivery    => 1,
-    car         => 2,
-    motorcar    => 2,
-    bus         => 3,
-    taxi        => 4,
-    foot        => 5,
-    pedestrian  => 5,
-    bike        => 6,
-    bicycle     => 6,
-    truck       => 7,
-);
-$transport_mode = $transport_code{ $transport_mode }
-    if defined $transport_mode && exists $transport_code{ $transport_mode };
-
-my %country_code;
-if ( $country_list ) {
-    open my $cl, '<:utf8', $country_list;
-    while ( my $line = <$cl> ) {
-        chomp $line;
-        next if $line =~ /^#/;
-        next if $line =~ /^\s+$/;
-        my ($code, $name) = split /\s\s\s+/, $line;
-        next unless $code;
-        $country_code{uc $code} = $name;
-    }
-    close $cl;
-}
-
-
-
-
-####    Action
 
 print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2011  liosha, xliosha\@gmail.com\n\n";
-
-usage() unless (@ARGV);
-
 
 
 
 ####    Reading configs
+
+for ( @ARGV ) {   $_ = decode 'locale', $_   }
+
+GetOptions (
+    'config=s@'         => \$config,
+    'countrylist=s'     => \$country_list,
+);
 
 my %config;
 print STDERR "Loading configuration...  ";
@@ -301,37 +191,139 @@ while ( my $cfgfile = shift @$config ) {
     }
 }
 
+my %country_code;
+if ( $country_list ) {
+    open my $cl, '<:utf8', $country_list;
+    while ( my $line = <$cl> ) {
+        next if $line =~ / ^ # /xms;
+        chomp $line;
+        my ($code, $name) = split /\s+/xms, $line, 2;
+        next unless $code;
+        $country_code{uc $code} = $name;
+    }
+    close $cl;
+}
+
 print STDERR "Ok\n\n";
 
 
+
+# cl-options second pass: tuning
+GetOptions (
+    'output|o=s'        => sub { open $out, '>', $_[1] },
+
+    'mp-header=s%'      => sub { $mp_opts->{$_[1]} = $_[2] },
+    'codepage=s'        => \$codepage,
+    'nocodepage'        => sub { undef $codepage },
+    'upcase!'           => \$upcase,
+    'ttable=s'          => \$ttable,
+    'textfilter=s'      => sub { eval { require "$_[1].pm" } or require "PerlIO/via/$_[1].pm"; $text_filter .= ":via($_[1])"; },
+
+    'oneway!'           => \$oneway,
+    'routing!'          => \$routing,
+    'mergeroads!'       => \$mergeroads,
+    'mergecos=f'        => \$mergecos,
+    'detectdupes!'      => \$detectdupes,
+    'splitroads!'       => \$splitroads,
+    'maxroadnodes=f'    => \$maxroadnodes,
+    'fixclosenodes!'    => \$fixclosenodes,
+    'fixclosedist=f'    => \$fixclosedist,
+    'restrictions!'     => \$restrictions,
+    'barriers!'         => \$barriers,
+    'disableuturns!'    => \$disableuturns,
+    'destsigns!'        => \$destsigns,
+    'roadshields!'      => \$roadshields,
+    'transportstops!'   => \$transportstops,
+    'streetrelations!'  => \$streetrelations,
+    'interchange3d!'    => \$interchange3d,
+    'transport=s'       => \$transport_mode,
+    'notransport'       => sub { undef $transport_mode },
+
+    'defaultcity=s'     => \$defaultcity,
+
+    'bbox=s'            => \$bbox,
+    'bpoly=s'           => \$bpolyfile,
+    'osmbbox!'          => \$osmbbox,
+    'background!'       => \$background,
+    'lessgpc!'          => \$lessgpc,
+    'shorelines!'       => \$shorelines,
+    'hugesea=i'         => \$hugesea,
+    'waterback!'        => \$waterback,
+    'marine!'           => \$marine,
+
+    'addressing!'       => \$addressing,
+    'navitel!'          => \$navitel,
+    'addrfrompoly!'     => \$addrfrompoly,
+    'addrinterpolation!'=> \$addrinterpolation,
+    'makepoi!'          => \$makepoi,
+    'poiregion!'        => \$poiregion,
+    'poicontacts!'      => \$poicontacts,
+
+    'namelist=s%'       => sub { $taglist{$_[1]} = [ split /[ ,]+/, $_[2] ] },
+
+    # obsolete, for backward compatibility
+    'nametaglist=s'     => sub { push @ARGV, '--namelist', "label=$_[1]" },
+    'translit!'         => sub { push @ARGV, '--textfilter', 'Unidecode' },
+    'mapid=s'           => sub { push @ARGV, '--mp-header', "ID=$_[1]" },
+    'mapname=s'         => sub { push @ARGV, '--mp-header', "Name=$_[1]" },
+    'defaultcountry=s'  => sub { push @ARGV, '--mp-header', "DefaultCityCountry=$_[1]" },
+    'defaultregion=s'   => sub { push @ARGV, '--mp-header', "DefaultRegionCountry=$_[1]" },
+);
+
+usage() unless (@ARGV);
+
+
+if ( $codepage =~ / ^ (?: cp | win (?: dows )? )? -? ( \d{3,} ) $ /ixms ) {
+    $mp_opts->{CodePage} = $1;
+    $codepage = "cp$1";
+}
+
+$codepage ||= 'utf8';
+binmode $out, "encoding($codepage)$text_filter:utf8";
+
+my $cmap;
+if ( $ttable ) {
+    $cmap = do $ttable;
+    die unless $cmap;
+}
+
+my %transport_code = (
+    emergency   => 0,
+    police      => 0,
+    delivery    => 1,
+    car         => 2,
+    motorcar    => 2,
+    bus         => 3,
+    taxi        => 4,
+    foot        => 5,
+    pedestrian  => 5,
+    bike        => 6,
+    bicycle     => 6,
+    truck       => 7,
+);
+$transport_mode = $transport_code{ $transport_mode }
+    if defined $transport_mode && exists $transport_code{ $transport_mode };
 
 
 
 ####    Header
 
-$defaultcountry = convert_string( $country_code{uc $defaultcountry} )
-    if exists $country_code{uc $defaultcountry};
+$mp_opts->{DefaultCityCountry} = $country_code{uc $mp_opts->{DefaultCityCountry}}
+    if $mp_opts->{DefaultCityCountry} && $country_code{uc $mp_opts->{DefaultCityCountry}};
 
-my $tmpl = Template->new();
-$tmpl->process (\$config{header}, {
-    mapid           => $mapid,
-    mapname         => $mapname,
-    codepage        => $codepagenum,
-    routing         => $routing,
-    defaultcountry  => $defaultcountry,
-    defaultregion   => $defaultregion,
-})
-or die $tmpl->error();
+my $tt2 = Template->new();
+my $data = q{};
+$tt2->process( \$config{header}, { opts => $mp_opts, version => $VERSION }, \$data )
+    or die $tt2->error();
+print {$out} $data;
 
 
 
 
 ####    Info
 
-print {$out} "\n; #### Converted from OpenStreetMap data with  osm2mp $VERSION  (" . strftime ("%Y-%m-%d %H:%M:%S", localtime) . ")\n\n\n";
 
-
-my ($infile) = @ARGV;
+my $infile = shift @ARGV;
 open my $in, '<', $infile;
 print STDERR "Processing file $infile\n\n";
 
@@ -1989,8 +1981,7 @@ Available options [defaults]:
  --output <file>           output to file       [stdout]
  --config <file>           configuration file   [ @$config ]
 
- --mapid <id>              map id               [$mapid]
- --mapname <name>          map name             [$mapname]
+ --mp-header <key>=<value> MP header values
 
  --codepage <num>          codepage number                   [$codepage]
  --upcase                  convert all labels to upper case  [$onoff[$upcase]]
@@ -2007,8 +1998,6 @@ Available options [defaults]:
  --poiregion               write region info for settlements [$onoff[$poiregion]]
  --poicontacts             write contact info for POIs       [$onoff[$poicontacts]]
  --defaultcity <name>      default city for addresses        [$defaultcity]
- --defaultregion <name>            region                    [$defaultregion]
- --defaultcountry <name>           country                   [$defaultcountry]
  --countrylist <file>      replace country code by name
 
  --routing                 produce routable map                      [$onoff[$routing]]

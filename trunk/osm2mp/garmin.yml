@@ -36,29 +36,31 @@
 --- header
 --- |
   [IMG ID]
-  ID=[% mapid %]
-  Name=[% mapname %]
+  ID=[% opts.exists('ID') ? opts.ID : '88888888'; opts.delete('ID') %]
+  Name=[% opts.exists('Name') ? opts.Name : 'OSM-based map'; opts.delete('Name') %]
   Copyright=OpenStreetMap project contributors under CC-BY-SA
  
-  [% IF codepage %]
   LblCoding=9
-  CodePage=[% codepage %]
-  [% ELSE %]
-  ; UTF-8 encoding
-  CodePage=utf8
-  [% END %]
+  CodePage=[% opts.exists('CodePage') ? opts.CodePage : 'utf8'; opts.delete('CodePage') %]
 
-  POINumberFirst=N
-  DefaultCityCountry=[% defaultcountry %]
-  DefaultRegionCountry=[% defaultregion %]
+  [% # keys with default values
+    defs = {
+        POINumberFirst='N'
+        MG='Y'
+        POIIndex='Y'
+        Routing='Y'
+        Elevation='M'
+        Preprocess='F'
+        TreSize='3000'
+    }; 
+    FOREACH key IN defs.keys -%]
+  [% key %]=[% opts.exists(key) ? opts.$key : defs.$key; opts.delete(key) %]
+  [%- END %]
 
-  MG=Y
-  POIIndex=Y
-  Routing=Y
-
-  Elevation=M
-  Preprocess=F
-  TreSize=3000
+  [% # keys without default values
+    FOREACH key IN opts.keys -%]
+  [% key %]=[% opts.$key %]
+  [%- END %]
 
   Levels=6
   Level0=24
@@ -70,6 +72,10 @@
 
   [END-IMG ID]
 
+  [% USE date -%]
+  ; #### Converted from OpenStreetMap data with osm2mp [% version %] ([% date.format(format='%Y-%m-%d %H:%M:%S') %])
+
+  ;
 
 
 ################################
