@@ -27,7 +27,7 @@
 --- |
   [IMG ID]
   ID=[% opts.exists('ID') ? opts.ID : '88888888'; opts.delete('ID') %]
-  Name=[% opts.exists('Name') ? opts.Name : 'OSM авто-карта'; opts.delete('Name') %]
+  Name=[% opts.exists('Name') ? opts.Name : 'OSM Р°РІС‚Рѕ-РєР°СЂС‚Р°'; opts.delete('Name') %]
   Copyright=OpenStreetMap project contributors under CC-BY-SA
  
   LblCoding=9
