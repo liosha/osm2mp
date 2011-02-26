@@ -195,7 +195,7 @@ my %country_code;
 if ( $country_list ) {
     open my $cl, '<:utf8', $country_list;
     while ( my $line = <$cl> ) {
-        next if $line =~ / ^ # /xms;
+        next if $line =~ / ^ \# /xms;
         chomp $line;
         my ($code, $name) = split /\s+/xms, $line, 2;
         next unless $code;
