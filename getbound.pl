@@ -46,6 +46,7 @@ my %rename = (
     tunisia         =>  192757,
     turkey          =>  174737,
     united_arab_emirates    =>  307763,
+    vietnam         =>  49915,
     yemen           =>  305092,
 
     # geofabrik
