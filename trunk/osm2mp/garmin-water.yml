@@ -35,12 +35,12 @@
     }; 
     FOREACH key IN defs.keys -%]
   [% key %]=[% opts.exists(key) ? opts.$key : defs.$key; opts.delete(key) %]
-  [%- END %]
+  [% END %]
 
   [% # keys without default values
     FOREACH key IN opts.keys -%]
   [% key %]=[% opts.$key %]
-  [%- END %]
+  [% END %]
 
   Levels=6
   Level0=24
