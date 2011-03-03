@@ -55,7 +55,7 @@
   [% USE date -%]
   ; #### Converted from OpenStreetMap data with osm2mp [% version %] ([% date.format(format='%Y-%m-%d %H:%M:%S') %])
 
-  ;
+  [% "\n\n" %]
 
 
 
