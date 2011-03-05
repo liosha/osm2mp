@@ -279,7 +279,7 @@ if ( $codepage =~ / ^ (?: cp | win (?: dows )? )? -? ( \d{3,} ) $ /ixms ) {
     $codepage = "cp$1";
 }
 
-binmode $out, "encoding($codepage)$text_filter:encoding(utf8)";
+binmode $out, "encoding($codepage)$text_filter:utf8";
 
 my $cmap;
 if ( $ttable ) {
