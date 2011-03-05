@@ -193,7 +193,7 @@ while ( my $cfgfile = shift @$config ) {
 
 my %country_code;
 if ( $country_list ) {
-    open my $cl, '<:utf8', $country_list;
+    open my $cl, '<:encoding(utf8)', $country_list;
     while ( my $line = <$cl> ) {
         next if $line =~ / ^ \# /xms;
         chomp $line;
@@ -217,7 +217,7 @@ GetOptions (
     'nocodepage'        => sub { undef $codepage },
     'upcase!'           => \$upcase,
     'ttable=s'          => \$ttable,
-    'textfilter=s'      => sub { eval { require "$_[1].pm" } or require "PerlIO/via/$_[1].pm"; $text_filter .= ":via($_[1])"; },
+    'textfilter=s'      => sub { eval "require $_[1]" or eval "require PerlIO::via::$_[1]" or die $@; $text_filter .= ":via($_[1])"; },
 
     'oneway!'           => \$oneway,
     'routing!'          => \$routing,
@@ -279,7 +279,7 @@ if ( $codepage =~ / ^ (?: cp | win (?: dows )? )? -? ( \d{3,} ) $ /ixms ) {
 }
 
 $codepage ||= 'utf8';
-binmode $out, "encoding($codepage)$text_filter:utf8";
+binmode $out, "encoding($codepage)$text_filter:encoding(utf8)";
 
 my $cmap;
 if ( $ttable ) {
