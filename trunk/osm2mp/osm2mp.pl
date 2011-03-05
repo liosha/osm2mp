@@ -36,7 +36,7 @@ use lib $Bin;
 
 use POSIX;
 use YAML 0.72;
-use Template;
+use Template::Context;
 use Getopt::Long qw{ :config pass_through };
 use File::Spec;
 
@@ -273,12 +273,12 @@ GetOptions (
 usage() unless (@ARGV);
 
 
+$codepage ||= 'utf8';
 if ( $codepage =~ / ^ (?: cp | win (?: dows )? )? -? ( \d{3,} ) $ /ixms ) {
     $mp_opts->{CodePage} = $1;
     $codepage = "cp$1";
 }
 
-$codepage ||= 'utf8';
 binmode $out, "encoding($codepage)$text_filter:encoding(utf8)";
 
 my $cmap;
@@ -311,12 +311,8 @@ $transport_mode = $transport_code{ $transport_mode }
 $mp_opts->{DefaultCityCountry} = $country_code{uc $mp_opts->{DefaultCityCountry}}
     if $mp_opts->{DefaultCityCountry} && $country_code{uc $mp_opts->{DefaultCityCountry}};
 
-my $tt2 = Template->new();
-my $data = q{};
-$tt2->process( \$config{header}, { opts => $mp_opts, version => $VERSION }, \$data )
-    or die $tt2->error();
-print {$out} $data;
-
+my $ttc = Template::Context->new();
+print {$out} $ttc->process( \$config{header}, { opts => $mp_opts, version => $VERSION } );
 
 
 
