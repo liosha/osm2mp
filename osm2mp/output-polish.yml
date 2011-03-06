@@ -125,3 +125,30 @@ polyline: |
   [END]
   [% %]
 
+
+
+turn_restriction: |
+  [% INCLUDE comment  text = comment  IF comment -%]
+  [Restrict]
+  TraffPoints=[% opts.node_from %],[% opts.node_via %],[% opts.node_to %]
+  TraffRoads=[% opts.road_from %],[% opts.road_to %]
+  [% IF opts.param -%]
+  RestrParam=[% opts.param %]
+  [% END -%]
+  [END-Restrict]
+  [% %]
+
+
+
+destination_sign: |
+  [% INCLUDE comment  text = comment  IF comment -%]
+  [Sign]
+  SignPoints=[% opts.node_from %],[% opts.node_via %],[% opts.node_to %]
+  SignRoads=[% opts.road_from %],[% opts.road_to %]
+  [% IF opts.param -%]
+  SignParam=[% opts.param %]
+  [% END -%]
+  [END-Sign]
+  [% %]
+
+
