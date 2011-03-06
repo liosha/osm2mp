@@ -2111,9 +2111,6 @@ sub WritePOI {
     return      unless  exists $param{nodeid}  ||  exists $param{latlon};
     return      unless  exists $param{type};
 
-    my $llev  =  $param{level_l} || '0';
-    my $hlev  =  $param{level_h} || '0';
-
     my $comment = $param{comment} || q{};
 
     while ( my ( $key, $val ) = each %tag ) {
@@ -2526,26 +2523,24 @@ sub WritePolygon {
 
     my %param = %{$_[0]};
 
-    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
+    my %tag   = $param{tags} ? %{$param{tags}} : ();
 
-    return  unless  exists $param{areas};
+    return  unless  $param{areas};
     return  unless  @{$param{areas}};
-    return  unless  exists $param{type};
 
+    my $comment = $param{comment} || q{};
+    my $lzoom   = $param{level_l} || '0';
+    my $hzoom   = $param{level_h} || '0';
 
-    #   select endlevel
-    my $llev  =  $param{level_l} // 0;
-    my $hlev  =  $param{level_h} // 0;
-
-    if ( ref $hlev ) {
+    #   area-dependent zoomlevel
+    if ( ref $hzoom ) {
         my $square = sum map { Math::Polygon::Calc::polygon_area( @$_ )
                                 * cos( [polygon_centroid( @{$param{areas}->[0]} )]->[1] / 180 * 3.14159 )
                                 * (40000/360)**2 } @{$param{areas}};
-        $hlev = $llev + last_index { $square >= $_ } @$hlev;
-        return if $hlev < $llev;
-        $param{comment} .= "\n; area: $square km2 -> $hlev";
+        $hzoom = $lzoom + last_index { $square >= $_ } @$hzoom;
+        return if $hzoom < $lzoom;
+        $param{comment} .= "\narea: $square km2 -> $hzoom";
     }
-
 
     #   test if inside bounds
     my @inside = map { $bounds ? $boundtree->contains_polygon_rough( $_ ) : 1 } @{$param{areas}};
@@ -2553,7 +2548,7 @@ sub WritePolygon {
 
     if ( $bounds  &&  $lessgpc  &&  any { !defined } @inside ) {
         @inside = map { $boundtree->contains_points( @$_ ) } @{$param{areas}};
-        return  if all { defined && $_==0 } @inside;
+        return  if all { defined && $_ == 0 } @inside;
     }
 
 
@@ -2579,19 +2574,20 @@ sub WritePolygon {
 
     return    unless @plist;
 
-    print  {$out} "; $param{comment}\n"            if  exists $param{comment};
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        print {$out} "; $key = $val\n";
+        $comment .= "\n$key = $val";
     }
 
     $countpolygons ++;
 
-    print  {$out} "[POLYGON]\n";
-    printf {$out} "Type=%s\n",        $param{type};
-    printf {$out} "EndLevel=%d\n",    $hlev    if  $hlev > $llev;
-    printf {$out} "Label=%s\n", convert_string( $param{name} )
-        if !exists $param{Label} && defined $param{name} && $param{name} ne q{};
+    my %opts = (
+        lzoom   => $lzoom || '0',
+        hzoom   => $hzoom || '0',
+        Type    => $param{type},
+    );
+    
+    $opts{Label} = convert_string( $param{name} )   if defined $param{name} && $param{name} ne q{};
 
     ## Navitel
     if ( $navitel ) {
@@ -2609,47 +2605,49 @@ sub WritePolygon {
             my $suburb = FindSuburb( $plist[0]->[0] );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
 
-            printf  {$out} "HouseNumber=%s\n", convert_string( $housenumber );
-            printf  {$out} "StreetDesc=%s\n", convert_string( $street )     if defined $street && $street ne q{};
+            $opts{HouseNumber} = convert_string( $housenumber );
+            $opts{StreetDesc}  = convert_string( $street )     if defined $street && $street ne q{};
+
             if ( $city ) {
-                printf {$out} "CityName=%s\n",     convert_string( $city->{name} );
-                printf {$out} "RegionName=%s\n",   convert_string( $city->{region} )      if $city->{region};
-                printf {$out} "CountryName=%s\n",  convert_string( $city->{country} )     if $city->{country};
+                $opts{CityName}    = convert_string( $city->{name} );
+                $opts{RegionName}  = convert_string( $city->{region} )      if $city->{region};
+                $opts{CountryName} = convert_string( $city->{country} )     if $city->{country};
             }
             elsif ( $defaultcity ) {
-                print {$out} "CityName=$defaultcity\n";
+                $opts{CityName}    = $defaultcity;
             }
         }
 
         # entrances
         for my $entr ( @{ $param{entrance} } ) {
             next unless !$bounds || is_inside_bounds( $entr->[0] );
-            printf {$out} "EntryPoint=(%s),%s\n", $entr->[0], convert_string( $entr->[1] // q{} );
+            push @{$opts{EntryPoint}}, { coords => [ split /\s*,\s*/xms ], name => convert_string( $entr->[1] ) };
         }
     }
 
     for my $polygon ( @plist ) {
-        printf {$out} "Data%d=(%s)\n", $llev, join( q{),(}, map {join( q{,}, reverse @{$_} )} @{$polygon} )
-            if scalar @{$polygon} > 2;
+        next if @$polygon < 3;
+        push @{ $opts{contours} }, [ map { [ reverse @{$_} ] } @$polygon ];
     }
 
     ## Rusa - floors
     if ( my $levels = $tag{'building:levels'} ) {
         $levels =~ s/\D.*//x;
-        printf {$out} "Floors=%d\n",  0 + $levels;
+        $opts{Floors} = 0 + $levels;
     }
     if ( my $height = $tag{'building:height'} // $tag{'height'} ) {
         $height =~ s/\D.*//x;
-        printf {$out} "Floors=%d\n",  3 * $height;
+        $opts{Floors} = 3 * $height;
     }
 
     for my $key ( keys %param ) {
         next unless $key =~ /^_*[A-Z]/;
         next if !defined $param{$key} || $param{$key} eq q{};
-        printf {$out} "$key=%s\n", convert_string($param{$key});
+        $opts{$key} = convert_string( $param{$key} );
     }
 
-    print {$out} "[END]\n\n\n";
+    print {$out} $ttc->process( polygon => { comment => $comment, opts => \%opts } );
+
     return;
 }
 
@@ -2985,7 +2983,7 @@ sub execute_action {
 
             $objinfo{areas} = [ [ map { [reverse split q{,}, $node{$_}] } @{$obj->{chain}} ] ];
             if ( $mpoly{$obj->{id}} ) {
-                $objinfo{comment} .= sprintf "\n; multipolygon with %d holes", scalar @{$mpoly{$obj->{id}}};
+                $objinfo{comment} .= sprintf "\nmultipolygon with %d holes", scalar @{$mpoly{$obj->{id}}};
                 for my $hole ( grep { exists $waychain{$_} } @{$mpoly{$obj->{id}}} ) {
                     push @{$objinfo{holes}}, [ map { [reverse split q{,}, $node{$_}] } @{$waychain{$hole}} ];
                 }
