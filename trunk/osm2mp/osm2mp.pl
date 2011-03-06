@@ -1702,7 +1702,7 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
             next;
         }
 
-        report( "RelID = $relid (from $tr->{fr_way} $tr->{type} $tr->{to_way})", 'INFO' );
+        $tr->{comment} = "RelID = $relid: from $tr->{fr_way} $tr->{type} $tr->{to_way}";
 
         if ( $tr->{type} eq 'sign' ) {
             $countsigns ++;
@@ -1731,7 +1731,7 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
 
                 if (  $newtr{to_pos} < $#{$road{$roadid}->{chain}}
                   &&  !( $tr->{to_way} eq $roadid  &&  $tr->{to_dir} eq 1 ) ) {
-                    report( "To road $roadid forward", 'INFO' );
+                    $newtr{comment} = "$tr->{comment}\nSo restrict to $roadid forward";
                     $newtr{to_dir} = 1;
                     $counttrest ++;
                     write_turn_restriction (\%newtr);
@@ -1740,7 +1740,7 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
                 if (  $newtr{to_pos} > 0
                   &&  !( $tr->{to_way} eq $roadid  &&  $tr->{to_dir} eq -1 )
                   &&  $road{$roadid}->{rp} !~ /^.,.,1/ ) {
-                    report( "To road $roadid backward", 'INFO' );
+                    $newtr{comment} = "$tr->{comment}\nSo restrict to $roadid backward";
                     $newtr{to_dir} = -1;
                     $counttrest ++;
                     write_turn_restriction (\%newtr);
@@ -1754,11 +1754,11 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
     print_section( 'Barriers' );
 
     for my $node ( keys %barrier ) {
-        report( "$barrier{$node}->{type}   NodeID = $node", 'INFO' );
         my %newtr = (
             node    => $node,
             type    => 'no',
             param   => $barrier{$node}->{param},
+            comment => "NodeID = $node\nbarrier = $barrier{$node}->{type}",
         );
         for my $way_from ( @{$nodeways{$node}} ) {
             $newtr{fr_way} = $way_from;
@@ -1944,23 +1944,25 @@ sub write_turn_restriction {            # \%trest
     }
 
     unless ( ${nodid{$tr->{node}}} ) {
-        print {$out} "; Outside boundaries\n";
+        print {$out} $ttc->process( comment => { text => "$tr->{comment}\nOutside boundaries" } );
         return;
     }
 
+    my %opts = (
+        node_from   => $nodid{ $road{$tr->{fr_way}}->{chain}->[$i] },
+        node_via    => $nodid{ $tr->{node} },
+        node_to     => $nodid{ $road{$tr->{to_way}}->{chain}->[$j] },
+        road_from   => $roadid{ $tr->{fr_way} },
+        road_to     => $roadid{$tr->{to_way}},
+    );
+
     if ( $tr->{type} eq 'sign' ) {
-        print {$out}  "[Sign]\n";
-        print {$out}  "SignPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
-        print {$out}  "SignRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
-        print {$out}  "SignParam=T,$tr->{name}\n";
-        print {$out}  "[END-Sign]\n\n";
+        $opts{param} = "T,$tr->{name}";
+        print {$out} $ttc->process( destination_sign => { comment => $tr->{comment}, opts => \%opts } );
     }
     else {
-        print {$out}  "[Restrict]\n";
-        print {$out}  "TraffPoints=${nodid{$road{$tr->{fr_way}}->{chain}->[$i]}},${nodid{$tr->{node}}},${nodid{$road{$tr->{to_way}}->{chain}->[$j]}}\n";
-        print {$out}  "TraffRoads=${roadid{$tr->{fr_way}}},${roadid{$tr->{to_way}}}\n";
-        print {$out}  "RestrParam=$tr->{param}\n"     if $tr->{param};
-        print {$out}  "[END-Restrict]\n\n";
+        $opts{param} = $tr->{param}    if $tr->{param};
+        print {$out} $ttc->process( turn_restriction => { comment => $tr->{comment}, opts => \%opts } );
     }
 
     return;
