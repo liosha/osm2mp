@@ -2111,13 +2111,14 @@ sub WritePOI {
     return      unless  exists $param{nodeid}  ||  exists $param{latlon};
     return      unless  exists $param{type};
 
-    my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
-    my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
+    my $llev  =  $param{level_l} || '0';
+    my $hlev  =  $param{level_h} || '0';
 
-    print {$out}  "; $param{comment}\n"            if  exists $param{comment};
+    my $comment = $param{comment} || q{};
+
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        print {$out} "; $key = $val\n";
+        $comment .= "\n$key = $val";
     }
 
     my $data;
@@ -2141,20 +2142,23 @@ sub WritePOI {
             } @stops ) . q{)}   if @stops;
     }
 
-    print  {$out} "[POI]\n";
-    print  {$out} "Type=$param{type}\n";
-    printf {$out} "Label=%s\n", convert_string( $label )
-        if $label ne q{}  &&  !exists( $param{Label} );
-    printf {$out} "Data%d=$data\n", $llev;
-    print  {$out} "EndLevel=$hlev\n"       if  $hlev > $llev;
+    my %opts = (
+        Type        => $param{type},
+        "Data$llev" => $data,
+    );
+
+    $opts{Label}    = convert_string( $label )  unless $label;
+    $opts{EndLevel} = $hlev                     if $hlev;
 
     # region and country - for cities
-    if ( $poiregion  &&  $label  &&  $param{add_region} ) {
+    if ( $poiregion  &&  $label  &&  $param{add_region} && !$param{add_contacts} ) {
+        my $country = name_from_list( 'country', $param{tags});
         my $region  = name_from_list( 'region', $param{tags});
-        $region .= q{ }. $tag{'addr:district'}     if exists $tag{'addr:district'};
-        printf {$out} "RegionName=%s\n", convert_string( $region )     if $region;
-        my $country = convert_string( name_from_list( 'country', $param{tags}) );
-        printf {$out} "CountryName=%s\n", convert_string( $country )   if $country;
+        $region .= " $tag{'addr:district'}"         if $tag{'addr:district'};
+        $region .= " $tag{'addr:subdistrict'}"      if $tag{'addr:subdistrict'};
+
+        $opts{RegionName}  = convert_string( $region )      if $region;
+        $opts{CountryName} = convert_string( $country )     if $country;
     }
 
     # contact information: address, phone
@@ -2162,34 +2166,27 @@ sub WritePOI {
         my $cityid = FindCity( $param{nodeid} || $param{latlon} );
         if ( $cityid ) {
             my $city = $city{ $cityid };
-            printf {$out} "CityName=%s\n", convert_string( $city->{name} );
-            printf {$out} "RegionName=%s\n", convert_string( $city->{region} )        if  $city->{region};
-            printf {$out} "CountryName=%s\n", convert_string( $city->{country} )      if  $city->{country};
+            $opts{CityName}    = convert_string( $city->{name} );
+            $opts{RegionName}  = convert_string( $city->{region} )      if  $city->{region};
+            $opts{CountryName} = convert_string( $city->{country} )     if  $city->{country};
         }
         elsif ( $defaultcity ) {
-            printf {$out} "CityName=$defaultcity\n";
+            $opts{CityName}    = $defaultcity;
         }
 
-        my $housenumber = name_from_list( 'house', \%tag );
-        $housenumber = $param{housenumber}
-            if exists $param{housenumber} && !defined $housenumber;
-        printf {$out} "HouseNumber=%s\n", convert_string( $housenumber )     if $housenumber;
+        my $housenumber = $param{housenumber} || name_from_list( 'house', \%tag );
+        $opts{HouseNumber} = convert_string( $housenumber )     if $housenumber;
 
-        my $street = $tag{'addr:street'};
-        $street = $param{street}
-            if exists $param{street} && !defined $street;
-        $street //= ( $city ? $city->{name} : $defaultcity );
-
+        my $street = $param{street} || $tag{'addr:street'} || ( $city ? $city->{name} : $defaultcity );
         if ( $street ) {
             my $suburb = FindSuburb( $param{nodeid} || $param{latlon} );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
-            printf {$out} "StreetDesc=%s\n", convert_string( $street );
+            $opts{StreetDesc} = convert_string( $street );
         }
 
-        printf {$out} "Zip=%s\n",          convert_string($tag{'addr:postcode'})   if exists $tag{'addr:postcode'};
-        printf {$out} "Phone=%s\n",        convert_string($tag{'phone'})           if exists $tag{'phone'};
-        printf {$out} "WebPage=%s\n",      convert_string($tag{'url'})             if exists $tag{'url'};
-        printf {$out} "WebPage=%s\n",      convert_string($tag{'website'})         if exists $tag{'website'};
+        $opts{Zip}      = convert_string($tag{'addr:postcode'})   if $tag{'addr:postcode'};
+        $opts{Phone}    = convert_string($tag{'phone'})           if $tag{'phone'};
+        $opts{WebPage}  = convert_string($tag{'website'})         if $tag{'website'};
     }
 
     # marine data
@@ -2236,14 +2233,14 @@ sub WritePOI {
     ## Buoys
     if ( $marine  &&  $param{add_buoy} ) {
         if ( my $buoy_type = ( $tag{'buoy'} or $tag{'beacon'} ) ) {
-            print {$out} "FoundationColor=$buoy_color{$buoy_type}\n";
+            $opts{FoundationColor} = $buoy_color{$buoy_type};
         }
         if ( my $buoy_light = ( $tag{'light:colour'} or $tag{'seamark:light:colour'} ) ) {
-            print {$out} "Light=$light_color{$buoy_light}\n";
+            $opts{Light} = $light_color{$buoy_light};
         }
         if ( my $light_type = ( $tag{'light:character'} or $tag{'seamark:light:character'} ) ) {
             ( $light_type ) = split /[\(\. ]/, $light_type;
-            print {$out} "LightType=$light_type{$light_type}\n";
+            $opts{LightType} = $light_type{$light_type};
         }
     }
 
@@ -2261,27 +2258,28 @@ sub WritePOI {
             }
         }
 
-        printf {$out} "Light=%s\n", join( q{,},
+        $opts{Light} = join( q{,},
             map { sprintf "(%s,%d,$_->[1])", ($light_color{$_->[0]} or '0'), $_->[3]/10 }
                 sort { $a->[1] <=> $b->[1] } @sectors
             );
 
         my $light_type = ( $tag{'light:character'} or $tag{'seamark:light:character'} or 'isophase' );
         ( $light_type ) = split /[\(\. ]/, $light_type;
-        print {$out} "LightType=$light_type{$light_type}\n"     if $light_type{$light_type};
+        $opts{LightType} = $light_type{$light_type}     if $light_type{$light_type};
 
         for my $sector ( grep { /seamark:light:\d/ } keys %tag ) {
-            print {$out} ";;; $sector -> $tag{$sector}\n";
+            $comment .= "\n$sector -> $tag{$sector}";
         }
     }
 
     # other parameters - capital first letter!
     for my $key ( grep { /^_*[A-Z]/ } keys %param ) {
-        next    if !defined $param{$key} || $param{$key} eq q{};
-        printf {$out} "$key=%s\n", convert_string($param{$key}, 1);
+        next    unless !defined $param{$key} || $param{$key} eq q{};
+        $opts{$key} = convert_string($param{$key}, 1);
     }
 
-    print  {$out} "[END]\n\n";
+    print {$out} $ttc->process( point => { comment => $comment, opts => \%opts } );
+
     return;
 }
 
