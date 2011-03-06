@@ -2108,8 +2108,7 @@ sub WritePOI {
 
     my %tag   = exists $param{tags} ? %{$param{tags}} : ();
 
-    return      unless  exists $param{nodeid}  ||  exists $param{latlon};
-    return      unless  exists $param{type};
+    return  unless  exists $param{nodeid}  ||  exists $param{latlon};
 
     my $comment = $param{comment} || q{};
 
@@ -2330,44 +2329,41 @@ sub CalcAccessRules {
 sub WriteLine {
 
     my %param = %{$_[0]};
-    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
+    my %tag   = ref $param{tags} ? %{$param{tags}} : ();
 
-    return      unless  exists $param{chain};
-    return      unless  exists $param{type};
+    return unless $param{chain};
 
-    my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
-    my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
+    my %opts = (
+        lzoom   => $param{level_l} || '0',
+        hzoom   => $param{level_h} || '0',
+        Type    => $param{type},
+    );
 
-    printf {$out} "; $param{comment}\n"      if  exists $param{comment};
+    my $comment = $param{comment} || q{};
+
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        print {$out} "; $key = $val\n";
+        $comment .= "\n$key = $val";
     }
 
-    print  {$out} "[POLYLINE]\n";
-    printf {$out} "Type=%s\n",         $param{type};
-    printf {$out} "EndLevel=%d\n",     $hlev           if $hlev > $llev;
-    printf {$out} "Data%d=(%s)\n",     $llev, join( q{),(}, @node{ @{ $param{chain} } } );
+    $opts{chain} = [ map { [ split /\s*,\s*/xms ] } @node{ @{ $param{chain} } } ];
 
-    printf {$out} "Label=%s\n", convert_string( $param{name} )
-        if !exists $param{Label} && $param{name} ne q{};
+    $opts{Label}       = convert_string( $param{name} )   if defined $param{name} && $param{name} ne q{};
+    $opts{RoadID}      = $param{roadid}         if exists $param{roadid};
+    $opts{RouteParams} = $param{routeparams}    if exists $param{routeparams};
 
-    # road data
-    printf {$out} "RoadID=$param{roadid}\n"            if exists $param{roadid};
-    printf {$out} "RouteParams=$param{routeparams}\n"  if exists $param{routeparams};
-
-    my $nodcount = 0;
     for my $nod ( @{$param{nod}} ) {
-        printf {$out} "Nod%d=%d,%d,%d\n", $nodcount++, @$nod[0,1], $$nod[2]//0;
+        push @{ $opts{nods} }, [ @$nod[0,1], $$nod[2] || '0' ];
     }
 
     # the rest tags (capitals!)
     for my $key ( sort keys %param ) {
         next unless $key =~ /^_*[A-Z]/;
         next if !$param{$key} || $param{$key} eq q{};
-        printf {$out} "$key=%s\n", convert_string( $param{$key} );
+        $opts{$key} = convert_string( $param{$key} );
     }
-    print  {$out} "[END]\n\n\n";
+
+    print {$out} $ttc->process( polyline => { comment => $comment, opts => \%opts } );
     return;
 }
 
@@ -2463,7 +2459,7 @@ sub AddRoad {
     # FIXME: buggy object comment
     while ( my ( $key, $val ) = each %tag ) {
         next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
-        $road{$param{id}}->{comment} .= "\n; $key = $tag{$key}";
+        $road{$param{id}}->{comment} .= "\n$key = $tag{$key}";
     }
 
     # the rest object parameters (capitals!)
@@ -2621,7 +2617,7 @@ sub WritePolygon {
         # entrances
         for my $entr ( @{ $param{entrance} } ) {
             next unless !$bounds || is_inside_bounds( $entr->[0] );
-            push @{$opts{EntryPoint}}, { coords => [ split /\s*,\s*/xms ], name => convert_string( $entr->[1] ) };
+            push @{$opts{EntryPoint}}, { coords => [ split /\s*,\s*/xms, $entr->[0] ], name => convert_string( $entr->[1] ) };
         }
     }
 
