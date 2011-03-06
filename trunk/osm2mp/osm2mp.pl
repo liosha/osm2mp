@@ -60,7 +60,7 @@ use Data::Dumper;
 
 
 
-our $VERSION = '0.90_1';
+our $VERSION = '0.91_2';
 
 
 
@@ -322,7 +322,7 @@ for my $template ( keys %{ $config{output} } ) {
 $mp_opts->{DefaultCityCountry} = $country_code{uc $mp_opts->{DefaultCityCountry}}
     if $mp_opts->{DefaultCityCountry} && $country_code{uc $mp_opts->{DefaultCityCountry}};
 
-print {$out} $ttc->process( 'header', { opts => $mp_opts, version => $VERSION } );
+print {$out} $ttc->process( header => { opts => $mp_opts, version => $VERSION } );
 
 
 
@@ -758,8 +758,7 @@ undef %ways_to_load;
 
 
 print STDERR "Processing multipolygons  ";
-
-print {$out} "\n\n\n; ### Multipolygons\n\n";
+print_section( 'Multipolygons' );
 
 # load addressing polygons
 if ( $addressing && exists $config{address} ) {
@@ -828,8 +827,7 @@ my %entrance;
 
 
 print STDERR "Processing nodes...       ";
-
-print {$out} "\n\n\n; ### Points\n\n";
+print_section( 'Points' );
 
 my $countpoi = 0;
 my $nodeid;
@@ -910,8 +908,7 @@ my %coast;
 my %hlevel;
 
 print STDERR "Processing ways...        ";
-
-print {$out} "\n\n\n; ### Lines and polygons\n\n";
+print_section( 'Lines and polygons' );
 
 my $countlines  = 0;
 $countpolygons  = 0;
@@ -1008,7 +1005,7 @@ undef %waychain;
 ####    Writing non-addressed POIs
 
 if ( %poi ) {
-    print {$out} "\n\n\n; ### Non-addressed POIs\n\n";
+    print_section( 'Non-addressed POIs' );
     while ( my ($id,$list) = each %poi ) {
         for my $poi ( @$list ) {
             WritePOI( $poi );
@@ -1025,8 +1022,8 @@ if ( $shorelines ) {
 
     my $boundcross = 0;
 
-    print {$out} "\n\n\n; ### Sea areas generated from coastlines\n\n";
     print STDERR "Processing shorelines...  ";
+    print_section( 'Sea areas generated from coastlines' );
 
 
     ##  merging
@@ -1222,7 +1219,7 @@ my %nodeways;
 
 if ( $routing ) {
 
-    print {$out} "\n\n\n; ### Roads\n\n";
+    print_section( 'Roads' );
 
     ###     detecting end nodes
 
@@ -1365,7 +1362,6 @@ if ( $routing ) {
         my %segway;
 
         print STDERR "Detecting duplicates...   ";
-        print {$out} "\n\n\n";
 
         while ( my ($roadid, $road) = each %road ) {
             for my $i ( 0 .. $#{$road->{chain}} - 1 ) {
@@ -1405,7 +1401,6 @@ if ( $routing ) {
     if ( $splitroads ) {
 
         print STDERR "Splitting roads...        ";
-        print {$out} "\n\n\n";
 
         my $countself = 0;
         my $countlong = 0;
@@ -1572,7 +1567,6 @@ if ( $routing ) {
 
     if ( $fixclosenodes ) {
 
-        print {$out} "\n\n\n";
         print STDERR "Fixing close nodes...     ";
 
         my $countclose = 0;
@@ -1674,7 +1668,7 @@ if ( $routing ) {
 
 if ( $bounds && $background  &&  exists $config{types}->{background} ) {
 
-    print {$out} "\n\n\n; ### Background\n\n";
+    print_section( 'Background' );
 
     WritePolygon({
             type    => $config{types}->{background}->{type},
@@ -1691,9 +1685,8 @@ if ( $bounds && $background  &&  exists $config{types}->{background} ) {
 
 if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
 
-    print {$out} "\n\n\n; ### Turn restrictions and signs\n\n";
-
     print STDERR "Writing crossroads...     ";
+    print_section( 'Turn restrictions and signs' );
 
     my $counttrest = 0;
     my $countsigns = 0;
@@ -1709,7 +1702,7 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
             next;
         }
 
-        print {$out} "\n; RelID = $relid (from $tr->{fr_way} $tr->{type} $tr->{to_way})\n\n";
+        report( "RelID = $relid (from $tr->{fr_way} $tr->{type} $tr->{to_way})", 'INFO' );
 
         if ( $tr->{type} eq 'sign' ) {
             $countsigns ++;
@@ -1738,7 +1731,7 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
 
                 if (  $newtr{to_pos} < $#{$road{$roadid}->{chain}}
                   &&  !( $tr->{to_way} eq $roadid  &&  $tr->{to_dir} eq 1 ) ) {
-                    print {$out} "; To road $roadid forward\n";
+                    report( "To road $roadid forward", 'INFO' );
                     $newtr{to_dir} = 1;
                     $counttrest ++;
                     write_turn_restriction (\%newtr);
@@ -1747,7 +1740,7 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
                 if (  $newtr{to_pos} > 0
                   &&  !( $tr->{to_way} eq $roadid  &&  $tr->{to_dir} eq -1 )
                   &&  $road{$roadid}->{rp} !~ /^.,.,1/ ) {
-                    print {$out} "; To road $roadid backward\n";
+                    report( "To road $roadid backward", 'INFO' );
                     $newtr{to_dir} = -1;
                     $counttrest ++;
                     write_turn_restriction (\%newtr);
@@ -1758,9 +1751,10 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
 
     ##  Barriers
 
-    print {$out} "\n; ### Barriers\n\n";
+    print_section( 'Barriers' );
+
     for my $node ( keys %barrier ) {
-        print {$out} "; $barrier{$node}->{type}   NodeID = $node \n\n";
+        report( "$barrier{$node}->{type}   NodeID = $node", 'INFO' );
         my %newtr = (
             node    => $node,
             type    => 'no',
@@ -1817,16 +1811,16 @@ print {$out} $ttc->process( 'footer' );
 
 ####    Functions
 
-sub convert_string {            # String
+sub convert_string {
 
     my ($str) = @_;
-    return $str     unless $str;
+    return q{}     unless $str;
 
     if ( $cmap ) {
         $cmap->( $str );
     }
 
-    $str = uc($str)             if $upcase;
+    $str = uc($str)     if $upcase;
 
     $str =~ s/\&#(\d+)\;/chr($1)/ge;
     $str =~ s/\&amp\;/\&/gi;
@@ -3121,7 +3115,14 @@ sub report {
     $type //= 'ERROR';
 
     # should be extended
-    say {$out} $ttc->process( 'comment', { text => "$type: $msg" } );
+    say {$out} $ttc->process( comment => { text => "$type: $msg" } );
+    return;
+}
+
+
+sub print_section {
+    my ($title) = @_;
+    say {$out} "\n\n" . $ttc->process( comment => { text => "### $title" } ) . "\n";
     return;
 }
 
