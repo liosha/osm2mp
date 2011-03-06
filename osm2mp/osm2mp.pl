@@ -2147,7 +2147,7 @@ sub WritePOI {
             } @stops ) . q{)}   if @stops;
     }
 
-    $opts{Label}    = convert_string( $label )  unless $label;
+    $opts{Label}    = convert_string( $label )  if $label;
 
     # region and country - for cities
     if ( $poiregion  &&  $label  &&  $param{add_region} && !$param{add_contacts} ) {
