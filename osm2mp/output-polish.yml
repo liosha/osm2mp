@@ -57,6 +57,16 @@ header: |
 footer: |
   [%- "\n\n" -%]
   [% INCLUDE comment
-    text = "###  That's all, folks!"
+      text = "###  That's all, folks!"
    %]
 
+
+
+point: |
+  [% INCLUDE comment  text = comment  IF comment -%]
+  [POI]
+  [% FOREACH key IN opts.keys -%]
+  [% key %]=[% opts.$key %]
+  [% END -%]
+  [END]
+  [% %]
