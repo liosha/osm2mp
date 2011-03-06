@@ -2121,12 +2121,17 @@ sub WritePOI {
         $comment .= "\n$key = $val";
     }
 
-    my $data;
-    $data = "($node{$param{nodeid}})"    if  exists $param{nodeid};
-    $data = "($param{latlon})"           if  exists $param{latlon};
+    my $data = $param{latlon} || $node{$param{nodeid}};
     return unless $data;
 
-    my $label = exists $param{name} ? $param{name} : q{};
+    my %opts = (
+        coords  => [ split /\s*,\s*/xms, $data ],
+        lzoom   => $param{level_l} || '0',
+        hzoom   => $param{level_h} || '0',
+        Type    => $param{type},
+    );
+
+    my $label = defined $param{name} ? $param{name} : q{};
 
     if ( exists $param{add_elevation} && exists $tag{'ele'} ) {
         $label .= '~[0x1f]' . $tag{'ele'};
@@ -2142,13 +2147,7 @@ sub WritePOI {
             } @stops ) . q{)}   if @stops;
     }
 
-    my %opts = (
-        Type        => $param{type},
-        "Data$llev" => $data,
-    );
-
     $opts{Label}    = convert_string( $label )  unless $label;
-    $opts{EndLevel} = $hlev                     if $hlev;
 
     # region and country - for cities
     if ( $poiregion  &&  $label  &&  $param{add_region} && !$param{add_contacts} ) {

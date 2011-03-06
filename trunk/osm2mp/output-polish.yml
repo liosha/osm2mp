@@ -65,6 +65,11 @@ footer: |
 point: |
   [% INCLUDE comment  text = comment  IF comment -%]
   [POI]
+  Data[% opts.lzoom %]=([% opts.coords.0 %],[% opts.coords.1 %])
+  [% IF opts.hzoom -%]
+  EndLevel=[% opts.hzoom %]
+  [% END -%]
+  [% opts.delete( 'lzoom', 'hzoom', 'coords' ) -%]
   [% FOREACH key IN opts.keys -%]
   [% key %]=[% opts.$key %]
   [% END -%]
