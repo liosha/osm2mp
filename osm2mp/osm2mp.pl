@@ -36,12 +36,14 @@ use lib $Bin;
 
 use POSIX;
 use YAML 0.72;
-use Template::Context;
 use Getopt::Long qw{ :config pass_through };
 use File::Spec;
 
 use Encode;
 use Encode::Locale;
+
+use Template::Context;
+use Template::Provider;
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
@@ -306,22 +308,29 @@ $transport_mode = $transport_code{ $transport_mode }
 
 
 
-####    Header
+####    Precompiling templates
+
+
+my $ttc = Template::Context->new();
+my $ttp = $ttc->{LOAD_TEMPLATES}->[0];
+$ttp->{STAT_TTL} = 2**31;
+
+for my $template ( keys %{ $config{output} } ) {
+    $ttp->store( $template, $ttc->template( \$config{output}->{$template} ) );
+}
 
 $mp_opts->{DefaultCityCountry} = $country_code{uc $mp_opts->{DefaultCityCountry}}
     if $mp_opts->{DefaultCityCountry} && $country_code{uc $mp_opts->{DefaultCityCountry}};
 
-my $ttc = Template::Context->new();
-print {$out} $ttc->process( \$config{header}, { opts => $mp_opts, version => $VERSION } );
+print {$out} $ttc->process( 'header', { opts => $mp_opts, version => $VERSION } );
 
 
 
-####    Info
-
+####    Opening input
 
 my $infile = shift @ARGV;
-open my $in, '<', $infile;
 print STDERR "Processing file $infile\n\n";
+open my $in, '<', $infile;
 
 
 
@@ -1793,7 +1802,8 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
 
 
 print STDERR "All done!!\n\n";
-print {$out} "\n; ### That's all, folks!\n\n";
+
+print {$out} $ttc->process( 'footer' );
 
 
 
@@ -3111,9 +3121,10 @@ sub report {
     $type //= 'ERROR';
 
     # should be extended
-    print {$out} "; $type: $msg\n\n";
+    say {$out} $ttc->process( 'comment', { text => "$type: $msg" } );
     return;
 }
+
 
 sub looks_like_number {
     return ~~($_[0] =~ /^\d/x);

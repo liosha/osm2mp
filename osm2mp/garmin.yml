@@ -5,6 +5,8 @@
 --- load
 ---
 
+- output-polish.yml
+
 - nodes-common.yml
 - nodes-common-univ.yml
 - nodes-garmin-custom.yml
@@ -28,54 +30,6 @@
 
 - nodes-common-en.yml
 
-
-################################
-##  MP header
-################################
-
---- header
---- |
-  [IMG ID]
-  ID=[% opts.exists('ID') ? opts.ID : '88888888'; opts.delete('ID') %]
-  Name=[% opts.exists('Name') ? opts.Name : 'OSM-based map'; opts.delete('Name') %]
-  Copyright=OpenStreetMap project contributors under CC-BY-SA
- 
-  LblCoding=9
-  CodePage=[% opts.exists('CodePage') ? opts.CodePage : 'utf8'; opts.delete('CodePage') %]
-
-  [% # keys with default values
-    defs = {
-        POINumberFirst='N'
-        MG='Y'
-        POIIndex='Y'
-        Routing='Y'
-        Elevation='M'
-        Preprocess='F'
-        TreSize='3000'
-    }; 
-    FOREACH key IN defs.keys -%]
-  [% key %]=[% opts.exists(key) ? opts.$key : defs.$key; opts.delete(key) %]
-  [% END %]
-
-  [% # keys without default values
-    FOREACH key IN opts.keys -%]
-  [% key %]=[% opts.$key %]
-  [% END %]
-
-  Levels=6
-  Level0=24
-  Level1=22
-  Level2=20
-  Level3=18
-  Level4=16
-  Level5=15
-
-  [END-IMG ID]
-
-  [% USE date -%]
-  ; #### Converted from OpenStreetMap data with osm2mp [% version %] ([% date.format(format='%Y-%m-%d %H:%M:%S') %])
-
-  [% "\n\n" %]
 
 
 ################################
