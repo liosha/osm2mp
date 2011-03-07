@@ -69,6 +69,12 @@
       type: 0x640B
 
 - condition:
+    - landuse = quarry
+  action:
+    - action: write_poi
+      type: 0x640C
+
+- condition:
     - man_made = survey_point|tower|water_tower
   action:
     - action: write_poi
