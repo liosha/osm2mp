@@ -89,6 +89,13 @@
       type: 0x1f
       level_h: 3
 
+- condition:
+    - waterway = ditch
+  action:
+    - action: write_line
+      type: 0x26
+      level_h: 1
+
 
 
 # Boundaries
