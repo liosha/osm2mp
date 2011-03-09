@@ -19,6 +19,14 @@ header: |
  
   LblCoding=9
   CodePage=[% opts.exists('CodePage') ? opts.CodePage : 'utf8'; opts.delete('CodePage') %]
+  
+  [% # default zoomlevels
+    levels = [ 24, 22, 20, 18, 16, 15 ]; -%]
+  Levels=[% levels.size %]
+  [% FOREACH zoom IN [ 0 .. levels.max ];
+    key = "Level$zoom" -%]
+  [% key %]=[% opts.exists(key) ? opts.$key : levels.$zoom %]
+  [% opts.delete(key); END %]
 
   [% # keys with default values
     defs = {
@@ -38,14 +46,6 @@ header: |
     FOREACH key IN opts.keys -%]
   [% key %]=[% opts.$key %]
   [% END %]
-
-  Levels=6
-  Level0=24
-  Level1=22
-  Level2=20
-  Level3=18
-  Level4=16
-  Level5=15
 
   [END-IMG ID]
 
