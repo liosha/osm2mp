@@ -139,9 +139,7 @@ my %interpolation_node;
 my %poi;
 my $poi_rtree = Tree::R->new();
 
-
-# output filehandle
-my $out = *STDOUT{IO};
+my $output_fn;
 
 
 
@@ -215,7 +213,7 @@ print STDERR "Ok\n\n";
 
 # cl-options second pass: tuning
 GetOptions (
-    'output|o=s'        => sub { open $out, '>', $_[1] },
+    'output|o=s'        => \$output_fn,
 
     'mp-header=s%'      => sub { $mp_opts->{$_[1]} = $_[2] },
     'codepage=s'        => \$codepage,
@@ -286,7 +284,8 @@ if ( $codepage =~ / ^ (?: cp | win (?: dows )? )? -? ( \d{3,} ) $ /ixms ) {
     $codepage = "cp$1";
 }
 
-binmode $out, "encoding($codepage)$text_filter:utf8";
+my $binmode = "encoding($codepage)$text_filter:utf8";
+
 
 my $cmap;
 if ( $ttable ) {
@@ -327,8 +326,16 @@ for my $template ( keys %{ $config{output} } ) {
 $mp_opts->{DefaultCityCountry} = $country_code{uc $mp_opts->{DefaultCityCountry}}
     if $mp_opts->{DefaultCityCountry} && $country_code{uc $mp_opts->{DefaultCityCountry}};
 
-print {$out} $ttc->process( header => { opts => $mp_opts, version => $VERSION } );
 
+    
+####    Creating simple multiwriter output
+    
+my $out = {};
+if ( !$output_fn ) {
+    $out->{q{}} = *STDOUT{IO};
+    binmode $out->{q{}}, $binmode;
+    print {$out->{q{}}} $ttc->process( header => { opts => $mp_opts, version => $VERSION } );
+}
 
 
 ####    Opening input
@@ -1805,10 +1812,11 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
 
 
 
-
 print STDERR "All done!!\n\n";
 
-print {$out} $ttc->process( 'footer' );
+for my $group ( keys %$out ) {
+    print {$out->{$group}} $ttc->process( 'footer' );
+}
 
 
 
@@ -1955,7 +1963,7 @@ sub write_turn_restriction {            # \%trest
     }
 
     unless ( ${nodid{$tr->{node}}} ) {
-        print {$out} $ttc->process( comment => { text => "$tr->{comment}\nOutside boundaries" } );
+        output( comment => { text => "$tr->{comment}\nOutside boundaries" } );
         return;
     }
 
@@ -1969,11 +1977,11 @@ sub write_turn_restriction {            # \%trest
 
     if ( $tr->{type} eq 'sign' ) {
         $opts{param} = "T,$tr->{name}";
-        print {$out} $ttc->process( destination_sign => { comment => $tr->{comment}, opts => \%opts } );
+        output( destination_sign => { comment => $tr->{comment}, opts => \%opts } );
     }
     else {
         $opts{param} = $tr->{param}    if $tr->{param};
-        print {$out} $ttc->process( turn_restriction => { comment => $tr->{comment}, opts => \%opts } );
+        output( turn_restriction => { comment => $tr->{comment}, opts => \%opts } );
     }
 
     return;
@@ -2297,7 +2305,7 @@ sub WritePOI {
         $opts{$key} = convert_string($param{$key});
     }
 
-    print {$out} $ttc->process( point => { comment => $comment, opts => \%opts } );
+    output( point => { comment => $comment, opts => \%opts } );
 
     return;
 }
@@ -2387,7 +2395,7 @@ sub WriteLine {
         $opts{$key} = convert_string( $param{$key} );
     }
 
-    print {$out} $ttc->process( polyline => { comment => $comment, opts => \%opts } );
+    output( polyline => { comment => $comment, opts => \%opts } );
     return;
 }
 
@@ -2671,7 +2679,7 @@ sub WritePolygon {
         $opts{$key} = convert_string( $param{$key} );
     }
 
-    print {$out} $ttc->process( polygon => { comment => $comment, opts => \%opts } );
+    output( polygon => { comment => $comment, opts => \%opts } );
 
     return;
 }
@@ -3132,18 +3140,30 @@ sub merge_ampoly {
 
 sub report {
     my ( $msg, $type ) = @_;
-    $type //= 'ERROR';
-
-    # should be extended
-    say {$out} $ttc->process( comment => { text => "$type: $msg" } );
+    $type ||= 'ERROR';
+    output( info => { text => "$type: $msg" } );
     return;
 }
 
 
 sub print_section {
     my ($title) = @_;
-    say {$out} "\n\n" . $ttc->process( comment => { text => "### $title" } ) . "\n";
+    output( section => { text => "### $title" } );
     return;
+}
+
+
+sub output {
+    my ( $template, $data ) = @_;
+    my $group = $output_fn ? $data->{group} || q{} : q{};
+    unless( $out->{$group} ) {
+        my $fn = $output_fn;
+        $fn =~ s/ (?<= . ) ( \. .* $ | $ ) /.$group$1/xms   if $group;
+        open $out->{$group}, ">:$binmode", $fn;
+        print {$out->{$group}} $ttc->process( header => { opts => $mp_opts, group => $group, version => $VERSION } );  
+    }
+
+    print {$out->{$group}} $ttc->process( $template => $data );
 }
 
 
