@@ -2270,9 +2270,10 @@ sub WritePOI {
     }
 
     # other parameters - capital first letter!
-    for my $key ( grep { /^_*[A-Z]/ } keys %param ) {
-        next    unless !defined $param{$key} || $param{$key} eq q{};
-        $opts{$key} = convert_string($param{$key}, 1);
+    for my $key ( keys %param ) {
+        next unless $key =~ / ^ _* [A-Z] /xms;
+        delete $opts{$key} and next     if  !defined $param{$key} || $param{$key} eq q{};
+        $opts{$key} = convert_string($param{$key});
     }
 
     print {$out} $ttc->process( point => { comment => $comment, opts => \%opts } );
