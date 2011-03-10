@@ -112,7 +112,10 @@ my $addrinterpolation = 1;
 my $makepoi         = 1;
 my $country_list;
 
-my $defaultcity;
+my $default_city;
+my $default_region;
+my $default_country;
+
 my $poiregion       = 1;
 my $poicontacts     = 1;
 
@@ -241,7 +244,9 @@ GetOptions (
     'transport=s'       => \$transport_mode,
     'notransport'       => sub { undef $transport_mode },
 
-    'defaultcity=s'     => \$defaultcity,
+    'defaultcity=s'     => \$default_city,
+    'defaultregion=s'   => \$default_region,
+    'defaultcountry=s'  => \$default_country,
 
     'bbox=s'            => \$bbox,
     'bpoly=s'           => \$bpolyfile,
@@ -268,8 +273,8 @@ GetOptions (
     'translit!'         => sub { push @ARGV, '--textfilter', 'Unidecode' },
     'mapid=s'           => sub { push @ARGV, '--mp-header', "ID=$_[1]" },
     'mapname=s'         => sub { push @ARGV, '--mp-header', "Name=$_[1]" },
-    'defaultcountry=s'  => sub { push @ARGV, '--mp-header', "DefaultCityCountry=$_[1]" },
-    'defaultregion=s'   => sub { push @ARGV, '--mp-header', "DefaultRegionCountry=$_[1]" },
+#    'defaultcountry=s'  => sub { push @ARGV, '--mp-header', "DefaultCityCountry=$_[1]" },
+#    'defaultregion=s'   => sub { push @ARGV, '--mp-header', "DefaultRegionCountry=$_[1]" },
 );
 
 usage() unless (@ARGV);
@@ -1619,14 +1624,20 @@ if ( $routing ) {
         $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
 
         if ( $road->{city} ) {
-            my $rcity = $city{$road->{city}};
-            $objinfo{CityName}      = $rcity->{name};
-            $objinfo{RegionName}    = $rcity->{region}  if $rcity->{region};
-            $objinfo{CountryName}   = $rcity->{country} if $rcity->{country};
-        } elsif ( $name  &&  $defaultcity ) {
-            $objinfo{CityName}      = $defaultcity;
-        }
+            my $city = $city{ $road->{city} };
+            my $region  = $city->{region}  || $default_region;
+            my $country = $city->{country} || $default_country;
 
+            $objinfo{CityName}    = convert_string( $city->{name} );
+            $objinfo{RegionName}  = convert_string( $region )  if $region;
+            $objinfo{CountryName} = convert_string( $country ) if $country;
+        }
+        elsif ( $default_city ) {
+            $objinfo{CityName}    = $default_city;
+            $objinfo{RegionName}  = convert_string( $default_region )  if $default_region;
+            $objinfo{CountryName} = convert_string( $default_country ) if $default_country;
+        }
+        
         my @levelchain = ();
         my $prevlevel = 0;
         for my $i ( 0 .. $#{$road->{chain}} ) {
@@ -1999,7 +2010,9 @@ Available options [defaults]:
  --makepoi                 create POIs for polygons          [$onoff[$makepoi]]
  --poiregion               write region info for settlements [$onoff[$poiregion]]
  --poicontacts             write contact info for POIs       [$onoff[$poicontacts]]
- --defaultcity <name>      default city for addresses        [$defaultcity]
+ --defaultcity <name>      default city for addresses        [$default_city]
+ --defaultregion <name>    default region                    [$default_region]
+ --defaultcountry <name>   default country                   [$default_country]
  --countrylist <file>      replace country code by name
 
  --routing                 produce routable map                      [$onoff[$routing]]
@@ -2154,6 +2167,9 @@ sub WritePOI {
         $region .= " $tag{'addr:district'}"         if $tag{'addr:district'};
         $region .= " $tag{'addr:subdistrict'}"      if $tag{'addr:subdistrict'};
 
+        $region  ||= $default_region;
+        $country ||= $default_country;
+
         $opts{RegionName}  = convert_string( $region )      if $region;
         $opts{CountryName} = convert_string( $country )     if $country;
     }
@@ -2163,18 +2179,23 @@ sub WritePOI {
         my $cityid = FindCity( $param{nodeid} || $param{latlon} );
         if ( $cityid ) {
             my $city = $city{ $cityid };
+            my $region  = $city->{region}  || $default_region;
+            my $country = $city->{country} || $default_country;
+
             $opts{CityName}    = convert_string( $city->{name} );
-            $opts{RegionName}  = convert_string( $city->{region} )      if  $city->{region};
-            $opts{CountryName} = convert_string( $city->{country} )     if  $city->{country};
+            $opts{RegionName}  = convert_string( $region )  if $region;
+            $opts{CountryName} = convert_string( $country ) if $country;
         }
-        elsif ( $defaultcity ) {
-            $opts{CityName}    = $defaultcity;
+        elsif ( $default_city ) {
+            $opts{CityName}    = $default_city;
+            $opts{RegionName}  = convert_string( $default_region )  if $default_region;
+            $opts{CountryName} = convert_string( $default_country ) if $default_country;
         }
 
         my $housenumber = $param{housenumber} || name_from_list( 'house', \%tag );
         $opts{HouseNumber} = convert_string( $housenumber )     if $housenumber;
 
-        my $street = $param{street} || $tag{'addr:street'} || ( $city ? $city->{name} : $defaultcity );
+        my $street = $param{street} || $tag{'addr:street'} || ( $city ? $city->{name} : $default_city );
         if ( $street ) {
             my $suburb = FindSuburb( $param{nodeid} || $param{latlon} );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
@@ -2599,7 +2620,7 @@ sub WritePolygon {
 
             my $street = $tag{'addr:street'};
             $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
-            $street //= ( $city ? $city->{name} : $defaultcity );
+            $street //= ( $city ? $city->{name} : $default_city );
 
             my $suburb = FindSuburb( $plist[0]->[0] );
             $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
@@ -2608,12 +2629,17 @@ sub WritePolygon {
             $opts{StreetDesc}  = convert_string( $street )     if defined $street && $street ne q{};
 
             if ( $city ) {
+                my $region  = $city->{region}  || $default_region;
+                my $country = $city->{country} || $default_country;
+
                 $opts{CityName}    = convert_string( $city->{name} );
-                $opts{RegionName}  = convert_string( $city->{region} )      if $city->{region};
-                $opts{CountryName} = convert_string( $city->{country} )     if $city->{country};
+                $opts{RegionName}  = convert_string( $region )  if $region;
+                $opts{CountryName} = convert_string( $country ) if $country;
             }
-            elsif ( $defaultcity ) {
-                $opts{CityName}    = $defaultcity;
+            elsif ( $default_city ) {
+                $opts{CityName}    = $default_city;
+                $opts{RegionName}  = convert_string( $default_region )  if $default_region;
+                $opts{CountryName} = convert_string( $default_country ) if $default_country;
             }
         }
 
