@@ -10,6 +10,13 @@ comment: |
   [% FOREACH line IN text.split('\n'); "; $line\n"; END -%]
 
 
+info: |
+  [% INCLUDE comment  text = text; "\n" -%]
+
+
+section: |
+  [% "\n\n"; INCLUDE comment  text = text; "\n\n" -%]
+
 
 header: |
   [IMG ID]
