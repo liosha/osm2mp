@@ -21,6 +21,21 @@
 
 
 ################################
+##  Predefined command-line options
+################################
+
+
+--- command-line
+--- > 
+  --countrylist "iso-3166-1-a2-en.txt"
+  --disableuturns
+  --shorelines
+  --hugesea 100000
+  --marine
+
+
+
+################################
 ##  Name selection priority
 ################################
 

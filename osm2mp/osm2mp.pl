@@ -54,10 +54,6 @@ use List::Util qw{ first reduce sum min max };
 use List::MoreUtils qw{ all none any first_index last_index uniq };
 #use Scalar::Util qw{ looks_like_number };
 
-# debug
-use Data::Dump 'dd';
-use Data::Dumper;
-
 
 
 our $VERSION = '0.91_2';
@@ -87,7 +83,7 @@ my $restrictions    = 1;
 my $barriers        = 1;
 my $disableuturns   = 0;
 my $destsigns       = 1;
-my $detectdupes     = 1;
+my $detectdupes     = 0;
 
 my $roadshields     = 1;
 my $transportstops  = 1;
@@ -153,7 +149,6 @@ for ( @ARGV ) {   $_ = decode 'locale', $_   }
 
 GetOptions (
     'config=s@'         => \$config,
-    'countrylist=s'     => \$country_list,
 );
 
 my %config;
@@ -167,6 +162,9 @@ while ( my $cfgfile = shift @$config ) {
             for my $addcfg ( @$item ) {
                 push @$config, File::Spec->catpath( $vol, $dir, $addcfg );
             }
+        }
+        elsif ( $key eq 'command-line' ) {
+            unshift @ARGV, grep {defined} ( $item =~ m{ (?: '([^']*)' | "([^"]*)" | (\S+) ) }gxms );
         }
         elsif ( $key eq 'yesno' ) {
             %yesno = %{ $item };
@@ -193,6 +191,10 @@ while ( my $cfgfile = shift @$config ) {
         }
     }
 }
+
+GetOptions (
+    'countrylist=s'     => \$country_list,
+);
 
 my %country_code;
 if ( $country_list ) {

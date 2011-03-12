@@ -12,6 +12,20 @@
 
 
 ################################
+##  Predefined command-line options
+################################
+
+
+--- command-line
+--- > 
+  --nodisableuturns
+  --shorelines
+  --hugesea 100000
+  --marine
+
+
+
+################################
 ##  Name selection priority
 ################################
 
