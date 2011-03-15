@@ -64,6 +64,8 @@ our $VERSION = '0.91_2';
 
 my $config          = [ 'garmin.yml' ];
 
+my $output_fn;
+my $multiout;
 my $codepage        = '1251';
 my $mp_opts         = {};
 
@@ -135,7 +137,6 @@ my %interpolation_node;
 my %poi;
 my $poi_rtree = Tree::R->new();
 
-my $output_fn;
 
 
 
@@ -216,6 +217,7 @@ print STDERR "Ok\n\n";
 # cl-options second pass: tuning
 GetOptions (
     'output|o=s'        => \$output_fn,
+    'multiout=s'        => \$multiout,
 
     'mp-header=s%'      => sub { $mp_opts->{$_[1]} = $_[2] },
     'codepage=s'        => \$codepage,
@@ -1814,12 +1816,11 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
 
 
 
-print STDERR "All done!!\n\n";
-
-for my $group ( keys %$out ) {
-    print {$out->{$group}} $ttc->process( 'footer' );
+for my $file ( keys %$out ) {
+    print {$out->{$file}} $ttc->process( 'footer' );
 }
 
+print STDERR "All done!!\n\n";
 
 
 #### The end
@@ -2001,9 +2002,10 @@ Usage:  osm2mp.pl [options] file.osm
 
 Available options [defaults]:
 
- --output <file>           output to file       [stdout]
- --config <file>           configuration file   [ @$config ]
+ --config <file>           configuration file                [garmin.yml]
 
+ --output <file>           output to file                    [${\( $output_fn || 'stdout' )}]
+ --multiout <key>          write output to multiple files    [${\( $multiout  || 'off' )}]
  --mp-header <key>=<value> MP header values
 
  --codepage <num>          codepage number                   [$codepage]
@@ -3157,12 +3159,12 @@ sub print_section {
 
 sub output {
     my ( $template, $data ) = @_;
-    my $group = $output_fn ? $data->{group} || q{} : q{};
+    my $group = $multiout && $output_fn ? $data->{$multiout} || $data->{opts}->{$multiout} || q{} : q{};
     unless( $out->{$group} ) {
         my $fn = $output_fn;
         $fn =~ s/ (?<= . ) ( \. .* $ | $ ) /.$group$1/xms   if $group;
         open $out->{$group}, ">:$binmode", $fn;
-        print {$out->{$group}} $ttc->process( header => { opts => $mp_opts, group => $group, version => $VERSION } );  
+        print {$out->{$group}} $ttc->process( header => { opts => $mp_opts, $multiout => $group, version => $VERSION } );
     }
 
     print {$out->{$group}} $ttc->process( $template => $data );
