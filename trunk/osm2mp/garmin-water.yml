@@ -5,9 +5,9 @@
 --- load
 ---
 
-- output-polish.yml
+- polish-mp/output-polish.yml
 
-- ways-roads-waterway.yml
+- polish-mp/ways-roads-waterway.yml
 
 
 

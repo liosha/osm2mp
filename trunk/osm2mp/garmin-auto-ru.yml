@@ -5,20 +5,20 @@
 --- load
 ---
 
-- output-polish.yml
+- polish-mp/output-polish.yml
 
-- nodes-common.yml
-- nodes-garmin-custom.yml
+- polish-mp/nodes-common.yml
+- polish-mp/nodes-garmin-custom.yml
 
-- ways-lines-common.yml
-- ways-lines-garmin-custom.yml
+- polish-mp/ways-lines-common.yml
+- polish-mp/ways-lines-garmin-custom.yml
 
-- ways-areas-common.yml
-- ways-areas-garmin-custom.yml
-- ways-roads-common.yml
-- ways-roads-garmin.yml
+- polish-mp/ways-areas-common.yml
+- polish-mp/ways-areas-garmin-custom.yml
+- polish-mp/ways-roads-common.yml
+- polish-mp/ways-roads-garmin.yml
 
-- nodes-common-ru.yml
+- polish-mp/nodes-common-ru.yml
 
 
 
