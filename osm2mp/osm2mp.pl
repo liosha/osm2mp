@@ -3164,7 +3164,7 @@ sub output {
         my $fn = $output_fn;
         $fn =~ s/ (?<= . ) ( \. .* $ | $ ) /.$group$1/xms   if $group;
         open $out->{$group}, ">:$binmode", $fn;
-        print {$out->{$group}} $ttc->process( header => { opts => $mp_opts, $multiout => $group, version => $VERSION } );
+        print {$out->{$group}} $ttc->process( header => { opts => $mp_opts, ($multiout // q{}) => $group, version => $VERSION } );
     }
 
     print {$out->{$group}} $ttc->process( $template => $data );
