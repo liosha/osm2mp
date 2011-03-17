@@ -210,6 +210,7 @@ if ( $country_list ) {
     close $cl;
 }
 
+
 print STDERR "Ok\n\n";
 
 
@@ -275,9 +276,11 @@ GetOptions (
     'translit!'         => sub { push @ARGV, '--textfilter', 'Unidecode' },
     'mapid=s'           => sub { push @ARGV, '--mp-header', "ID=$_[1]" },
     'mapname=s'         => sub { push @ARGV, '--mp-header', "Name=$_[1]" },
-#    'defaultcountry=s'  => sub { push @ARGV, '--mp-header', "DefaultCityCountry=$_[1]" },
-#    'defaultregion=s'   => sub { push @ARGV, '--mp-header', "DefaultRegionCountry=$_[1]" },
 );
+
+$default_country = $country_code{uc $default_country}
+    if $default_country && $country_code{uc $default_country};
+
 
 usage() unless (@ARGV);
 
