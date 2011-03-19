@@ -2397,8 +2397,8 @@ sub WriteLine {
 
     # the rest tags (capitals!)
     for my $key ( sort keys %param ) {
-        next unless $key =~ /^_*[A-Z]/;
-        next if !$param{$key} || $param{$key} eq q{};
+        next unless $key =~ / ^ _* [A-Z] /xms;
+        delete $opts{$key} and next if !defined $param{$key} || $param{$key} eq q{};
         $opts{$key} = convert_string( $param{$key} );
     }
 
@@ -2682,7 +2682,7 @@ sub WritePolygon {
 
     for my $key ( keys %param ) {
         next unless $key =~ /^_*[A-Z]/;
-        next if !defined $param{$key} || $param{$key} eq q{};
+        delete $opts{$key} and next if !defined $param{$key} || $param{$key} eq q{};
         $opts{$key} = convert_string( $param{$key} );
     }
 
