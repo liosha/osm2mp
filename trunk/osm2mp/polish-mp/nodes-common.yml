@@ -443,7 +443,7 @@
       contacts: yes
 
 - condition:
-    - shop = bicycle|electronics|electrogoods|electrotools|outdoor|stationery|sports|toys
+    - shop = bicycle|electronics|electrogoods|electrotools|outdoor|stationery|sports|toys|kids
   action:
     - action: write_poi
       type: 0x2E0A
