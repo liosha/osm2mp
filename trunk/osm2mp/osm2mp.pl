@@ -104,6 +104,7 @@ my $waterback       = 0;
 my $marine          = 1;
 
 my $addressing      = 1;
+my $full_karlsruhe  = 0;
 my $navitel         = 0;
 my $addrfrompoly    = 1;
 my $addrinterpolation = 1;
@@ -262,6 +263,7 @@ GetOptions (
     'marine!'           => \$marine,
 
     'addressing!'       => \$addressing,
+    'full-karlsruhe!'   => \$full_karlsruhe,
     'navitel!'          => \$navitel,
     'addrfrompoly!'     => \$addrfrompoly,
     'addrinterpolation!'=> \$addrinterpolation,
@@ -1638,7 +1640,7 @@ if ( $routing ) {
         $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
 
         if ( $road->{city} ) {
-            my $city = $city{ $road->{city} };
+            my $city = ref $road->{city} eq 'HASH' ? $road->{city} : $city{ $road->{city} };
             my $region  = $city->{region}  || $default_region;
             my $country = $city->{country} || $default_country;
 
@@ -2020,6 +2022,7 @@ Available options [defaults]:
  --namelist <key>=<list>   comma-separated list of tags to select names
 
  --addressing              use city polygons for addressing  [$onoff[$addressing]]
+ --full-karlsruhe          use addr:* tags if no city found  [$onoff[$full_karlsruhe]]
  --navitel                 write addresses for polygons      [$onoff[$navitel]]
  --addrfrompoly            get POI address from buildings    [$onoff[$addrfrompoly]]
  --makepoi                 create POIs for polygons          [$onoff[$makepoi]]
@@ -2177,8 +2180,8 @@ sub WritePOI {
 
     # region and country - for cities
     if ( $poiregion  &&  $label  &&  $param{add_region} && !$param{add_contacts} ) {
-        my $country = name_from_list( 'country', $param{tags});
-        my $region  = name_from_list( 'region', $param{tags});
+        my $country = name_from_list( 'country', $param{tags} );
+        my $region  = name_from_list( 'region', $param{tags} );
         $region .= " $tag{'addr:district'}"         if $tag{'addr:district'};
         $region .= " $tag{'addr:subdistrict'}"      if $tag{'addr:subdistrict'};
 
@@ -2192,8 +2195,20 @@ sub WritePOI {
     # contact information: address, phone
     if ( $poicontacts  &&  $param{add_contacts} ) {
         my $cityid = FindCity( $param{nodeid} || $param{latlon} );
+
+        my $city;
         if ( $cityid ) {
-            my $city = $city{ $cityid };
+            $city = $city{ $cityid };
+        }
+        elsif ( $full_karlsruhe && $tag{'addr:city'} ) {
+            $city = {
+                name    => $tag{'addr:city'},
+                region  => name_from_list( 'region', \%tag ) || undef,
+                country => name_from_list( 'country', \%tag ) || undef,
+             };
+        }
+
+        if ( $city ) {
             my $region  = $city->{region}  || $default_region;
             my $country = $city->{country} || $default_country;
 
@@ -2483,6 +2498,14 @@ sub AddRoad {
         }
     }
 
+    if ( $full_karlsruhe && !$city && $tag{'addr:city'} ) {
+        $city = {
+            name    => $tag{'addr:city'},
+            region  => name_from_list( 'region', \%tag ) || undef,
+            country => name_from_list( 'country', \%tag ) || undef,
+        };
+    }
+
     # load road
     $road{$param{id}} = {
         #comment =>  $param{comment},
@@ -2632,6 +2655,14 @@ sub WritePolygon {
 
             my $cityid = FindCity( $plist[0]->[0] );
             my $city = $cityid ? $city{$cityid} : undef;
+
+            if ( $full_karlsruhe && !$city && $tag{'addr:city'} ) {
+                $city = {
+                    name    => $tag{'addr:city'},
+                    region  => name_from_list( 'region', \%tag ),
+                    country => name_from_list( 'country', \%tag ),
+                };
+            }
 
             my $street = $tag{'addr:street'};
             $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
