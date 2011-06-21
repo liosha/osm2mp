@@ -52,7 +52,6 @@ use Tree::R;
 
 use List::Util qw{ first reduce sum min max };
 use List::MoreUtils qw{ all none any first_index last_index uniq };
-#use Scalar::Util qw{ looks_like_number };
 
 
 
@@ -275,7 +274,7 @@ GetOptions (
 
     # obsolete, for backward compatibility
     'nametaglist=s'     => sub { push @ARGV, '--namelist', "label=$_[1]" },
-    'translit!'         => sub { push @ARGV, '--textfilter', 'Unidecode' },
+    'translit!'         => sub { push @ARGV, '--textfilter', 'Unidecode', '--codepage', '1252' },
     'mapid=s'           => sub { push @ARGV, '--mp-header', "ID=$_[1]" },
     'mapname=s'         => sub { push @ARGV, '--mp-header', "Name=$_[1]" },
 );
@@ -893,7 +892,7 @@ while ( my $line = decode 'utf8', <$in> ) {
         ##  Interpolation nodes
         if ( $addrinterpolation  &&  exists $interpolation_node{$nodeid} ) {
             if ( exists $nodetag{'addr:housenumber'} ) {
-                if ( looks_like_number($nodetag{'addr:housenumber'}) ) {
+                if ( extract_number( $nodetag{'addr:housenumber'} ) ) {
                     $interpolation_node{$nodeid} = { %nodetag };
                 }
                 else {
@@ -2172,7 +2171,9 @@ sub WritePOI {
         push @stops, split( /\s*[,;]\s*/, $tag{'route_ref'} )   if exists $tag{'route_ref'};
         @stops = uniq @stops;
         $label .= q{ (} . join( q{,}, sort {
-                ( looks_like_number($a) && looks_like_number($b) && $a <=> $b ) or $a cmp $b
+                my $aa = extract_number($a);
+                my $bb = extract_number($b);
+                $aa && $bb  ?  $aa <=> $bb : $a cmp $b;
             } @stops ) . q{)}   if @stops;
     }
 
@@ -2203,8 +2204,8 @@ sub WritePOI {
         elsif ( $full_karlsruhe && $tag{'addr:city'} ) {
             $city = {
                 name    => $tag{'addr:city'},
-                region  => name_from_list( 'region', \%tag ) || undef,
-                country => name_from_list( 'country', \%tag ) || undef,
+                region  => name_from_list( 'region', \%tag )  || $default_region,
+                country => name_from_list( 'country', \%tag ) || $default_country,
              };
         }
 
@@ -2444,28 +2445,28 @@ sub AddRoad {
         $param{chain}->[ ceil $#{$param{chain}}*2/3 ] );
 
     # calculate speed class
-    if ( $tag{'maxspeed'} && looks_like_number($tag{'maxspeed'}) && $tag{'maxspeed'} > 0 ) {
-       $tag{'maxspeed'} *= 1.61      if  $tag{'maxspeed'} =~ /mph$/i;
-       $rp[0]  = speed_code( $tag{'maxspeed'} * 0.9 );
+    if ( my $speed = extract_number( $tag{'maxspeed'} ) ) {
+       $speed *= 1.61   if  $tag{'maxspeed'} =~ /mph$/i;
+       $rp[0]  = speed_code( $speed * 0.9 );
     }
-    if ( $tag{'maxspeed:practical'} && looks_like_number($tag{'maxspeed:practical'}) && $tag{'maxspeed:practical'} > 0 ) {
-       $tag{'maxspeed:practical'} *= 1.61        if  $tag{'maxspeed:practical'} =~ /mph$/i;
-       $rp[0]  = speed_code( $tag{'maxspeed:practical'} * 0.9 );
+    if ( my $speed = extract_number( $tag{'maxspeed:practical'} ) ) {
+       $speed *= 1.61   if  $tag{'maxspeed:practical'} =~ /mph$/i;
+       $rp[0]  = speed_code( $speed * 0.9 );
     }
-    if ( $tag{'avgspeed'} && looks_like_number($tag{'avgspeed'}) && $tag{'avgspeed'} > 0 ) {
-       $tag{'avgspeed'} *= 1.61        if  $tag{'avgspeed'} =~ /mph$/i;
-       $rp[0]  = speed_code( $tag{'avgspeed'} );
+    if ( my $speed = extract_number( $tag{'avgspeed'} ) ) {
+       $speed *= 1.61   if  $tag{'avgspeed'} =~ /mph$/i;
+       $rp[0]  = speed_code( $speed );
     }
 
     # navitel-style 3d interchanges
-    if ( $interchange3d && $waytag{'layer'} && looks_like_number($waytag{'layer'}) ) {
-        my $layer = ( $tag{'layer'}<0 ? $tag{'layer'} : $tag{'layer'} * 2 );
+    if ( my $layer = $interchange3d && extract_number($waytag{'layer'}) ) {
+        $layer *= 2     if $layer > 0;
         for my $node ( @{$param{chain}} ) {
             $hlevel{ $node } = $layer;
         }
-        $layer = $layer - ( $layer < 0  ?  0  :  1 );
-        $hlevel { $param{chain}->[0]  } = $layer;
-        $hlevel { $param{chain}->[-1] } = $layer;
+        $layer--        if $layer > 0;
+        $hlevel{ $param{chain}->[0]  } = $layer;
+        $hlevel{ $param{chain}->[-1] } = $layer;
     }
 
     # determine suburb
@@ -2501,8 +2502,8 @@ sub AddRoad {
     if ( $full_karlsruhe && !$city && $tag{'addr:city'} ) {
         $city = {
             name    => $tag{'addr:city'},
-            region  => name_from_list( 'region', \%tag ) || undef,
-            country => name_from_list( 'country', \%tag ) || undef,
+            region  => name_from_list( 'region', \%tag )  || $default_region,
+            country => name_from_list( 'country', \%tag ) || $default_country,
         };
     }
 
@@ -2659,8 +2660,8 @@ sub WritePolygon {
             if ( $full_karlsruhe && !$city && $tag{'addr:city'} ) {
                 $city = {
                     name    => $tag{'addr:city'},
-                    region  => name_from_list( 'region', \%tag ),
-                    country => name_from_list( 'country', \%tag ),
+                    region  => name_from_list( 'region', \%tag )  || $default_region,
+                    country => name_from_list( 'country', \%tag ) || $default_country,
                 };
             }
 
@@ -3205,8 +3206,10 @@ sub output {
 }
 
 
-sub looks_like_number {
-    return ~~($_[0] =~ /^\d/x);
+sub extract_number {
+    my $str = shift;
+    return unless defined $str;
+    return $str =~ /^ ( [-+]? \d+ ) /x;
 }
 
 __END__
