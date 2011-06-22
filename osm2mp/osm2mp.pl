@@ -202,7 +202,6 @@ while ( my $cfgfile = shift @$config ) {
     }
 }
 
-say Dump \@ARGV;
 
 GetOptions (
     'countrylist=s'     => \$country_list,
