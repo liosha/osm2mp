@@ -2455,17 +2455,17 @@ sub AddRoad {
         $param{chain}->[ ceil $#{$param{chain}}*2/3 ] );
 
     # calculate speed class
-    if ( my $speed = extract_number( $tag{'maxspeed'} ) ) {
-       $speed *= 1.61   if  $tag{'maxspeed'} =~ /mph$/i;
-       $rp[0]  = speed_code( $speed * 0.9 );
-    }
-    if ( my $speed = extract_number( $tag{'maxspeed:practical'} ) ) {
-       $speed *= 1.61   if  $tag{'maxspeed:practical'} =~ /mph$/i;
-       $rp[0]  = speed_code( $speed * 0.9 );
-    }
-    if ( my $speed = extract_number( $tag{'avgspeed'} ) ) {
-       $speed *= 1.61   if  $tag{'avgspeed'} =~ /mph$/i;
-       $rp[0]  = speed_code( $speed );
+    my %speed_coef = (
+        maxspeed             => 0.9,
+        'maxspeed:practical' => 0.9,
+        avgspeed             => 1,
+    );
+    for my $speed_key ( keys %speed_coef ) {
+        next unless $tag{$speed_key};
+        my $speed = extract_number( $tag{$speed_key} );
+        next unless $speed;
+        $speed *= 1.61   if  $tag{$speed_key} =~ /mph$/ixms;
+        $rp[0] = speed_code( $speed * $speed_coef{$speed_key} );
     }
 
     # navitel-style 3d interchanges
@@ -3219,7 +3219,8 @@ sub output {
 sub extract_number {
     my $str = shift;
     return unless defined $str;
-    return $str =~ /^ ( [-+]? \d+ ) /x;
+    my ($number) = $str =~ /^ ( [-+]? \d+ ) /x;
+    return $number;
 }
 
 __END__
