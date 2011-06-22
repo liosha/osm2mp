@@ -156,16 +156,25 @@ my %config;
 print STDERR "Loading configuration...  ";
 
 while ( my $cfgfile = shift @$config ) {
+    my ( $cfgvol, $cfgdir, undef ) = File::Spec->splitpath( $cfgfile );
     my %cfgpart = YAML::LoadFile $cfgfile;
     while ( my ( $key, $item ) = each %cfgpart ) {
         if ( $key eq 'load' && ref $item ) {
-            my ( $vol, $dir, undef ) = File::Spec->splitpath( $cfgfile );
             for my $addcfg ( @$item ) {
-                push @$config, File::Spec->catpath( $vol, $dir, $addcfg );
+                $addcfg = File::Spec->catpath( $cfgvol, $cfgdir, $addcfg )
+                    unless File::Spec->file_name_is_absolute( $addcfg );
+                push @$config, $addcfg;
             }
         }
         elsif ( $key eq 'command-line' ) {
-            unshift @ARGV, grep {defined} ( $item =~ m{ (?: '([^']*)' | "([^"]*)" | (\S+) ) }gxms );
+            my @args = grep {defined} ( $item =~ m{ (?: '([^']*)' | "([^"]*)" | (\S+) ) }gxms );
+            for my $i ( 0 .. $#args ) {
+                next if $args[$i] !~ / --? (?: countrylist|ttable|bpoly ) /xms;
+                next if !length($args[$i+1]);
+                next if File::Spec->file_name_is_absolute( $args[$i+1] );
+                $args[$i+1] = File::Spec->catpath( $cfgvol, $cfgdir, $args[$i+1] );
+            }
+            unshift @ARGV, @args;
         }
         elsif ( $key eq 'yesno' ) {
             %yesno = %{ $item };
@@ -192,6 +201,8 @@ while ( my $cfgfile = shift @$config ) {
         }
     }
 }
+
+say Dump \@ARGV;
 
 GetOptions (
     'countrylist=s'     => \$country_list,
@@ -2027,9 +2038,9 @@ Available options [defaults]:
  --makepoi                 create POIs for polygons          [$onoff[$makepoi]]
  --poiregion               write region info for settlements [$onoff[$poiregion]]
  --poicontacts             write contact info for POIs       [$onoff[$poicontacts]]
- --defaultcity <name>      default city for addresses        [$default_city]
- --defaultregion <name>    default region                    [$default_region]
- --defaultcountry <name>   default country                   [$default_country]
+ --defaultcity <name>      default city for addresses        [${ \($default_city    // '') }]
+ --defaultregion <name>    default region                    [${ \($default_region  // '') }]
+ --defaultcountry <name>   default country                   [${ \($default_country // '') }]
  --countrylist <file>      replace country code by name
 
  --routing                 produce routable map                      [$onoff[$routing]]
