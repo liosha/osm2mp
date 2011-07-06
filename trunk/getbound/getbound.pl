@@ -9,161 +9,23 @@ use List::Util qw{ min max sum };
 use List::MoreUtils qw{ first_index };
 use IO::Uncompress::Gunzip qw{ gunzip $GunzipError };
 
+use YAML::Any qw/ Dump LoadFile /;
 
-use Data::Dumper;
 
+####    Settings
 
 my $api  = 'http://www.openstreetmap.org/api/0.6';
 my $proxy;
 
 my $onering = 0;
 my $noinner = 0;
-
-
-my %rename = (
-    
-    rus             =>  60189,
-    russia          =>  60189,
-    russian_federation  =>  60189,
-    
-    # cloudmade
-    afghanistan     =>  303427,
-    albania         =>  53292,
-    armenia         =>  364066,
-    azerbaijan      =>  364110,
-    cuba            =>  307833,
-    cyprus          =>  307787,
-    egypt           =>  192761,
-    estonia         =>  79510,
-    georgia         =>  28699,
-    honduras        =>  287670,
-    israel          =>  214865,
-    jordan          =>  184818,
-    mongolia        =>  161033,
-    oman            =>  305138,
-    saudi_arabia    =>  307584,
-    syria           =>  184840,
-    tunisia         =>  192757,
-    turkey          =>  174737,
-    united_arab_emirates    =>  307763,
-    vietnam         =>  49915,
-    yemen           =>  305092,
-
-    # geofabrik
-    'bosnia-herzegovina'    =>  214908,
-    bulgaria        =>  186382,
-    croatia         =>  214885,
-    greece          =>  192307,
-    hungary         =>  21335,
-    kosovo          =>  53295,
-    latvia          =>  72594,
-    lithuania       =>  72596,
-    macedonia       =>  53293,
-    moldova         =>  58974,
-    montenegro      =>  53296,
-    romania         =>  90689,
-    serbia          =>  53294,
-    slovenia        =>  218657,
-    ukraine         =>  60199,
-    
-    # gis-lab contries
-    belarus         =>  59065,
-    belarus_preprocessed    =>  59065,
-    kazakhstan      =>  214665,
-    kyrgyzstan      =>  178009,
-    tajikistan      =>  214626,
-    turkmenistan    =>  223026,
-    uzbekistan      =>  196240,
-
-    # gis-lab Russia
-    adygeya         =>  253256,
-    altay           =>  145194,
-    altayskiy       =>  144764,
-    amur            =>  147166,
-    arkhan          =>  140337,
-    astrakhan       =>  112819,
-    bashkir         =>  77677,
-    belgorod        =>  83184,
-    bryansk         =>  81997,
-    buryat          =>  145729,
-    chechen         =>  109877,
-    chel            =>  77687,
-    chukot          =>  151231,
-    chuvash         =>  80513,
-    dagestan        =>  109876,
-    evrey           =>  147167,
-    ingush          =>  253252,
-    irkutsk         =>  145454,
-    ivanov          =>  85617,
-    kabardin        =>  109879,
-    kalinin         =>  103906,
-    kalmyk          =>  108083,
-    kaluzh          =>  81995,
-    kamch           =>  151233,
-    karach          =>  109878,
-    karel           =>  393980,
-    kemerovo        =>  144763,
-    khabar          =>  151223,
-    khakas          =>  190911,
-    khanty          =>  140296,
-    kirov           =>  115100,
-    komi            =>  115136,
-    kostrom         =>  85963,
-    krasnodar       =>  108082,
-    krasnoyarsk     =>  190090,
-    kurgan          =>  140290,
-    kursk           =>  72223,
-    leningrad       =>  176095,
-    lipetsk         =>  72169,
-    magadan         =>  151228,
-    mariyel         =>  115114,
-    mordov          =>  72196,
-    moscow          =>  102269,
-    mosobl          =>  51490,
-    murmansk        =>  289998,
-    nenec           =>  274048,
-    nizhegorod      =>  72195,
-    novgorod        =>  89331,
-    novosib         =>  140294,
-    omsk            =>  140292,
-    orenburg        =>  77669,
-    orlovsk         =>  72224,
-    osetiya         =>  110032,
-    penz            =>  72182,
-    perm            =>  115135,
-    prim            =>  151225,
-    pskov           =>  155262,
-    rostov          =>  85606,
-    ryazan          =>  71950,
-    sakhalin        =>  394235,
-    samar           =>  72194,
-    saratov         =>  72193,
-    smol            =>  81996,
-    stavrop         =>  108081,
-    stpeter         =>  337422,
-    sverdl          =>  79379,
-    tambov          =>  72180,
-    tatar           =>  79374,
-    tomsk           =>  140295,
-    tul             =>  81993,
-    tumen           =>  140291,
-    tver            =>  178005,
-    tyva            =>  145195,
-    udmurt          =>  115134,
-    ulyan           =>  72192,
-    vladimir        =>  72197,
-    volgograd       =>  77665,
-    vologda         =>  115106,
-    voronezh        =>  72181,
-    yakut           =>  151234,
-    yamal           =>  191706,
-    yarosl          =>  81994,
-    zabaikal        =>  145730,
-);
-
+my $alias_config = 'aliases.yml';
 
 my $filename;
 my $outfile;
+
+
+####    Command-line
 
 GetOptions (
     'file=s'    => \$filename,
@@ -171,6 +33,7 @@ GetOptions (
     'onering!'  => \$onering,
     'noinner!'  => \$noinner,
     'proxy=s'   => \$proxy,
+    'aliases=s' => \$alias_config,
 );
 
 unless ( @ARGV ) {
@@ -183,10 +46,22 @@ unless ( @ARGV ) {
 }
 
 
+####    Aliases
+
+my ($rename) = eval{ LoadFile $alias_config };
+unless ( $rename ) {
+    warn "Unable to load aliases from $alias_config: $@" if $alias_config;
+    $rename = {};
+}
+
+
+
+####    Process
+
 my $osmdata;
 
 my $name =  $ARGV[0];
-my $rel  =  exists $rename{$name}  ?  $rename{$name}  :  $name;
+my $rel  =  $rename->{$name}  //  $name;
 
 
 if ( $filename ) {
