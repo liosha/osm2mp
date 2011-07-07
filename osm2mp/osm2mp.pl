@@ -133,6 +133,8 @@ my $city_rtree = Tree::R->new();
 my %suburb;
 
 my %interpolation_node;
+my %entrance;
+my %main_entrance;
 
 my %poi;
 my $poi_rtree = Tree::R->new();
@@ -332,7 +334,6 @@ $transport_mode = $transport_code{ $transport_mode }
 
 ####    Precompiling templates
 
-
 my $ttc = Template::Context->new();
 my $ttp = $ttc->{LOAD_TEMPLATES}->[0];
 $ttp->{STAT_TTL} = 2**31;
@@ -413,11 +414,22 @@ my ( $waypos, $relpos ) = ( 0, 0 );
 
 print STDERR "Loading nodes...          ";
 
+my $current_node;
 while ( my $line = <$in> ) {
 
     if ( $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/ ) {
         $node{$1} = "$2,$3";
+        $current_node = $1;
         next;
+    }
+    
+    if ( $line =~ /<tag/ ) {
+        my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
+
+        ##  Territory main entrances
+        if ( $key  &&  $key eq 'entrance'  &&  $val eq 'main' ) {
+            $main_entrance{$current_node} = 1;
+        }
     }
 
     if ( $osmbbox  &&  $line =~ /<bounds?/ ) {
@@ -813,12 +825,19 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
 
     ## POI
     if ( $makepoi ) {
-        process_config( $config{nodes}, {
-                type    => "Rel",
-                id      => $mpid,
-                tag     => $mp->{tags},
-                latlon  => ( join q{,}, polygon_centroid( map { [ split q{,}, $node{$_} ] } @{ $ampoly->{outer}->[0] } ) ),
-            } );
+        my $poi_data = {
+            type    => "Rel",
+            id      => $mpid,
+            tag     => $mp->{tags},
+        };
+        if ( my $entrance_node = first { exists $main_entrance{$_} } @{ $ampoly->{outer}->[0] } ) {
+            $poi_data->{latlon} = $node{$entrance_node};
+        }
+        else {
+            $poi_data->{latlon} = join q{,}, polygon_centroid( map { [ split q{,}, $node{$_} ] } @{ $ampoly->{outer}->[0] } );
+        }
+
+        process_config( $config{nodes}, $poi_data );
     }
 
     ## Polygon
@@ -853,7 +872,6 @@ printf STDERR "                          %d cities and %d suburbs loaded\n", sca
 
 my %barrier;
 my %xnode;
-my %entrance;
 
 
 print STDERR "Processing nodes...       ";
@@ -890,13 +908,13 @@ while ( my $line = decode 'utf8', <$in> ) {
         }
 
         ##  Forced external nodes
-        if ( $routing  &&  exists $nodetag{'garmin:extnode'}  &&  $yesno{$nodetag{'garmin:extnode'}} ) {
+        if ( $routing  &&  defined $nodetag{'garmin:extnode'}  &&  $yesno{$nodetag{'garmin:extnode'}} ) {
             $xnode{$nodeid} = 1;
         }
 
         ##  Building entrances
-        if ( $navitel  &&  exists $nodetag{'building'}  &&  $nodetag{'building'} eq 'entrance' ) {
-            $entrance{$nodeid} = name_from_list( 'entrance', \%nodetag);
+        if ( $navitel  &&  defined $nodetag{'building'}  &&  $nodetag{'building'} eq 'entrance' ) {
+            $entrance{$nodeid} = name_from_list( 'entrance', \%nodetag );
         }
 
         ##  Interpolation nodes
@@ -1013,12 +1031,19 @@ while ( my $line = decode 'utf8', <$in> ) {
 
         ## POI config
         if ( $makepoi ) {
-            process_config( $config{nodes}, {
-                    type    => "Way",
-                    id      => $wayid,
-                    latlon  => ( join q{,}, polygon_centroid( map { [ split q{,}, $node{$_} ] } @chain ) ),
-                    tag     => \%waytag,
-                } );
+            my $poi_data = {
+                type    => "Way",
+                id      => $wayid,
+                tag     => \%waytag,
+            };
+            if ( my $entrance_node = first { exists $main_entrance{$_} } @chain ) {
+                $poi_data->{latlon} = $node{entrance_node};
+            }
+            else {
+                $poi_data->{latlon} = join q{,}, polygon_centroid( map { [ split q{,}, $node{$_} ] } @chain );
+            }
+            
+            process_config( $config{nodes}, $poi_data );
         }
     } # </way>
 
@@ -2714,12 +2739,10 @@ sub WritePolygon {
 
     ## Rusa - floors
     if ( my $levels = $tag{'building:levels'} ) {
-        $levels =~ s/\D.*//x;
-        $opts{Floors} = 0 + $levels;
+        $opts{Floors} = extract_number($levels);
     }
     if ( my $height = $tag{'building:height'} // $tag{'height'} ) {
-        $height =~ s/\D.*//x;
-        $opts{Floors} = 3 * $height;
+        $opts{Floors} = 3 * extract_number($height);
     }
 
     for my $key ( keys %param ) {
