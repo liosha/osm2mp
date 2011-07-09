@@ -55,7 +55,7 @@ use List::MoreUtils qw{ all none any first_index last_index uniq };
 
 
 
-our $VERSION = '0.91_2';
+our $VERSION = '0.91_3';
 
 
 
@@ -71,6 +71,7 @@ my $mp_opts         = {};
 my $upcase          = 0;
 my $ttable          = q{};
 my $text_filter     = q{};
+my @filters         = ();
 
 my $oneway          = 1;
 my $routing         = 1;
@@ -238,6 +239,7 @@ GetOptions (
     'upcase!'           => \$upcase,
     'ttable=s'          => \$ttable,
     'textfilter=s'      => sub { eval "require $_[1]" or eval "require PerlIO::via::$_[1]" or die $@; $text_filter .= ":via($_[1])"; },
+    'filter|filters=s@' => \@filters,
 
     'oneway!'           => \$oneway,
     'routing!'          => \$routing,
@@ -332,22 +334,49 @@ $transport_mode = $transport_code{ $transport_mode }
 
 
 
-####    Precompiling templates
+####    Preparing templates
 
 my $ttc = Template::Context->new();
+
+##  loading filters
+my $ttf = $ttc->{LOAD_FILTERS}->[0];
+$ttf->store( 'upcase', sub {  my $text = uc shift;  $text =~ s/ \b 0X (?=\w)/0x/xms;  return $text;  } );
+$ttf->store( 'translit', sub {  require Text::Unidecode; return Text::Unidecode::unidecode( shift );  } );
+
+@filters = map { split q{,}, $_ } @filters;
+for my $filter ( @filters ) {
+    my ($filter_sub) = $ttf->fetch( $filter );
+    next if $filter_sub;
+    my $filter_package = "Template::Plugin::Filter::$filter";
+    eval "require $filter"
+        or eval "require $filter_package"
+        or die $@;
+    my $filter_object = $filter_package->new( $ttc ); #!!! @args
+    $filter_object->init( $filter );
+}
+
+##  master chain filter
+$ttf->store( 'mp_filter', sub {
+    my $text = shift;
+    for my $filter ( @filters ) {
+        $text = $ttf->fetch($filter)->($text);
+    }
+    return $text;
+});
+
+##  precompiling blocks
 my $ttp = $ttc->{LOAD_TEMPLATES}->[0];
 $ttp->{STAT_TTL} = 2**31;
-
 for my $template ( keys %{ $config{output} } ) {
     $ttp->store( $template, $ttc->template( \$config{output}->{$template} ) );
 }
 
-$mp_opts->{DefaultCityCountry} = $country_code{uc $mp_opts->{DefaultCityCountry}}
-    if $mp_opts->{DefaultCityCountry} && $country_code{uc $mp_opts->{DefaultCityCountry}};
-
 
     
 ####    Creating simple multiwriter output
+
+$mp_opts->{DefaultCityCountry} = $country_code{uc $mp_opts->{DefaultCityCountry}}
+    if $mp_opts->{DefaultCityCountry} && $country_code{uc $mp_opts->{DefaultCityCountry}};
     
 my $out = {};
 if ( !$output_fn ) {
