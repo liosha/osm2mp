@@ -68,7 +68,6 @@ my $multiout;
 my $codepage        = '1251';
 my $mp_opts         = {};
 
-my $upcase          = 0;
 my $ttable          = q{};
 my $text_filter     = q{};
 my @filters         = ();
@@ -236,7 +235,6 @@ GetOptions (
     'mp-header=s%'      => sub { $mp_opts->{$_[1]} = $_[2] },
     'codepage=s'        => \$codepage,
     'nocodepage'        => sub { undef $codepage },
-    'upcase!'           => \$upcase,
     'ttable=s'          => \$ttable,
     'textfilter=s'      => sub { eval "require $_[1]" or eval "require PerlIO::via::$_[1]" or die $@; $text_filter .= ":via($_[1])"; },
     'filter|filters=s@' => \@filters,
@@ -288,7 +286,8 @@ GetOptions (
 
     # obsolete, for backward compatibility
     'nametaglist=s'     => sub { push @ARGV, '--namelist', "label=$_[1]" },
-    'translit!'         => sub { push @ARGV, '--textfilter', 'Unidecode', '--codepage', '1252' },
+    'translit'          => sub { push @ARGV, '--filter', 'translit', '--codepage', '1252' },
+    'upcase'            => sub { push @ARGV, '--filter', 'upcase' },
     'mapid=s'           => sub { push @ARGV, '--mp-header', "ID=$_[1]" },
     'mapname=s'         => sub { push @ARGV, '--mp-header', "Name=$_[1]" },
 );
@@ -343,7 +342,7 @@ my $ttf = $ttc->{LOAD_FILTERS}->[0];
 $ttf->store( 'upcase', sub {  my $text = uc shift;  $text =~ s/ \b 0X (?=\w)/0x/xms;  return $text;  } );
 $ttf->store( 'translit', sub {  require Text::Unidecode; return Text::Unidecode::unidecode( shift );  } );
 
-@filters = map { split q{,}, $_ } @filters;
+#@filters = map { split q{,}, $_ } @filters;
 for my $filter ( @filters ) {
     my ($filter_sub) = $ttf->fetch( $filter );
     next if $filter_sub;
@@ -1910,8 +1909,6 @@ sub convert_string {
         $cmap->( $str );
     }
 
-    $str = uc($str)     if $upcase;
-
     $str =~ s/\&#(\d+)\;/chr($1)/ge;
     $str =~ s/\&amp\;/\&/gi;
     $str =~ s/\&apos\;/\'/gi;
@@ -1924,8 +1921,6 @@ sub convert_string {
     $str =~ s/^[ \`\'\;\.\,\!\-\+\_]+//;
     $str =~ s/  +/ /g;
     $str =~ s/\s+$//;
-
-    $str =~ s/~\[0X(\w+)\]/~[0x$1]/;
 
     return $str;
 }
@@ -2077,9 +2072,10 @@ Available options [defaults]:
  --mp-header <key>=<value> MP header values
 
  --codepage <num>          codepage number                   [$codepage]
- --upcase                  convert all labels to upper case  [$onoff[$upcase]]
- --textfilter <layer>      use extra output filter PerlIO::via::<layer>
- --translit                same as --textfilter Unidecode
+ --filter <name>           use TT filter (standard, plugin or predefined)
+ --upcase                  (obsolete) same as --filter=upcase
+ --translit                (obsolete) same as --filter=translit
+ --textfilter <layer>      (obsolete) use extra output filter PerlIO::via::<layer>
  --ttable <file>           character conversion table
  --roadshields             shields with road numbers         [$onoff[$roadshields]]
  --namelist <key>=<list>   comma-separated list of tags to select names
