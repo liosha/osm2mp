@@ -7,7 +7,7 @@
 
 
 comment: |
-  [% FOREACH line IN text.split('\n'); "; $line\n"; END -%]
+  [% FOREACH line IN text.split('\n'); "; "; line | mp_filter; "\n"; END -%]
 
 
 info: |
@@ -21,7 +21,7 @@ section: |
 header: |
   [IMG ID]
   ID=[% opts.exists('ID') ? opts.ID : '88888888'; opts.delete('ID') %]
-  Name=[% opts.exists('Name') ? opts.Name : 'OSM-based map'; opts.delete('Name') %]
+  Name=[% opts.exists('Name') ? opts.Name : 'OSM-based map' | mp_filter; opts.delete('Name') %]
   Copyright=OpenStreetMap project contributors under CC-BY-SA
  
   LblCoding=9
@@ -51,7 +51,7 @@ header: |
 
   [% # keys without default values
     FOREACH key IN opts.keys -%]
-  [% key %]=[% opts.$key %]
+  [% key %]=[% opts.$key | mp_filter %]
   [% END %]
 
   [END-IMG ID]
@@ -81,7 +81,7 @@ point: |
   [% END -%]
   [% opts.delete( 'lzoom', 'hzoom', 'coords' ) -%]
   [% FOREACH key IN opts.keys -%]
-  [% key %]=[% opts.$key %]
+  [% key %]=[% opts.$key | mp_filter %]
   [% END -%]
   [END]
   [% %]
@@ -102,10 +102,10 @@ polygon: |
   [% END -%]
   [% entrances = opts.EntryPoint; opts.delete( 'lzoom', 'hzoom', 'contours', 'EntryPoint' ) -%]
   [% FOREACH key IN opts.keys -%]
-  [% key %]=[% opts.$key %]
+  [% key %]=[% opts.$key | mp_filter %]
   [% END -%]
   [% FOREACH entrance IN entrances -%]
-  EntryPoint=([% entrance.coords.0 %],[% entrance.coords.1 %]),[% entrance.name %]
+  EntryPoint=([% entrance.coords.0 %],[% entrance.coords.1 %]),[% entrance.name | mp_filter %]
   [% END -%]
   [END]
   [% %]
@@ -124,7 +124,7 @@ polyline: |
   [% END -%]
   [% nods = opts.nods; opts.delete( 'lzoom', 'hzoom', 'chain', 'nods' ) -%]
   [% FOREACH key IN opts.keys -%]
-  [% key %]=[% opts.$key %]
+  [% key %]=[% opts.$key | mp_filter %]
   [% END -%]
   [% IF nods; FOREACH nnod IN [ 0 .. nods.max ] -%]
   Nod[% nnod %]=[% nods.$nnod.join(',') %]
