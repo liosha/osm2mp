@@ -4,6 +4,7 @@
 - condition:
     - highway = steps
     - layer != -[2-5]
+    - area != *
   action:
     - action: load_road
       type: 0x13
@@ -17,10 +18,9 @@
         - railway = platform
         - pt = platform
         - public_transport = platform
-        - and:
-            - man_made = pier
-            - area != yes|true|1
+        - man_made = pier
     - layer != -[2-5]
+    - area != *
   action:
     - action: load_road
       type: 0x11

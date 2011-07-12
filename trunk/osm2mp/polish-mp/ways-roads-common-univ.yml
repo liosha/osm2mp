@@ -16,6 +16,7 @@
 - condition:
     - highway = footway|path
     - layer != -[2-5]
+    - area != *
   action:
     - action: load_road
       type: 0x16
@@ -25,6 +26,7 @@
 - condition:
     - highway = footway|path
     - layer != -[2-5]
+    - area != *
     - inside_city
   action:
     - action: load_road
