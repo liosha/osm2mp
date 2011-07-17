@@ -1065,7 +1065,7 @@ while ( my $line = decode 'utf8', <$in> ) {
                 tag     => \%waytag,
             };
             if ( my $entrance_node = first { exists $main_entrance{$_} } @chain ) {
-                $poi_data->{latlon} = $node{entrance_node};
+                $poi_data->{latlon} = $node{$entrance_node};
             }
             else {
                 $poi_data->{latlon} = join q{,}, polygon_centroid( map { [ split q{,}, $node{$_} ] } @chain );
