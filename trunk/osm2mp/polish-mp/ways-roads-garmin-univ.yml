@@ -5,6 +5,7 @@
     - highway = steps
     - layer != -[2-5]
     - area != *
+    - ~inside_city
   action:
     - action: load_road
       type: 0x13
@@ -21,6 +22,7 @@
         - man_made = pier
     - layer != -[2-5]
     - area != *
+    - ~inside_city
   action:
     - action: load_road
       type: 0x11
