@@ -2,15 +2,6 @@
 ---
 
 
-# Railways - avoiding garmin zoomlevel bug
-
-- condition:
-    - railway = tram
-  action:
-    - action: write_line
-      type: 0x010f14
-
-
 
 # Custom lines
 
