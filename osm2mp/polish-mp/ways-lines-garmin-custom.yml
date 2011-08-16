@@ -14,7 +14,7 @@
     - action: write_line
       type: 0x010f13
       level_l: 1
-      level_h: 3
+      level_h: 2
 
 - id: service_railway
   condition:
