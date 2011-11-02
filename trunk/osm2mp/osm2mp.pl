@@ -690,7 +690,7 @@ while ( my $line = decode 'utf8', <$in> ) {
                 &&  exists $reltag{'ref'}  ) {
             $countroutes ++;
             for my $role ( keys %relmember ) {
-                next unless $role =~ /^node:.*stop/;
+                next unless $role =~ /^node:.*(?:stop|platform)/;
                 for my $stop ( @{ $relmember{$role} } ) {
                     push @{ $trstop{$stop} }, $reltag{'ref'};
                 }
