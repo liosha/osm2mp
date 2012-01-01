@@ -2182,7 +2182,7 @@ sub FindSuburb {
 
 sub AddPOI {
     my ($obj) = @_;
-    if ( $addrfrompoly && exists $obj->{nodeid} && exists $obj->{add_contacts} ) {
+    if ( $addrfrompoly && exists $obj->{nodeid} && $obj->{add_contacts} && !$obj->{dont_inherit_address} ) {
         my $id = $obj->{nodeid};
         my @bbox = ( reverse split q{,}, $node{$id} ) x 2;
         push @{$poi{$id}}, $obj;
