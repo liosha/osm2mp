@@ -3010,6 +3010,9 @@ sub execute_action {
         if ( exists $action->{'contacts'} ) {
             $objinfo{add_contacts}  = 1;
         }
+        if ( exists $action->{'inherit_address'} && !$yesno{$action->{'inherit_address'}} ) {
+            $objinfo{dont_inherit_address}  = 1;
+        }
         if ( exists $action->{'marine_buoy'} ) {
             $objinfo{add_buoy}      = 1;
         }
