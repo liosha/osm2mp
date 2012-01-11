@@ -67,22 +67,19 @@ my $callback = sub {
     return
         unless all { exists $obj->{attributes}->{$_} } qw{ HouseNumber StreetDesc CityName };
 
-    say '[POLYLINE]';
-    say 'Type=0x0D';
-
     my $number = encode $MP_CODEPAGE, uc( decode $MP_CODEPAGE, $obj->{attributes}->{HouseNumber} );
     $number =~ tr/ \t\r\n//;
+    $number = min( 0+$number, $MAX_HOUSE_NUMBER );
+    return unless $number;
 
+    say '[POLYLINE]';
+    say 'Type=0x0D';
     say "Label=$number $obj->{attributes}->{StreetDesc}";
 
     my ( $lat, $lon ) = polygon_centroid( @{ $obj->{attributes}->{Data0} } );
     printf "Data0=(%f,%f),(%f,%f)\n", $lat-$FAKE_ROAD_LENGTH, $lon, $lat+$FAKE_ROAD_LENGTH, $lon;
 
     say 'RoadID=' . $roadid++;
-
-    $number = min( 0+$number, $MAX_HOUSE_NUMBER );
-
-    return unless $number;
 
     $obj->{attributes}->{CityName} =~ tr/,/ /;
     $obj->{attributes}->{RegionName} =~ tr/,/ /;
