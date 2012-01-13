@@ -69,8 +69,8 @@ my $callback = sub {
 
     my $number = encode $MP_CODEPAGE, uc( decode $MP_CODEPAGE, $obj->{attributes}->{HouseNumber} );
     $number =~ tr/ \t\r\n//;
-    $number = min( 0+$number, $MAX_HOUSE_NUMBER );
-    return unless $number;
+    my $digits = min( 0+$number, $MAX_HOUSE_NUMBER );
+    return unless $digits;
 
     say '[POLYLINE]';
     say 'Type=0x0D';
@@ -84,7 +84,7 @@ my $callback = sub {
     $obj->{attributes}->{CityName} =~ tr/,/ /;
     $obj->{attributes}->{RegionName} =~ tr/,/ /;
     $obj->{attributes}->{CountryName} =~ tr/,/ /;
-    say "Numbers1=0,B,$number,$number,N,-1,-1,-1,-1,$obj->{attributes}->{CityName},$obj->{attributes}->{RegionName},$obj->{attributes}->{CountryName},-1";
+    say "Numbers1=0,B,$digits,$digits,N,-1,-1,-1,-1,$obj->{attributes}->{CityName},$obj->{attributes}->{RegionName},$obj->{attributes}->{CountryName},-1";
 
     printf "Nod1=0,%d,0\n", $nodeid++;
     printf "Nod2=1,%d,0\n", $nodeid++;
