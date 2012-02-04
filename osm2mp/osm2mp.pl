@@ -2537,7 +2537,7 @@ sub AddRoad {
         }
         else {
             my $sub_ref = FindSuburb(
-               $param{chain}->[ floor $#{$param{chain}}/3 ],
+                $param{chain}->[ floor $#{$param{chain}}/3 ],
                 $param{chain}->[ ceil $#{$param{chain}}*2/3 ]
             );
             $suburb = $suburb{$sub_ref}->{name} if $sub_ref;
@@ -2766,8 +2766,8 @@ sub WritePolygon {
     if ( my $levels = $tag{'building:levels'} ) {
         $opts{Floors} = extract_number($levels);
     }
-    if ( my $height = $tag{'building:height'} // $tag{'height'} ) {
-        $opts{Floors} = 3 * extract_number($height);
+    elsif ( my $height = $tag{'building:height'} || $tag{'height'} ) {
+        $opts{Floors} = int(extract_number($height)/3);
     }
 
     for my $key ( keys %param ) {
