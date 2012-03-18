@@ -8,6 +8,7 @@ use XML::Simple;
 use List::Util qw{ min max sum };
 use List::MoreUtils qw{ first_index };
 use IO::Uncompress::Gunzip qw{ gunzip $GunzipError };
+use File::Slurp;
 
 use YAML::Any qw/ Dump LoadFile /;
 
@@ -37,7 +38,8 @@ GetOptions (
 );
 
 unless ( @ARGV ) {
-    print "Usage:  getbound.pl [options] <relation_id>\n\n";
+    print "Usage:  getbound.pl [options] <relation> [<relation> ...]\n\n";
+    print "relation - id or alias\n\n";
     print "Available options:\n";
     print "     -o <file>       - output filename (default: STDOUT)\n";
     print "     -proxy <host>   - use proxy\n";
@@ -58,49 +60,57 @@ unless ( $rename ) {
 
 ####    Process
 
-my $osmdata;
+my @rel_ids = map { $rename->{$_} // $_ } @ARGV;
+my @osmdata;
 
-my $name =  $ARGV[0];
-my $rel  =  $rename->{$name}  //  $name;
-
-
+# getting
 if ( $filename ) {
-    open my $file, '<', $filename;
-    read $file, $osmdata, 10_000_000;
+    push @osmdata, read_file $filename;
 }
 else {
+    for my $rel_id ( @rel_ids ) {
+        print STDERR "Downloading RelID=$rel_id..";
 
-    print STDERR "Downloading RelID=$rel..";
+        my $ua = LWP::UserAgent->new();
+        $ua->proxy( 'http', $proxy ) if $proxy;
+        $ua->default_header('Accept-Encoding' => 'gzip');
+        $ua->timeout( 300 );
 
-    my $ua = LWP::UserAgent->new;
-    $ua->proxy( 'http', $proxy ) if $proxy;
-    $ua->default_header('Accept-Encoding' => 'gzip');
-    $ua->timeout( 300 );
+        my $req = HTTP::Request->new( GET => "$api/relation/$rel_id/full" );
+        my $res;
 
-    my $req = HTTP::Request->new( GET => "$api/relation/$rel/full" );
-    my $res;
+        for my $attempt ( 1 .. 10 ) {
+            print STDERR q{.};
+            $res = $ua->request($req);
+            last if $res->is_success;
+        }
 
-    for my $attempt ( 1 .. 10 ) {
-        print STDERR q{.};
-        $res = $ua->request($req);
-        last if $res->is_success;
+        unless ( $res->is_success ) {
+            print STDERR "Failed\n";
+            exit;
+        }
+
+        print STDERR "  Ok\n";
+        gunzip \($res->content) => \my $reldata;
+        push @osmdata, $reldata;
     }
-
-    unless ( $res->is_success ) {
-        print STDERR "Failed\n";
-        exit;
-    }
-
-    print STDERR "  Ok\n";
-    gunzip \($res->content) => \$osmdata;
 }
 
 
-my $osm = XMLin( $osmdata, 
+# parsing and preloading
+my %osm;
+for my $osmdata ( @osmdata ) {
+    my $osm = XMLin( $osmdata,
             ForceArray  => 1,
             KeyAttr     => [ 'id', 'k' ],
-          );
+        );
+    $osm{node}      = { %{$osm{node}     // {}},  %{$osm->{node}} };
+    $osm{way}       = { %{$osm{way}      // {}},  %{$osm->{way}} };
+    $osm{relation}  = { %{$osm{relation} // {}},  %{$osm->{relation}} };
+}
 
+
+# connecting rings
 my %role = (
     ''          => 'outer',
     'outer'     => 'outer',
@@ -110,59 +120,62 @@ my %role = (
     'enclave'   => 'inner',
 );
 
-my %ring = ( 'inner' => [], 'outer' => [] );
 my %result;
 
 
-for my $member ( @{ $osm->{relation}->{$rel}->{member} } ) {
-    next unless $member->{type} eq 'way';
-    next unless exists $role{ $member->{role} };
+for my $rel_id ( @rel_ids ) {
+    my $relation = $osm{relation}->{$rel_id};
+    my %ring;
+
+    for my $member ( @{ $relation->{member} } ) {
+        next unless $member->{type} eq 'way';
+        my $role = $role{ $member->{role} }  or next;
     
-    unless ( exists $osm->{way}->{$member->{ref}} ) {
-        print STDERR "Incomplete data: way $member->{ref} is missing\n";
-        next;
+        unless ( exists $osm{way}->{$member->{ref}} ) {
+            print STDERR "Incomplete data: way $member->{ref} is missing\n";
+            next;
+        }
+
+        push @{ $ring{$role} },  [ map { $_->{ref} } @{$osm{way}->{$member->{ref}}->{nd}} ];
     }
 
-    push @{ $ring{$role{$member->{role}}} },  [ map { $_->{ref} } @{$osm->{way}->{$member->{ref}}->{nd}} ];
-
-}
-
-while ( my ( $type, $list_ref ) = each %ring ) {
-    while ( @$list_ref ) {
-        my @chain = @{ shift @$list_ref };
+    while ( my ( $type, $list_ref ) = each %ring ) {
+        while ( @$list_ref ) {
+            my @chain = @{ shift @$list_ref };
         
-        if ( $chain[0] eq $chain[-1] ) {
-            push @{$result{$type}}, [@chain];
-            next;
-        }
+            if ( $chain[0] eq $chain[-1] ) {
+                push @{$result{$type}}, [@chain];
+                next;
+            }
 
-        my $pos = first_index { $chain[0] eq $_->[0] } @$list_ref;
-        if ( $pos > -1 ) {
-            shift @chain;
-            $list_ref->[$pos] = [ (reverse @chain), @{$list_ref->[$pos]} ];
-            next;
+            my $pos = first_index { $chain[0] eq $_->[0] } @$list_ref;
+            if ( $pos > -1 ) {
+                shift @chain;
+                $list_ref->[$pos] = [ (reverse @chain), @{$list_ref->[$pos]} ];
+                next;
+            }
+            $pos = first_index { $chain[0] eq $_->[-1] } @$list_ref;
+            if ( $pos > -1 ) {
+                shift @chain;
+                $list_ref->[$pos] = [ @{$list_ref->[$pos]}, @chain ];
+                next;
+            }
+            $pos = first_index { $chain[-1] eq $_->[0] } @$list_ref;
+            if ( $pos > -1 ) {
+                pop @chain;
+                $list_ref->[$pos] = [ @chain, @{$list_ref->[$pos]} ];
+                next;
+            }
+            $pos = first_index { $chain[-1] eq $_->[-1] } @$list_ref;
+            if ( $pos > -1 ) {
+                pop @chain;
+                $list_ref->[$pos] = [ @{$list_ref->[$pos]}, reverse @chain ];
+                next;
+            }
+            print STDERR "Invalid data: ring is not closed\n";
+            print STDERR "Non-connecting chain:\n" . Dumper( \@chain );
+            exit;
         }
-        $pos = first_index { $chain[0] eq $_->[-1] } @$list_ref;
-        if ( $pos > -1 ) {
-            shift @chain;
-            $list_ref->[$pos] = [ @{$list_ref->[$pos]}, @chain ];
-            next;
-        }
-        $pos = first_index { $chain[-1] eq $_->[0] } @$list_ref;
-        if ( $pos > -1 ) {
-            pop @chain;
-            $list_ref->[$pos] = [ @chain, @{$list_ref->[$pos]} ];
-            next;
-        }
-        $pos = first_index { $chain[-1] eq $_->[-1] } @$list_ref;
-        if ( $pos > -1 ) {
-            pop @chain;
-            $list_ref->[$pos] = [ @{$list_ref->[$pos]}, reverse @chain ];
-            next;
-        }
-        print STDERR "Invalid data: ring is not closed\n";
-        print STDERR "Non-connecting chain:\n" . Dumper( \@chain );
-        exit;
     }
 }
 
@@ -185,7 +198,7 @@ if ( $onering ) {
         while ( scalar @{$result{$type}} ) {
 
             # find close[st] points
-            my @ring_center = centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @ring );
+            my @ring_center = centroid( map { [@{$osm{node}->{$_}}{'lon','lat'}] } @ring );
             
             if ( $type eq 'inner' ) {
                 my ( $index_i, $dist ) = ( 0, metric( \@ring_center, $ring[0] ) );
@@ -194,16 +207,16 @@ if ( $onering ) {
                     next unless $tdist < $dist;
                     ( $index_i, $dist ) = ( $i, $tdist );
                 }
-                @ring_center = @{ $osm->{node}->{ $ring[$index_i] } }{'lon','lat'};
+                @ring_center = @{ $osm{node}->{ $ring[$index_i] } }{'lon','lat'};
             }
 
             $result{$type} = [ sort { 
-                    metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$a )] ) <=>
-                    metric( \@ring_center, [centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @$b )] )
+                    metric( \@ring_center, [centroid( map { [@{$osm{node}->{$_}}{'lon','lat'}] } @$a )] ) <=>
+                    metric( \@ring_center, [centroid( map { [@{$osm{node}->{$_}}{'lon','lat'}] } @$b )] )
                 } @{$result{$type}} ];
 
             my @add = @{ shift @{$result{$type}} };
-            my @add_center = centroid( map { [@{$osm->{node}->{$_}}{'lon','lat'}] } @add );
+            my @add_center = centroid( map { [@{$osm{node}->{$_}}{'lon','lat'}] } @add );
 
             my ( $index_r, $dist ) = ( 0, metric( \@add_center, $ring[0] ) );
             for my $i ( 1 .. $#ring ) {
@@ -239,6 +252,7 @@ else {
     *OUT = *STDOUT;
 }
 
+my $rel = join q{+}, @rel_ids;
 print OUT "Relation $rel\n\n";
 
 my $num = 1;
@@ -248,7 +262,7 @@ for my $type ( 'outer', 'inner' ) {
     for my $ring ( sort { scalar @$b <=> scalar @$a } @{$result{$type}} ) {
         print OUT ( $type eq 'inner' ? q{-} : q{}) . $num++ . "\n";
         for my $point ( @$ring ) {
-            printf OUT "   %-11s  %-11s\n", @{$osm->{node}->{$point}}{'lon','lat'};
+            printf OUT "   %-11s  %-11s\n", @{$osm{node}->{$point}}{'lon','lat'};
         }
         print OUT "END\n\n";
     }
@@ -262,10 +276,10 @@ print OUT "END\n";
 sub metric {
     my ( $x1, $y1 ) = ref $_[0]
         ? @{ shift @_ }
-        : @{ $osm->{node}->{ shift @_ } }{'lon','lat'};
+        : @{ $osm{node}->{ shift @_ } }{'lon','lat'};
     my ( $x2, $y2 ) = ref $_[0]
         ? @{ shift @_ }
-        : @{ $osm->{node}->{ shift @_ } }{'lon','lat'};
+        : @{ $osm{node}->{ shift @_ } }{'lon','lat'};
 
     return (($x2-$x1)*cos( ($y2+$y1)/2/180*3.14159 ))**2 + ($y2-$y1)**2;
 }
