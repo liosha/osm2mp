@@ -441,7 +441,7 @@ if ($bpolyfile) {
 
 print STDERR "Loading OSM data...       ";
 
-my (%nodetag, %waytag);
+my (%nodetag, %waytag, %ampoly);
 
 my %parse_handler = (
     node => sub {
@@ -474,8 +474,31 @@ my %parse_handler = (
 
             for ( $obj->{tag}->{type} ) {
                 when ( [ qw/ multipolygon boundary / ] ) {
-                    $waytag{"r$id"} = $obj->{tag};
-                    # !!! resolve multipolygon
+                    my $rid = "r$id";
+                    $waytag{$rid} = $obj->{tag};
+                    
+                    my %rings;
+                    for my $item ( [ outer => [q{}, 'outer', 'exclave'] ], [ inner => ['inner', 'enclave'] ] ) {
+                        my ($type, $roles) = @$item;
+                        $rings{$type} = [
+                            map { $_->{ref} }
+                            grep { $_->{type} ~~ 'way' && $_->{role} ~~ $roles }
+                            @{ $obj->{member} || [] }
+                        ];
+                    }
+
+                    if ( !@{$rings{outer}} ) {
+                        report( "Multipolygon RelID=$id doesn't have OUTER way" );
+                        return;
+                    }
+
+                    $ampoly{$rid} = _merge_multipolygon(\%rings);
+
+                    if ( @{$rings{outer}} == 1 && $waytag{$rings{outer}->[0]} ) {
+                        # old-style multipolygon
+                        my $wid = $rings{outer}->[0];
+                        $ampoly{$wid} = $ampoly{$rid};
+                    }
                 };
                 when ( 'turn_restriction' ) {};
                 # !!! etc
@@ -513,6 +536,34 @@ print STDERR "Ok\n";
 printf STDERR "Nodes: %s/%s\n", scalar keys %node, scalar keys %nodetag;
 printf STDERR "Ways:  %s/%s\n", scalar keys %waychain, scalar keys %waytag;
 
+
+
+# load addressing polygons
+if ( $addressing && exists $config{address} ) {
+    print STDERR "Loading address areas     ";
+    while ( my ($id, $tags) = each %waytag ) {
+        process_config( $config{address}, {
+                type    => 'Way', # !!!
+                id      => $id,
+                tag     => $tags,
+                outer   => ( $ampoly{$id} ? $ampoly{$id}->{outer} : [ $waychain{$id} ] ),
+            } );
+    }
+}
+print STDERR "Ok\n";
+
+# processing poi nodes
+print STDERR "Making POIs from nodes    ";
+while ( my ($id, $tags) = each %nodetag ) {
+    process_config( $config{nodes}, {
+            type    => 'Node',
+            id      => $id,
+            tag     => $tags,
+        });
+}
+print STDERR "Ok\n";
+
+
 exit;
 
 ####    ----------------------
@@ -525,7 +576,6 @@ my $relpos;
 
 # multipolygons
 my %mpoly;
-my %ampoly; #advanced
 
 # turn restrictions
 my $counttrest = 0;
@@ -556,34 +606,12 @@ while ( my $line = decode 'utf8', <$in> ) {
     if ( $line =~ /<\/relation/ ) {
 
         # multipolygon
-        if ( $reltag{'type'} eq 'multipolygon'  ||  $reltag{'type'} eq 'boundary' ) {
+#            $ampoly{$relid} = {
+#                outer   =>  $relmember{'way:outer'},
+#                inner   =>  $relmember{'way:inner'},
+#                tags    =>  { %reltag },
+#            };
 
-            push @{$relmember{'way:outer'}}, @{$relmember{'way:'}}
-                if exists $relmember{'way:'};
-            push @{$relmember{'way:outer'}}, @{$relmember{'way:exclave'}}
-                if exists $relmember{'way:exclave'};
-            push @{$relmember{'way:inner'}}, @{$relmember{'way:enclave'}}
-                if exists $relmember{'way:enclave'};
-
-            unless ( exists $relmember{'way:outer'} ) {
-                report( "Multipolygon RelID=$relid doesn't have OUTER way" );
-                next;
-            }
-
-            $ampoly{$relid} = {
-                outer   =>  $relmember{'way:outer'},
-                inner   =>  $relmember{'way:inner'},
-                tags    =>  { %reltag },
-            };
-
-            next    unless exists $relmember{'way:inner'} && @{$relmember{'way:outer'}}==1;
-
-            # old simple multipolygon
-            my $outer = $relmember{'way:outer'}->[0];
-            my @inner = @{ $relmember{'way:inner'} };
-
-            $mpoly{$outer} = [ @inner ];
-        }
 
         # turn restrictions
         if ( $routing  &&  $restrictions  &&  $reltag{'type'} eq 'restriction' ) {
@@ -736,109 +764,15 @@ print  STDERR "                          $count_streets streets\n"              
 
 
 
-####    2nd pass
 ###     loading cities, multipolygon parts and checking node dupes
-
-
-my %ways_to_load;
-for my $mp ( values %ampoly ) {
-    if ( $mp->{outer} ) {
-        for my $id ( @{ $mp->{outer} } ) {
-            $ways_to_load{$id} ++;
-        }
-    }
-    if ( $mp->{inner} ) {
-        for my $id ( @{ $mp->{inner} } ) {
-            $ways_to_load{$id} ++;
-        }
-    }
-}
-
-
-print STDERR "Loading necessary ways... ";
 
 my $wayid;
 #my %waytag;
 my @chain;
-my $dupcount;
 
-seek $in, $waypos, 0;
-
-while ( my $line = decode 'utf8', <$in> ) {
-
-    if ( $line =~/<way / ) {
-        ($wayid)  = $line =~ / id=["']([^"']+)["']/;
-        @chain    = ();
-        %waytag   = ();
-        $dupcount = 0;
-        next;
-    }
-
-    if ( $line =~ /<nd / ) {
-        my ($ref)  =  $line =~ / ref=["']([^"']+)["']/;
-        if ( $node{$ref} ) {
-            unless ( scalar @chain  &&  $ref eq $chain[-1] ) {
-                push @chain, $ref;
-            }
-            else {
-                report( "WayID=$wayid has dupes at ($node{$ref})" );
-                $dupcount ++;
-            }
-        }
-        next;
-    }
-
-    if ( $line =~ /<tag.* k=["']([^"']+)["'].* v=["']([^"']+)["']/ ) {
-        $waytag{$1} = $2        unless exists $config{skip_tags}->{$1};
-        next;
-    }
+#                report( "WayID=$wayid has dupes at ($node{$ref})" );
 
 
-    if ( $line =~ /<\/way/ ) {
-
-        ##      part of multipolygon
-        if ( $ways_to_load{$wayid} ) {
-            $waychain{$wayid} = [ @chain ];
-        }
-
-        ##      address bound
-        process_config( $config{address}, {
-                type    => 'Way',
-                id      => $wayid,
-                tag     => { %waytag },
-                outer   => [ [ @chain ] ],
-            } )
-            if $addressing && exists $config{address};
-
-        next;
-    }
-
-    last  if $line =~ /<relation/;
-}
-
-printf STDERR "%d loaded\n", scalar keys %waychain;
-
-undef %ways_to_load;
-
-
-
-
-print STDERR "Processing multipolygons  ";
-print_section( 'Multipolygons' );
-
-# load addressing polygons
-if ( $addressing && exists $config{address} ) {
-    while ( my ( $mpid, $mp ) = each %ampoly ) {
-        my $ampoly = merge_ampoly( $mpid );
-        next unless exists $ampoly->{outer} && @{ $ampoly->{outer} };
-        process_config( $config{address}, {
-                type    => 'Rel',
-                id      => $mpid,
-                tag     => $mp->{tags},
-                outer   => $ampoly->{outer},
-            } );
-    }
-}
 
 # draw that should be drawn
 my $countpolygons = 0;
@@ -3178,20 +3112,16 @@ sub process_config {
 }
 
 
-sub merge_ampoly {
-    my ($mpid) = @_;
-    my $mp = $ampoly{$mpid};
-
+sub _merge_multipolygon {
+    my ($mp) = @_;
     my %res;
 
     for my $contour_type ( 'outer', 'inner' ) {
-
         my $list_ref = $mp->{$contour_type};
         my @list = grep { exists $waychain{$_} } @$list_ref;
 
         LIST:
         while ( @list ) {
-
             my $id = shift @list;
             my @contour = @{$waychain{$id}};
 
@@ -3223,8 +3153,8 @@ sub merge_ampoly {
                     next CONTOUR;
                 }
 
-                report( "Multipolygon's RelID=$mpid part WayID=$id is not closed",
-                    ( all { exists $waychain{$_} } @$list_ref ) ? 'ERROR' : 'WARNING' );
+                #report( "Multipolygon's RelID=$mpid part WayID=$id is not closed",
+                #    ( all { exists $waychain{$_} } @$list_ref ) ? 'ERROR' : 'WARNING' );
                 last CONTOUR;
             }
         }
