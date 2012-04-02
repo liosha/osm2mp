@@ -34,6 +34,8 @@ use autodie;
 use FindBin qw{ $Bin };
 use lib $Bin;
 
+use Geo::Openstreetmap::Parser;
+
 use POSIX;
 use YAML 0.72;
 use Getopt::Long qw{ :config pass_through };
@@ -55,7 +57,7 @@ use List::MoreUtils qw{ all none any first_index last_index uniq };
 
 
 
-our $VERSION = '0.91_3';
+our $VERSION = '1.00-1';
 
 
 
@@ -142,7 +144,7 @@ my $poi_rtree = Tree::R->new();
 
 
 
-print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2011  liosha, xliosha\@gmail.com\n\n";
+print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2012 liosha, xliosha\@gmail.com\n\n";
 
 
 
@@ -435,63 +437,91 @@ if ($bpolyfile) {
 }
 
 
-####    1st pass
-###     loading nodes
+####    preloading osm
 
-my ( $waypos, $relpos ) = ( 0, 0 );
+print STDERR "Loading OSM data...       ";
 
-print STDERR "Loading nodes...          ";
+my (%nodetag, %waytag);
 
-my $current_node;
-while ( my $line = <$in> ) {
+my %parse_handler = (
+    node => sub {
+            my $obj = shift;
+            my $id = $obj->{attr}->{id};
+            $node{$id} = "$obj->{attr}->{lat},$obj->{attr}->{lon}";
 
-    if ( $line =~ /<node.* id=["']([^"']+)["'].* lat=["']([^"']+)["'].* lon=["']([^"']+)["']/ ) {
-        $node{$1} = "$2,$3";
-        $current_node = $1;
-        next;
-    }
-    
-    if ( $line =~ /<tag/ ) {
-        my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
+            return if !$obj->{tag};
+            $nodetag{$id} = $obj->{tag};
+            #$main_entrance{$id} = 1  if $obj->{tag}->{entrance} ~~ 'main';
+            return;
+        },
+    way => sub {
+            my $obj = shift;
+            my $id = $obj->{attr}->{id};
+            $waychain{$id} = $obj->{nd};
 
-        ##  Territory main entrances
-        if ( $key  &&  $key eq 'entrance'  &&  $val eq 'main' ) {
-            $main_entrance{$current_node} = 1;
-        }
-    }
+            return if !$obj->{tag};
+            $waytag{$id} = $obj->{tag};
+            return;
+        },
+    relation => sub {
+            my $obj = shift;
+            my $id = $obj->{attr}->{id};
 
-    if ( $osmbbox  &&  $line =~ /<bounds?/ ) {
-        my ($minlat, $minlon, $maxlat, $maxlon);
-        if ( $line =~ /<bounds/ ) {
-            ($minlat, $minlon, $maxlat, $maxlon)
-                = ( $line =~ /minlat=["']([^"']+)["'] minlon=["']([^"']+)["'] maxlat=["']([^"']+)["'] maxlon=["']([^"']+)["']/ );
-        }
-        else {
-            ($minlat, $minlon, $maxlat, $maxlon)
-                = ( $line =~ /box=["']([^"',]+),([^"',]+),([^"',]+),([^"']+)["']/ );
-        }
-        $bbox = join q{,}, ($minlon, $minlat, $maxlon, $maxlat);
-        $bounds = 1     if $bbox;
-        @bound = ( [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] );
-        $boundtree = Math::Polygon::Tree->new( \@bound );
-    }
+            if ( !$obj->{tag} || !$obj->{tag}->{type} ) {
+                report( "No type defined for RelID=$id" );
+                return;
+            }
 
-    last    if $line =~ /<way/;
+            for ( $obj->{tag}->{type} ) {
+                when ( [ qw/ multipolygon boundary / ] ) {
+                    $waytag{"r$id"} = $obj->{tag};
+                    # !!! resolve multipolygon
+                };
+                when ( 'turn_restriction' ) {};
+                # !!! etc
+            }
+        },
+);
+
+if ( $osmbbox ) {
+    $parse_handler{bound} = sub {
+        my $obj = shift;
+        my ($minlat, $minlon, $maxlat, $maxlon) = split /,/x, $obj->{attr}->{box};
+        @bound = ([$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat]);
+        return;
+    };
+    $parse_handler{bounds} = sub {
+        my $obj = shift;
+        my ($minlat, $minlon, $maxlat, $maxlon) = @{$obj->{attr}}{qw/ minlat minlon maxlat maxlon /};
+        @bound = ([$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat]);
+        return;
+    };
 }
-continue { $waypos = tell $in }
 
-
-printf STDERR "%d loaded\n", scalar keys %node;
-
+my $parser = Geo::Openstreetmap::Parser->new( %parse_handler );
+$parser->parse ($in);
 
 my $boundgpc = new_gpc();
-$boundgpc->add_polygon ( \@bound, 0 )    if $bounds;
+
+if ( @bound ) {
+    $boundtree = Math::Polygon::Tree->new(\@bound)  if @bound;
+    $boundgpc->add_polygon ( \@bound, 0 );
+}
+
+
+print STDERR "Ok\n";
+printf STDERR "Nodes: %s/%s\n", scalar keys %node, scalar keys %nodetag;
+printf STDERR "Ways:  %s/%s\n", scalar keys %waychain, scalar keys %waytag;
+
+exit;
+
+####    ----------------------
 
 
 
+my $waypos;
+my $relpos;
 
-
-###     loading relations
 
 # multipolygons
 my %mpoly;
@@ -515,49 +545,15 @@ my $count_streets = 0;
 my %road_ref;
 my $count_ref_roads = 0;
 
-
-print STDERR "Loading relations...      ";
-
-my $relid;
 my %reltag;
-my %relmember;
-
-
-while ( <$in> ) {
-    last if /<relation/;
-}
-continue { $relpos = tell $in }
-seek $in, $relpos, 0;
-
 
 while ( my $line = decode 'utf8', <$in> ) {
 
-    if ( $line =~ /<relation/ ) {
-        ($relid)    =  $line =~ / id=["']([^"']+)["']/;
-        %reltag     = ();
-        %relmember  = ();
-        next;
-    }
+    my %relmember;
+    my $relid;
 
-    if ( $line =~ /<member/ ) {
-        my ($mtype, $mid, $mrole)  =
-            $line =~ / type=["']([^"']+)["'].* ref=["']([^"']+)["'].* role=["']([^"']*)["']/;
-        push @{ $relmember{"$mtype:$mrole"} }, $mid     if $mtype;
-        next;
-    }
-
-    if ( $line =~ /<tag/ ) {
-        my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        $reltag{$key} = $val    if $key && !exists $config{skip_tags}->{$key};
-        next;
-    }
-
+#        $reltag{$key} = $val    if $key && !exists $config{skip_tags}->{$key};
     if ( $line =~ /<\/relation/ ) {
-
-        if ( !exists $reltag{'type'} ) {
-            report( "No type defined for RelID=$relid" );
-            next;
-        } 
 
         # multipolygon
         if ( $reltag{'type'} eq 'multipolygon'  ||  $reltag{'type'} eq 'boundary' ) {
@@ -762,7 +758,7 @@ for my $mp ( values %ampoly ) {
 print STDERR "Loading necessary ways... ";
 
 my $wayid;
-my %waytag;
+#my %waytag;
 my @chain;
 my $dupcount;
 
@@ -907,7 +903,7 @@ print_section( 'Points' );
 
 my $countpoi = 0;
 my $nodeid;
-my %nodetag;
+#my %nodetag;
 
 seek $in, 0, 0;
 
