@@ -1,0 +1,253 @@
+--- ways
+---
+
+# RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
+
+- condition:
+    - highway = motorway
+  action:
+    - action: load_road
+      type: 0x01
+      level_h: 4
+      routeparams: '6,4,1,0,0,0,0,0,0,0,0,0'
+
+- condition:
+    - highway = motorway_link
+  action:
+    - action: load_road
+      type: 0x09
+      level_h: 2
+      routeparams: '3,4,1,0,0,0,0,0,0,0,0,0'
+
+
+- condition:
+    - highway = trunk
+  action:
+    - action: load_road
+      type: 0x01
+      level_h: 4
+      routeparams: '5,4,0,0,0,0,0,0,0,0,0,0'
+
+- condition:
+    - highway = trunk
+    - inside_city
+  action:
+    - action: load_road
+      type: 0x01
+      level_h: 4
+      routeparams: '3,4,0,0,0,0,0,0,0,0,0,0'
+
+- condition:
+    - highway = trunk_link
+  action:
+    - action: load_road
+      type: 0x09
+      level_h: 2
+      routeparams: '3,4,0,0,0,0,0,0,0,0,0,0'
+
+
+- condition:
+    - highway = primary
+  action:
+    - action: load_road
+      type: 0x02
+      level_h: 3
+      routeparams: '4,3,0,0,0,0,0,0,0,0,0,0'
+
+- condition:
+    - highway = primary
+    - inside_city
+  action:
+    - action: load_road
+      type: 0x04
+      level_h: 3
+      routeparams: '3,3,0,0,0,0,0,0,0,0,0,0'
+
+- condition:
+    - highway = primary_link
+  action:
+    - action: load_road
+      type: 0x08
+      level_h: 1
+      routeparams: '2,3,0,0,0,0,0,0,0,0,0,0'
+
+
+- condition:
+    - highway = secondary
+  action:
+    - action: load_road
+      type: 0x02
+      level_h: 2
+      routeparams: '4,2,0,0,0,0,0,0,0,0,0,0'
+
+- condition:
+    - highway = secondary
+    - inside_city
+  action:
+    - action: load_road
+      type: 0x05
+      level_h: 2
+      routeparams: '3,2,0,0,0,0,0,0,0,0,0,0'
+
+- condition:
+    - highway = secondary_link
+  action:
+    - action: load_road
+      type: 0x08
+      level_h: 1
+      routeparams: '2,2,0,0,0,0,0,0,0,0,0,0'
+
+
+- condition:
+    - highway = tertiary
+  action:
+    - action: load_road
+      type: 0x03
+      level_h: 2
+      routeparams: '4,1,0,0,0,0,0,0,0,0,0,0'
+
+- condition:
+    - highway = tertiary
+    - inside_city
+  action:
+    - action: load_road
+      type: 0x05
+      level_h: 1
+      routeparams: '3,1,0,0,0,0,0,0,0,0,0,0'
+
+
+- condition:
+    - highway = unclassified
+  action:
+    - action: load_road
+      type: 0x03
+      level_h: 1
+      routeparams: '3,1,0,0,0,0,0,0,0,0,0,0'
+
+
+- condition:
+    - highway = unclassified
+    - inside_city
+  action:
+    - action: load_road
+      type: 0x06
+      level_h: 1
+      routeparams: '2,1,0,0,0,0,0,0,0,0,0,0'
+
+
+- condition:
+    - highway = residential
+  action:
+    - action: load_road
+      type: 0x06
+      level_h: 1
+      routeparams: '2,0,0,0,0,0,0,0,0,0,0,0'
+
+
+- condition:
+    - highway = living_street
+  action:
+    - action: load_road
+      type: 0x06
+      level_h: 1
+      routeparams: '1,0,0,0,0,0,0,0,0,0,0,0'
+
+- condition:
+    - highway = pedestrian
+    - area != *
+  action:
+    - action: load_road
+      type: 0x06
+      level_h: 1
+      routeparams: '0,0,0,0,0,1,1,1,1,0,0,1'
+
+- condition:
+    - highway = service
+    - area != *
+  action:
+    - action: load_road
+      type: 0x07
+      level_h: 0
+      routeparams: '0,0,0,0,0,0,0,0,0,0,0,0'
+
+
+
+## Tracks
+
+- condition:
+    - highway = track|road
+  action:
+    - action: load_road
+      type: 0x0a
+      level_h: 1
+      routeparams: '1,0,0,0,0,0,0,1,0,0,0,0'
+
+- condition:
+    - highway = track
+    - tracktype = grade4|grade5
+  action:
+    - action: modify_road
+      type: 0x16
+
+- condition:
+    - highway = track
+    - tracktype = grade1|grade2
+    - ~inside_city
+  action:
+    - action: modify_road
+      level_h: 2
+
+
+
+## Modifiers
+
+- condition:
+    - route = ferry
+  action:
+    - action: modify_road
+      type: 0x1b
+
+- condition:
+    - junction = roundabout
+  action:
+    - action: modify_road
+      type: 0x0c
+      routeparams: '.,.,1,.,.,.,.,.,.,.,.,.'
+
+- condition:
+    - oneway = yes|true|1
+  action:
+    - action: modify_road
+      routeparams: '.,.,1,.,.,.,.,.,.,.,.,.'
+
+- condition:
+    - oneway = no|false|0
+  action:
+    - action: modify_road
+      routeparams: '.,.,0,.,.,.,.,.,.,.,.,.'
+
+- condition:
+    - oneway = -1
+  action:
+    - action: modify_road
+      routeparams: '.,.,1,.,.,.,.,.,.,.,.,.'
+      reverse: 1
+
+- condition:
+    - toll = yes|true|1
+  action:
+    - action: modify_road
+      routeparams: '.,.,.,1,.,.,.,.,.,.,.,.'
+
+
+# unpaved roads
+- condition:
+    - highway = unclassified|residential|road
+    - surface = unpaved|ground|earth|mud|grass|sand|dirt
+  action:
+    - action: modify_road
+      type: 0x0a
+
+# RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
+
+

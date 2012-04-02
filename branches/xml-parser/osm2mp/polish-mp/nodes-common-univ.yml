@@ -1,0 +1,185 @@
+
+####    Additional common points
+
+--- nodes
+---
+
+# Others
+
+- id:   toilets
+  condition:
+    - amenity = toilets
+  action:
+    - action: write_poi
+      type: 0x2F10
+      contacts: yes
+
+- id:   sauna
+  condition:
+    - amenity = sauna
+  action:
+    - action: write_poi
+      type: 0x2F10
+      contacts: yes
+
+
+
+# Manmade features
+
+- condition:
+    - or:
+        - and:
+            - bridge = yes
+            - highway != steps|\w+_link
+        - railway = viaduct
+  action:
+    - action: write_poi
+      type: 0x6401
+
+- condition:
+    - or:
+        - amenity = grave_yard
+        - landuse = cemetery
+  action:
+    - action: write_poi
+      type: 0x6403
+
+- condition:
+    - railway = level_crossing
+  action:
+    - action: write_poi
+      type: 0x6406
+
+- condition:
+    - man_made = power_hydro
+  action:
+    - action: write_poi
+      type: 0x6407
+
+- condition:
+    - amenity = veterinary
+  action:
+    - action: write_poi
+      type: 0x6408
+
+- condition:
+    - military = bunker
+  action:
+    - action: write_poi
+      type: 0x640B
+
+- condition:
+    - landuse = quarry
+  action:
+    - action: write_poi
+      type: 0x640C
+
+- condition:
+    - man_made = survey_point|tower|water_tower
+  action:
+    - action: write_poi
+      type: 0x6411
+
+- condition:
+    - tunnel = yes
+    - highway != service|footway|steps|residential
+    - railway != subway|platform
+    - station != subway    
+  action:
+    - action: write_poi
+      type: 0x6413
+
+- condition:
+    - amenity = drinking_water
+  action:
+    - action: write_poi
+      type: 0x6414
+
+
+
+# Water features
+
+- condition:
+    - natural = bay
+  action:
+    - action: write_poi
+      type: 0x6503
+
+- condition:
+    - waterway = waterfall
+  action:
+    - action: write_poi
+      type: 0x6508
+
+- condition:
+    - natural = glacier
+  action:
+    - action: write_poi
+      type: 0x650A
+
+- condition:
+    - place = island
+    - named
+  action:
+    - action: write_poi
+      type: 0x650C
+
+- condition:
+    - natural = water
+    - waterway != riverbank
+    - named
+  action:
+    - action: write_poi
+      type: 0x650D
+
+- condition:
+    - natural = spring
+  action:
+    - action: write_poi
+      type: 0x6511
+
+
+
+# Land features
+
+- condition:
+    - natural = arch|cave_entrance
+  action:
+    - action: write_poi
+      type: 0x6601
+
+- condition:
+    - natural = beach
+  action:
+    - action: write_poi
+      type: 0x6604
+
+- condition:
+    - natural = wood
+    - named
+  action:
+    - action: write_poi
+      type: 0x660A
+
+- condition:
+    - natural = plain
+  action:
+    - action: write_poi
+      type: 0x6610
+
+- condition:
+    - natural = rock
+  action:
+    - action: write_poi
+      type: 0x6614
+
+- condition:
+    - natural = peak
+  action:
+    - action: write_poi
+      type: 0x6616
+      level_h: 1
+      ele: yes
+
+
+

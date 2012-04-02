@@ -1,0 +1,768 @@
+
+####    Common points
+
+--- nodes
+---
+
+##  Settlements
+
+- condition:
+    - place = city
+    - only_node
+    - capital = yes
+    - or:
+        - admin_level = 1|2
+        - admin_level != *
+  action:
+    - action: write_poi
+      type: 0x0100
+      level_h: 4
+      city: yes
+
+- condition:
+    - place = city
+    - only_node
+    - capital = yes
+    - admin_level = 3|4
+  action:
+    - action: write_poi
+      type: 0x0200
+      level_h: 4
+      city: yes
+
+- condition:
+    - place = city
+    - only_node
+    - or:
+        - capital != yes
+        - and:
+            - capital = yes
+            - admin_level = *
+            - admin_level != 1|2|3|4
+  action:
+    - action: write_poi
+      type: 0x0400
+      level_h: 3
+      city: yes
+    - action: write_poi
+      type: 0x0800
+      level_l: 4
+      level_h: 4
+
+- condition:
+    - place = town
+    - only_node
+  action:
+    - action: write_poi
+      type: 0x0800
+      level_h: 3
+      city: yes
+
+- condition:
+    - place = village
+    - only_node
+  action:
+    - action: write_poi
+      type: 0x0B00
+      level_h: 2
+      city: yes
+
+- condition:
+    - place = hamlet
+    - only_node
+  action:
+    - action: write_poi
+      type: 0x0C00
+      level_h: 2
+      city: yes
+
+
+
+
+##  Searchable POI
+
+
+# Food & Drink
+
+- condition:
+    - amenity = restaurant
+    - cuisine != asian|barbecue|chinese|italian|pizza|mexican|seafood|french|german
+  action:
+    - action: write_poi
+      type: 0x2A00
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = asian
+  action:
+    - action: write_poi
+      type: 0x2A02
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = barbecue
+  action:
+    - action: write_poi
+      type: 0x2A03
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = chinese
+  action:
+    - action: write_poi
+      type: 0x2A04
+      contacts: yes
+
+- condition:
+    - shop = bakery
+  action:
+    - action: write_poi
+      type: 0x2A05
+      contacts: yes
+
+- condition:
+    - amenity = fast_food|food_court
+  action:
+    - action: write_poi
+      type: 0x2A07
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = italian
+  action:
+    - action: write_poi
+      type: 0x2A08
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = mexican
+  action:
+    - action: write_poi
+      type: 0x2A09
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = pizza
+  action:
+    - action: write_poi
+      type: 0x2A0A
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = seafood
+  action:
+    - action: write_poi
+      type: 0x2A0B
+      contacts: yes
+
+- condition:
+    - amenity = cafe
+  action:
+    - action: write_poi
+      type: 0x2A0E
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = french
+  action:
+    - action: write_poi
+      type: 0x2A0F
+      contacts: yes
+
+- condition:
+    - amenity = restaurant
+    - cuisine = german
+  action:
+    - action: write_poi
+      type: 0x2A10
+      contacts: yes
+
+
+
+
+# Lodging
+
+- condition:
+    - tourism = guest_house
+  action:
+    - action: write_poi
+      type: 0x2B00
+      contacts: yes
+
+- condition:
+    - tourism = hotel|motel
+  action:
+    - action: write_poi
+      type: 0x2B01
+      contacts: yes
+
+- condition:
+    - tourism = hostel
+  action:
+    - action: write_poi
+      type: 0x2B02
+      contacts: yes
+
+- condition:
+    - tourism = camp_site|caravan_site
+  action:
+    - action: write_poi
+      type: 0x2B03
+      contacts: yes
+
+
+
+# Fuel
+
+- condition:
+    - amenity = fuel
+  action:
+    - action: write_poi
+      type: 0x2F01
+      contacts: yes
+
+
+
+# Attractions
+
+- condition:
+    - tourism = attraction|viewpoint
+  action:
+    - action: write_poi
+      type: 0x2C00
+      contacts: yes
+
+- condition:
+    - or:
+        - leisure = theme_park|water_park
+        - tourism = theme_park
+  action:
+    - action: write_poi
+      type: 0x2C01
+      contacts: yes
+
+- condition:
+    - or:
+        - historic = archaeological_site|battlefield|castle|museum|ruins
+        - tourism = museum
+  action:
+    - action: write_poi
+      type: 0x2C02
+      contacts: yes
+
+- condition:
+    - historic = memorial|monument
+  action:
+    - action: write_poi
+      type: 0x2C04
+      contacts: yes
+
+- condition:
+    - leisure = garden|park
+    - named
+  action:
+    - action: write_poi
+      type: 0x2C06
+      contacts: yes
+
+- condition:
+    - tourism = zoo
+  action:
+    - action: write_poi
+      type: 0x2C07
+      contacts: yes
+
+- condition:
+    - leisure = stadium
+  action:
+    - action: write_poi
+      type: 0x2C08
+      contacts: yes
+
+
+
+# Recreation
+
+- condition:
+    - sport = golf
+  action:
+    - action: write_poi
+      contacts: yes
+      type: 0x2D05
+
+- condition:
+    - sport = skiing
+  action:
+    - action: write_poi
+      type: 0x2D06
+      contacts: yes
+
+- condition:
+    - sport = bowls
+  action:
+    - action: write_poi
+      type: 0x2D07
+      contacts: yes
+
+- condition:
+    - or:
+        - leisure = ice_rink
+        - sport = skating|hockey
+  action:
+    - action: write_poi
+      type: 0x2D08
+      contacts: yes
+
+- condition:
+    - sport = swimming
+  action:
+    - action: write_poi
+      type: 0x2D09
+      contacts: yes
+
+- condition:
+    - leisure = sports_centre
+    - sport != golf|skiing|bowls|skating|swimming
+  action:
+    - action: write_poi
+      type: 0x2D0A
+      contacts: yes
+
+
+
+# Entertainment
+
+- condition:
+    - amenity = theatre
+  action:
+    - action: write_poi
+      type: 0x2D01
+      contacts: yes
+
+- condition:
+    - amenity = bar|biergarten|nightclub|pub
+  action:
+    - action: write_poi
+      type: 0x2D02
+      contacts: yes
+
+- condition:
+    - amenity = cinema
+  action:
+    - action: write_poi
+      type: 0x2D03
+      contacts: yes
+
+
+
+# Shopping
+
+- condition:
+    - or:
+        - shop = dry_cleaning|laundry|beauty|hairdresser
+        - and:
+            - amenity = marketplace
+            - named
+  action:
+    - action: write_poi
+      type: 0x2E00
+      contacts: yes
+
+- condition:
+    - shop = department_store
+  action:
+    - action: write_poi
+      type: 0x2E01
+      contacts: yes
+
+- condition:
+    - shop = convenience|kiosk|butcher|grocery|supermarket|alcohol
+  action:
+    - action: write_poi
+      type: 0x2E02
+      contacts: yes
+
+- condition:
+    - shop = mall|hypermarket
+  action:
+    - action: write_poi
+      type: 0x2E04
+      contacts: yes
+
+- condition:
+    - or:
+        - amenity = pharmacy
+  action:
+    - action: write_poi
+      type: 0x2E05
+      contacts: yes
+
+- condition:
+    - shop = clothes
+  action:
+    - action: write_poi
+      type: 0x2E07
+      contacts: yes
+
+- id: shoes_shop
+  condition:
+    - shop = shoes
+  action:
+    - action: write_poi
+      type: 0x2E07
+      contacts: yes
+
+- condition:
+    - shop = doityourself|garden_centre|hardware|chemist
+  action:
+    - action: write_poi
+      type: 0x2E08
+      contacts: yes
+
+- condition:
+    - shop = furniture
+  action:
+    - action: write_poi
+      type: 0x2E09
+      contacts: yes
+
+- id: books_shop
+  condition:
+    - shop = books
+  action:
+    - action: write_poi
+      type: 0x2E0A
+      contacts: yes
+
+- condition:
+    - shop = bicycle|electronics|electrogoods|electrotools|outdoor|stationery|sports|toys|kids
+  action:
+    - action: write_poi
+      type: 0x2E0A
+      contacts: yes
+
+- condition:
+    - shop = computer
+  action:
+    - action: write_poi
+      type: 0x2E0B
+      contacts: yes
+
+
+
+# Auto Services
+
+- condition:
+    - amenity = car_rental|car_sharing
+  action:
+    - action: write_poi
+      type: 0x2F02
+      contacts: yes
+
+- condition:
+    - or:
+        - shop = car_repair|tyres
+        - and:
+            - shop = car
+            - service = repair|tyres
+  action:
+    - action: write_poi
+      type: 0x2F03
+      contacts: yes
+
+- condition:
+    - or:
+        - shop = car_parts
+        - and:
+            - shop = car
+            - or:
+                - service = dealer|parts
+                - service != *
+  action:
+    - action: write_poi
+      type: 0x2F07
+      contacts: yes
+
+- condition:
+    - amenity = parking
+    - access != private
+    - parking != garages|garage_boxes
+  action:
+    - action: write_poi
+      type: 0x2F0B
+      contacts: yes
+
+- condition:
+    - amenity = car_wash
+  action:
+    - action: write_poi
+      type: 0x2F0E
+      contacts: yes
+
+
+
+# Transportation
+
+- condition:
+    - place = airport
+  action:
+    - action: write_poi
+      type: 0x2F04
+      level_h: 2
+      contacts: yes
+
+- condition:
+    - aeroway = aerodrome
+    - place != airport
+  action:
+    - action: write_poi
+      type: 0x2F04
+      level_h: 1
+      contacts: yes
+
+- condition:
+    - or:
+        - amenity = bus_station|bus_stop
+        - highway = bus_station|bus_stop
+  action:
+    - action: write_poi
+      type: 0x2F08
+      transport: yes
+      contacts: yes
+
+- condition:
+    - railway = tram_stop
+  action:
+    - action: write_poi
+      type: 0x2F08
+      contacts: yes
+
+- id:   railway_station
+  condition:
+    - railway = halt|station
+    - station != subway
+  action:
+    - action: write_poi
+      type: 0x2F17
+      contacts: yes
+
+#
+#- id:   subway_station
+#  condition:
+#    - railway = subway_entrance
+#  action:
+#    - action: write_poi
+#      type: 0x2F17
+#      contacts: yes
+
+- id:   aerialway_station
+  condition:
+    - aerialway = station
+  action:
+    - action: write_poi
+      type: 0x2F17
+      contacts: yes
+
+
+
+# Community
+
+- condition:
+    - amenity = library
+  action:
+    - action: write_poi
+      type: 0x2C03
+      contacts: yes
+
+- condition:
+    - amenity = college|kindergarten|school|university
+  action:
+    - action: write_poi
+      type: 0x2C05
+      contacts: yes
+
+- condition:
+    - amenity = place_of_worship
+    - religion != christian|muslim|jewish
+  action:
+    - action: write_poi
+      type: 0x2C0F
+      contacts: yes
+
+- condition:
+    - amenity = place_of_worship
+    - religion = christian
+  action:
+    - action: write_poi
+      type: 0x2C0E
+      contacts: yes
+
+- condition:
+    - amenity = place_of_worship
+    - religion = muslim
+  action:
+    - action: write_poi
+      type: 0x2C0D
+      contacts: yes
+
+- condition:
+    - amenity = place_of_worship
+    - religion = jewish
+  action:
+    - action: write_poi
+      type: 0x2C10
+      contacts: yes
+
+- condition:
+    - amenity = police
+  action:
+    - action: write_poi
+      type: 0x3001
+      contacts: yes
+
+- condition:
+    - amenity = townhall
+  action:
+    - action: write_poi
+      type: 0x3003
+      contacts: yes
+
+- condition:
+    - amenity = courthouse
+  action:
+    - action: write_poi
+      type: 0x3004
+      contacts: yes
+
+- condition:
+    - barrier = border_control
+  action:
+    - action: write_poi
+      type: 0x3006
+      contacts: yes
+
+- condition:
+    - or:
+        - amenity = embassy|public_building
+        - office = government
+  action:
+    - action: write_poi
+      type: 0x3007
+      contacts: yes
+
+- condition:
+    - amenity = fire_station
+  action:
+    - action: write_poi
+      type: 0x3008
+      contacts: yes
+
+- condition:
+    - amenity = post_office
+  action:
+    - action: write_poi
+      type: 0x2F05
+      contacts: yes
+
+- id: bank
+  condition:
+    - amenity = atm|bank
+  action:
+    - action: write_poi
+      type: 0x2F06
+      contacts: yes
+
+- condition:
+    - amenity = bureau_de_change
+  action:
+    - action: write_poi
+      type: 0x2F06
+      contacts: yes
+
+
+
+
+# Hospital
+
+- condition:
+    - or:
+        - amenity = dentist|doctors|hospital
+        - healthcare = centre|clinic|dentist|doctor|hospital
+  action:
+    - action: write_poi
+      type: 0x3002
+      contacts: yes
+
+
+
+##  Labels
+
+- condition:
+    - boundary = administrative
+    - admin_level = 4
+    - only_rel
+  action:
+    - action: write_poi
+      type: 0x1500
+      level_l: 4
+      level_h: 4
+
+- condition:
+    - boundary = administrative
+    - admin_level = 6
+    - only_rel
+  action:
+    - action: write_poi
+      type: 0x1500
+      level_l: 3
+      level_h: 3
+
+- condition:
+    - place = suburb
+  action:
+    - action: write_poi
+      type: 0x1F00
+      level_h: 1
+
+- condition:
+    - place = locality
+  action:
+    - action: write_poi
+      type: 0x2800
+      level_h: 1
+
+
+
+##  The rest
+
+- condition:
+    - or:
+        - amenity = shelter
+        - tourism = alpine_hut
+        - and:
+            - landuse = residential
+            - only_node
+  action:
+    - action: write_poi
+      type: 0x6100
+
+
+- condition:
+    - building = *
+    - building != no
+    - addr:housenumber = *
+    - only_node
+  action:
+    - action: write_poi
+      type: 0x2800
+      Label: %house
+      contacts: yes
+

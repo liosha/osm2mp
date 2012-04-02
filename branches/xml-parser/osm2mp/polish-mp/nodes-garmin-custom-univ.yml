@@ -1,0 +1,130 @@
+
+
+--- nodes
+---
+
+##  Experimental
+
+- condition:
+    - note = *
+  action:
+    - action: write_poi
+      type: 0x010800
+      Label:
+      Text: %note
+
+
+##  Replaced rules
+
+- id:   sauna
+  condition:
+    - amenity = sauna
+  action:
+    - action: write_poi
+      type: 0x2F10
+      contacts: yes
+    - action: write_poi
+      type: 0x11500
+
+- id:   toilets
+  condition:
+    - amenity = toilets
+  action:
+    - action: write_poi
+      type: 0x2F10
+      contacts: yes
+    - action: write_poi
+      type: 0x11501
+
+
+
+##  Various custom points
+
+- condition:
+    - amenity = fountain
+  action:
+    - action: write_poi
+      type: 0x011502
+
+- condition:
+    - amenity = recycling|waste_basket|waste_disposal
+  action:
+    - action: write_poi
+      type: 0x011503
+
+
+- condition:
+    - traffic_calming = yes|bump|cushion|hump|table
+  action:
+    - action: write_poi
+      type: 0x011511
+
+- condition:
+    - highway = crossing
+  action:
+    - action: write_poi
+      type: 0x011512
+
+- condition:
+    - barrier = bollard
+  action:
+    - action: write_poi
+      type: 0x011513
+
+- condition:
+    - barrier = lift_gate|toll_booth
+  action:
+    - action: write_poi
+      type: 0x011514
+
+- condition:
+    - barrier = gate
+  action:
+    - action: write_poi
+      type: 0x011515
+
+- condition:
+    - barrier = block
+  action:
+    - action: write_poi
+      type: 0x011516
+
+- condition:
+    - barrier = chain
+  action:
+    - action: write_poi
+      type: 0x011517
+
+
+##  Whitewater
+
+- condition:
+    - whitewater = put_in
+    - whitewater != egress
+  action:
+    - action: write_poi
+      type: 0x01161C
+      level_h: 1
+
+- condition:
+    - whitewater = egress
+    - whitewater != put_in
+  action:
+    - action: write_poi
+      type: 0x01161D
+      level_h: 1
+
+- condition:
+    - whitewater = put_in
+    - whitewater = egress
+  action:
+    - action: write_poi
+      type: 0x01161E
+      level_h: 1
+
+- condition:
+    - whitewater = weir
+  action:
+    - action: write_poi
+      type: 0x01161F
+      level_h: 1

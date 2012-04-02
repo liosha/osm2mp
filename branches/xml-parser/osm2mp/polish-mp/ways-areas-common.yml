@@ -1,0 +1,159 @@
+--- ways
+---
+
+# Settlements
+
+- condition:
+    - place = city
+  action:
+    - action: write_polygon
+      type: 0x01
+      level_h: 4
+
+- condition:
+    - place = town
+  action:
+    - action: write_polygon
+      type: 0x02
+      level_h: 3
+
+- condition:
+    - place = village|hamlet
+  action:
+    - action: write_polygon
+      type: 0x03
+      level_h: 2
+
+
+# Man-made
+
+- condition:
+    - amenity = parking
+  action:
+    - action: write_polygon
+      type: 0x05
+      level_h: 1
+
+- condition:
+    - landuse = commercial|retail
+  action:
+    - action: write_polygon
+      type: 0x08
+      level_h: 2
+
+- condition:
+    - shop = mall|supermarket
+    - landuse != commercial|retail
+  action:
+    - action: write_polygon
+      type: 0x08
+      level_h: 1
+
+- condition:
+    - amenity = college|kindergarten|school|university
+    - building != *
+  action:
+    - action: write_polygon
+      type: 0x0a
+      level_h: 1
+
+- condition:
+    - amenity = hospital
+    - building != *
+  action:
+    - action: write_polygon
+      type: 0x0b
+      level_h: 1
+
+- condition:
+    - landuse = industrial
+  action:
+    - action: write_polygon
+      type: 0x0c
+      level_h: 2
+
+- condition:
+    - building = *
+    - building != no
+    # kill fakes
+    - or:
+        - addr:housenumber = *
+        - and:
+            - height != *
+            - min_height != *
+            - building:height != *
+            - building:levels != *
+            - building:min_level != *
+  action:
+    - action: write_polygon
+      type: 0x13
+      Label: %house
+    - action: address_poi
+
+- condition:
+    - or:
+        - leisure = nature_reserve
+        - boundary = national_park
+  action:
+    - action: write_polygon
+      type: 0x14
+      level_l: 2
+      level_h: 4
+
+- id: park
+  condition:
+    - leisure = garden|park
+    - landuse != forest
+  action:
+    - action: write_polygon
+      type: 0x17
+      level_h: 2
+
+- id: forest
+  condition:
+    - landuse = forest
+  action:
+    - action: write_polygon
+      type: 0x17
+      level_h: 3
+
+- condition:
+    - leisure = stadium|pitch
+  action:
+    - action: write_polygon
+      type: 0x19
+      level_h: 1
+
+- condition:
+    - sport = *
+    - leisure != *
+  action:
+    - action: write_polygon
+      type: 0x19
+
+- condition:
+    - landuse = cemetery
+  action:
+    - action: write_polygon
+      type: 0x1a
+      level_h: 1
+
+
+# Natural
+
+- condition:
+    - or:
+        - natural = water
+        - landuse = basin|reservoir
+  action:
+    - action: write_polygon
+      type: 0x3f
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - waterway = riverbank
+  action:
+    - action: write_polygon
+      type: 0x47
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
