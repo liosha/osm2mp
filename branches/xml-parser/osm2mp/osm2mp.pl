@@ -17,6 +17,7 @@
 ##    * Math::Polygon::Tree
 ##    * Math::Geometry::Planar::GPC::Polygon
 ##    * Tree::R
+##    * Geo::Openstreetmap::Parser
 ##
 ##  See http://search.cpan.org/ or use PPM (Perl package manager) or CPAN module
 ##
@@ -570,6 +571,19 @@ if ( $addressing && exists $config{address} ) {
 }
 print STDERR "Ok\n";
 
+
+my %road;
+my %coast;
+my %trest;
+my %barrier;
+my %xnode;
+my %nodetr;
+my %hlevel;
+my %road_ref;
+my %trstop;
+my %street;
+
+print_section( 'Simple objects' );
 # processing poi nodes
 print STDERR "Processing nodes          ";
 while ( my ($id, $tags) = each %nodetag ) {
@@ -595,11 +609,7 @@ while ( my ($id, $tags) = each %waytag ) {
 print STDERR "Ok\n";
 
 
-exit;
-
-####    ----------------------
-
-
+=old_code
 
 my $waypos;
 my $relpos;
@@ -611,19 +621,14 @@ my %mpoly;
 # turn restrictions
 my $counttrest = 0;
 my $countsigns = 0;
-my %trest;
-my %nodetr;
 
 # transport
 my $countroutes = 0;
-my %trstop;
 
 # streets
-my %street;
 my $count_streets = 0;
 
 # roads numbers
-my %road_ref;
 my $count_ref_roads = 0;
 
 my %reltag;
@@ -799,8 +804,6 @@ my @chain;
 ####    3rd pass
 ###     loading and writing points
 
-my %barrier;
-my %xnode;
 
 
 print STDERR "Processing nodes...       ";
@@ -834,15 +837,11 @@ while ( my $line = decode 'utf8', <$in> ) {
 
 ####    Loading roads and coastlines, and writing other ways
 
-my %road;
-my %coast;
-my %hlevel;
 
 print STDERR "Processing ways...        ";
 print_section( 'Lines and polygons' );
 
 my $countlines  = 0;
-my $countpolygons  = 0;
 
 my $city;
 my @chainlist;
@@ -904,6 +903,9 @@ printf STDERR "                          %d roads loaded\n",      scalar keys %r
 printf STDERR "                          %d coastlines loaded\n", scalar keys %coast    if  $shorelines;
 
 undef %waychain;
+
+
+=cut
 
 
 ####    Writing non-addressed POIs
@@ -2519,8 +2521,6 @@ sub WritePolygon {
         $comment .= "\n$key = $val";
     }
 
-    $countpolygons ++;
-
     my %opts = (
         lzoom   => $lzoom || '0',
         hzoom   => $hzoom || '0',
@@ -2547,7 +2547,7 @@ sub WritePolygon {
             }
 
             my $street = $tag{'addr:street'};
-            $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
+            #$street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
             $street //= ( $city ? $city->{name} : $default_city );
 
             my $suburb = FindSuburb( $plist[0]->[0] );
@@ -2828,7 +2828,7 @@ sub execute_action {
         return  unless $latlon && ( !$bounds || is_inside_bounds( $latlon ) );
 
         my %tag = %{ $obj->{tag} };
-        $countpoi ++;
+        #$countpoi ++;
 
         %objinfo = ( %objinfo, (
                 latlon      => $latlon,
@@ -2943,7 +2943,7 @@ sub execute_action {
                 }
             }
             elsif ( $param{action} ne 'modify_road' ) {
-                $countlines ++;
+                # $countlines ++;
                 WriteLine( \%objinfo );
             }
         }
