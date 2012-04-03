@@ -390,8 +390,15 @@ if ( !$output_fn ) {
 ####    Opening input
 
 my $infile = shift @ARGV;
-print STDERR "Processing file $infile\n\n";
-open my $in, '<', $infile;
+my $in;
+if ( $infile ~~ '-' ) {
+    print STDERR "Processing STDIN\n\n";
+    $in = *STDIN;
+}
+else {
+    print STDERR "Processing file $infile\n\n";
+    open $in, '<', $infile;
+}
 
 
 
@@ -533,7 +540,7 @@ if ( $osmbbox ) {
 }
 
 my $parser = Geo::Openstreetmap::Parser->new( %parse_handler );
-$parser->parse ($in);
+$parser->parse($in);
 
 my $boundgpc = new_gpc();
 
