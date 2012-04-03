@@ -450,16 +450,25 @@ my %parse_handler = (
             $node{$id} = "$obj->{attr}->{lat},$obj->{attr}->{lon}";
 
             return if !$obj->{tag};
+            return if !grep { !$config{skip_tags}->{$_} } keys %{$obj->{tag}};
+
             $nodetag{$id} = $obj->{tag};
-            #$main_entrance{$id} = 1  if $obj->{tag}->{entrance} ~~ 'main';
             return;
         },
     way => sub {
             my $obj = shift;
             my $id = $obj->{attr}->{id};
+
+            if ( @{ $obj->{nd} || [] } < 2 ) {
+                report( "Collapsed way WayID=$id" );
+                return;
+            }
+
             $waychain{$id} = $obj->{nd};
 
             return if !$obj->{tag};
+            return if !grep { !$config{skip_tags}->{$_} } keys %{$obj->{tag}};
+
             $waytag{$id} = $obj->{tag};
             return;
         },
@@ -474,9 +483,6 @@ my %parse_handler = (
 
             for ( $obj->{tag}->{type} ) {
                 when ( [ qw/ multipolygon boundary / ] ) {
-                    my $rid = "r$id";
-                    $waytag{$rid} = $obj->{tag};
-                    
                     my %rings;
                     for my $item ( [ outer => [q{}, 'outer', 'exclave'] ], [ inner => ['inner', 'enclave'] ] ) {
                         my ($type, $roles) = @$item;
@@ -492,7 +498,12 @@ my %parse_handler = (
                         return;
                     }
 
-                    $ampoly{$rid} = _merge_multipolygon(\%rings);
+                    my $ampoly = _merge_multipolygon(\%rings);
+                    return if !$ampoly->{outer} || !@{$ampoly->{outer}};
+                    
+                    my $rid = "r$id";
+                    $waytag{$rid} = $obj->{tag};
+                    $ampoly{$rid} = $ampoly;
 
                     if ( @{$rings{outer}} == 1 && $waytag{$rings{outer}->[0]} ) {
                         # old-style multipolygon
@@ -553,13 +564,25 @@ if ( $addressing && exists $config{address} ) {
 print STDERR "Ok\n";
 
 # processing poi nodes
-print STDERR "Making POIs from nodes    ";
+print STDERR "Processing nodes          ";
 while ( my ($id, $tags) = each %nodetag ) {
     process_config( $config{nodes}, {
             type    => 'Node',
             id      => $id,
             tag     => $tags,
         });
+}
+print STDERR "Ok\n";
+
+print STDERR "Processing ways           ";
+while ( my ($id, $tags) = each %waytag ) {
+    if ( $makepoi ) {
+        process_config( $config{nodes}, {
+                type    => "Way",
+                id      => $id,
+                tag     => $tags,
+            });
+    }
 }
 print STDERR "Ok\n";
 
@@ -778,8 +801,7 @@ my @chain;
 my $countpolygons = 0;
 while ( my ( $mpid, $mp ) = each %ampoly ) {
 
-    my $ampoly = merge_ampoly( $mpid );
-    next unless exists $ampoly->{outer} && @{ $ampoly->{outer} };
+    my $ampoly;
 
     ## POI
     if ( $makepoi ) {
@@ -860,21 +882,6 @@ while ( my $line = decode 'utf8', <$in> ) {
 
         next unless scalar %nodetag;
 
-        ##  Barriers
-        if ( $routing  &&  $barriers  &&  $nodetag{'barrier'} ) {
-            AddBarrier({ nodeid => $nodeid,  tags => \%nodetag });
-        }
-
-        ##  Forced external nodes
-        if ( $routing  &&  defined $nodetag{'garmin:extnode'}  &&  $yesno{$nodetag{'garmin:extnode'}} ) {
-            $xnode{$nodeid} = 1;
-        }
-
-        ##  Building entrances
-        if ( $navitel  &&  defined $nodetag{'building'}  &&  $nodetag{'building'} eq 'entrance' ) {
-            $entrance{$nodeid} = name_from_list( 'entrance', \%nodetag );
-        }
-
         ##  Interpolation nodes
         if ( $addrinterpolation  &&  exists $interpolation_node{$nodeid} ) {
             if ( exists $nodetag{'addr:housenumber'} ) {
@@ -886,13 +893,6 @@ while ( my $line = decode 'utf8', <$in> ) {
                 }
             }
         }
-
-        ##  POI
-        process_config( $config{nodes}, {
-                type    => 'Node',
-                id      => $nodeid,
-                tag     => \%nodetag,
-            } );
 
     }
 
@@ -2802,6 +2802,21 @@ sub execute_action {
 
     my %objinfo = map { $_ => $param{$_} } grep { /^_*[A-Z]/ } keys %param;
 
+
+    if ( $routing && $barriers && $param{action} eq 'load_barrier' ) {
+        AddBarrier({ nodeid => $obj->{id}, tags => $obj->{tag} });
+    }
+    if ( $routing && $param{action} eq 'force_external_node' ) {
+        $xnode{$obj->{id}} = 1;
+    }
+    if ( $navitel && $param{action} eq 'load_building_entrance' ) {
+        $entrance{$obj->{id}} = $param{name};
+    }
+    if ( $param{action} eq 'load_main_entrance' ) {
+        $main_entrance{$obj->{id}} = 1;
+    }
+
+
     ##  Load area as city
     if ( $param{action} eq 'load_city' ) {
 
@@ -2909,24 +2924,30 @@ sub execute_action {
 
     ##  Write POI
     if ( $param{action} eq 'write_poi' ) {
+
+        my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $node{$obj->{id}} );
+        if ( !$latlon && $obj->{type} eq 'Way' ) {
+            my $outer = $ampoly{$obj->{id}} ? $ampoly{$obj->{id}}->{outer}->[0] : $waychain{$obj->{id}};
+            my $entrance_node = first { exists $main_entrance{$_} } @$outer;
+            $latlon = $entrance_node
+                ? $node{$entrance_node}
+                : join( q{,}, polygon_centroid( map {[ split /,/, $node{$_} ]} @$outer ) );
+        }
+
+        return  unless $latlon && ( !$bounds || is_inside_bounds( $latlon ) );
+
         my %tag = %{ $obj->{tag} };
-
-        return  unless  !$bounds
-            || $obj->{type} eq 'Node' && is_inside_bounds( $node{$obj->{id}} )
-            || exists $obj->{latlon} && is_inside_bounds( $obj->{latlon} );
-        #return  if  exists $tag{'layer'} && $tag{'layer'} < -1;
-
         $countpoi ++;
 
         %objinfo = ( %objinfo, (
+                latlon      => $latlon,
                 type        => $action->{type},
                 name        => $param{name},
                 tags        => \%tag,
                 comment     => "$obj->{type}ID = $obj->{id}",
             ));
 
-        $objinfo{nodeid}  = $obj->{id}      if $obj->{type} eq 'Node';
-        $objinfo{latlon}  = $obj->{latlon}  if exists $obj->{latlon};
+        $objinfo{nodeid}  = $obj->{id}              if $obj->{type} eq 'Node';
         $objinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
         $objinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
 
