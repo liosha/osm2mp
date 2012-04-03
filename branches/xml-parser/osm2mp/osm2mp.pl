@@ -583,13 +583,14 @@ print STDERR "Ok\n";
 
 print STDERR "Processing ways           ";
 while ( my ($id, $tags) = each %waytag ) {
-    if ( $makepoi ) {
-        process_config( $config{nodes}, {
-                type    => "Way",
-                id      => $id,
-                tag     => $tags,
-            });
-    }
+    my $objinfo = {
+        type    => "Way",
+        id      => $id,
+        tag     => $tags,
+    };
+    
+    process_config( $config{ways}, $objinfo );
+    process_config( $config{nodes}, $objinfo )  if $makepoi;
 }
 print STDERR "Ok\n";
 
@@ -632,16 +633,7 @@ while ( my $line = decode 'utf8', <$in> ) {
     my %relmember;
     my $relid;
 
-#        $reltag{$key} = $val    if $key && !exists $config{skip_tags}->{$key};
     if ( $line =~ /<\/relation/ ) {
-
-        # multipolygon
-#            $ampoly{$relid} = {
-#                outer   =>  $relmember{'way:outer'},
-#                inner   =>  $relmember{'way:inner'},
-#                tags    =>  { %reltag },
-#            };
-
 
         # turn restrictions
         if ( $routing  &&  $restrictions  &&  $reltag{'type'} eq 'restriction' ) {
@@ -810,23 +802,6 @@ while ( my ( $mpid, $mp ) = each %ampoly ) {
 
     my $ampoly;
 
-    ## POI
-    if ( $makepoi ) {
-        my $poi_data = {
-            type    => "Rel",
-            id      => $mpid,
-            tag     => $mp->{tags},
-        };
-        if ( my $entrance_node = first { exists $main_entrance{$_} } @{ $ampoly->{outer}->[0] } ) {
-            $poi_data->{latlon} = $node{$entrance_node};
-        }
-        else {
-            $poi_data->{latlon} = join q{,}, polygon_centroid( map { [ split q{,}, $node{$_} ] } @{ $ampoly->{outer}->[0] } );
-        }
-
-        process_config( $config{nodes}, $poi_data );
-    }
-
     ## Polygon
     my @alist;
     for my $area ( @{ $ampoly->{outer} } ) {
@@ -866,28 +841,12 @@ print_section( 'Points' );
 
 my $countpoi = 0;
 my $nodeid;
-#my %nodetag;
 
 seek $in, 0, 0;
 
 while ( my $line = decode 'utf8', <$in> ) {
 
-    if ( $line =~ /<node/ ) {
-        ($nodeid)  =  $line =~ / id=["']([^"']+)["']/;
-        %nodetag   =  ();
-        next;
-    }
-
-    if ( $line =~ /<tag/ ) {
-        my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        next unless $key; #bug!
-        $nodetag{$key}   =  $val        unless exists $config{skip_tags}->{$key};
-        next;
-    }
-
     if ( $line =~ /<\/node/ ) {
-
-        next unless scalar %nodetag;
 
         ##  Interpolation nodes
         if ( $addrinterpolation  &&  exists $interpolation_node{$nodeid} ) {
@@ -902,8 +861,6 @@ while ( my $line = decode 'utf8', <$in> ) {
         }
 
     }
-
-    last  if  $line =~ /<way/;
 }
 
 printf STDERR "%d POIs written\n", $countpoi;
@@ -934,18 +891,6 @@ seek $in, $waypos, 0;
 
 while ( my $line = decode 'utf8', <$in> ) {
 
-    if ( $line =~ /<way/ ) {
-        ($wayid)  =  $line =~ / id=["']([^"']+)["']/;
-
-        %waytag       = ();
-        @chain        = ();
-        @chainlist    = ();
-        $inbounds     = 0;
-        $city         = 0;
-
-        next;
-    }
-
     if ( $line =~ /<nd/ ) {
         my ($ref)  =  $line =~ / ref=["']([^"']*)["']/;
         if ( $node{$ref}  &&  ( !@chain || $ref ne $chain[-1] ) ) {
@@ -957,12 +902,6 @@ while ( my $line = decode 'utf8', <$in> ) {
                 $inbounds = $in;
             }
         }
-        next;
-    }
-
-    if ( $line =~ /<tag/ ) {
-        my ($key, undef, $val)  =  $line =~ / k=["']([^"']+)["'].* v=(["'])(.+)\2/;
-        $waytag{$key} = $val        if $key && !exists $config{skip_tags}->{$key};
         next;
     }
 
@@ -3063,31 +3002,35 @@ sub execute_action {
         $objinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
         $objinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
 
-        $objinfo{areas} = $obj->{areas}     if exists $obj->{areas};
-        $objinfo{holes} = $obj->{holes}     if exists $obj->{holes};
-
-        if ( $obj->{type} eq 'Way' ) {
-            if ( $obj->{chain}->[0] ne $obj->{chain}->[-1] ) {
-                report( "Area WayID=$obj->{id} is not closed at ($node{$obj->{chain}->[0]})" );
+        if ( $ampoly{$obj->{id}} ) {
+            $objinfo{areas} = [ map {[ map {[ reverse split q{,}, $node{$_} ]} @$_ ]} @{$ampoly{$obj->{id}}->{outer}} ];
+            $objinfo{holes} = [ map {[ map {[ reverse split q{,}, $node{$_} ]} @$_ ]} @{$ampoly{$obj->{id}}->{inner} || []} ];
+            $objinfo{entrance} = [
+                map { [ $node{$_}, $entrance{$_} ] }
+                grep { exists $entrance{$_} }
+                map { @$_ } 
+                ( @{$ampoly{$obj->{id}}->{outer}}, @{$ampoly{$obj->{id}}->{inner} || []})
+            ];
+        }
+        else {
+            if ( $waychain{$obj->{id}}->[0] ne $waychain{$obj->{id}}->[-1] ) {
+                report( "Area WayID=$obj->{id} is not closed at ($node{$waychain{$obj->{id}}->[0]})" );
                 return;
             }
 
-            $objinfo{areas} = [ [ map { [reverse split q{,}, $node{$_}] } @{$obj->{chain}} ] ];
-            if ( $mpoly{$obj->{id}} ) {
-                $objinfo{comment} .= sprintf "\nmultipolygon with %d holes", scalar @{$mpoly{$obj->{id}}};
-                for my $hole ( grep { exists $waychain{$_} } @{$mpoly{$obj->{id}}} ) {
-                    push @{$objinfo{holes}}, [ map { [reverse split q{,}, $node{$_}] } @{$waychain{$hole}} ];
-                }
-            }
-
-            $objinfo{entrance} = [ map { [ $node{$_}, $entrance{$_} ] } grep { exists $entrance{$_} } @{$obj->{chain}} ];
+            $objinfo{areas} = [ [ map {[ reverse split q{,}, $node{$_} ]} @{$waychain{$obj->{id}}} ] ];
+            $objinfo{entrance} = [
+                map { [ $node{$_}, $entrance{$_} ] }
+                grep { exists $entrance{$_} }
+                @{$waychain{$obj->{id}}}
+            ];
         }
 
         WritePolygon( \%objinfo );
     }
 
     ##  Address loaded POI
-    if ( $param{action} eq 'address_poi' && exists $obj->{chain} && $obj->{chain}->[0] eq $obj->{chain}->[-1] && exists $poi_rtree->{root} ) {
+    if ( 0 && $param{action} eq 'address_poi' && exists $obj->{chain} && $obj->{chain}->[0] eq $obj->{chain}->[-1] && exists $poi_rtree->{root} ) {
 
         my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $node{$_} ]} @{$obj->{chain}} );
         my @poilist;
@@ -3104,7 +3047,7 @@ sub execute_action {
             my %tag = %{ $obj->{tag} };
             my $housenumber = name_from_list( 'house', \%tag );
             my $street = $tag{'addr:street'};
-            $street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
+            #$street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
 
             for my $poiobj ( @{ $poi{$id} } ) {
                 $poiobj->{street} = $street;
