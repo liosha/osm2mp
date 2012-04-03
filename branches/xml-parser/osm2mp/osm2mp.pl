@@ -3030,9 +3030,10 @@ sub execute_action {
     }
 
     ##  Address loaded POI
-    if ( 0 && $param{action} eq 'address_poi' && exists $obj->{chain} && $obj->{chain}->[0] eq $obj->{chain}->[-1] && exists $poi_rtree->{root} ) {
+    if ( $param{action} eq 'address_poi' && exists $poi_rtree->{root} ) {
 
-        my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $node{$_} ]} @{$obj->{chain}} );
+        my $outer = $ampoly{$obj->{id}} ? $ampoly{$obj->{id}}->{outer}->[0] : $waychain{$obj->{id}};
+        my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $node{$_} ]} @$outer );
         my @poilist;
 
         $poi_rtree->query_completely_within_rect( @bbox, \@poilist );
@@ -3041,7 +3042,7 @@ sub execute_action {
             next unless exists $poi{$id};
             next unless Math::Polygon::Tree::polygon_contains_point(
                     [ reverse split q{,}, $node{$id} ],
-                    map {[ reverse split q{,}, $node{$_} ]} @{$obj->{chain}}
+                    map {[ reverse split q{,}, $node{$_} ]} @$outer
                 );
 
             my %tag = %{ $obj->{tag} };
