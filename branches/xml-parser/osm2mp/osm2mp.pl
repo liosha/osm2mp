@@ -406,20 +406,17 @@ else {
 
 ####    Bounds
 
-my $bounds = 0;
 my @bound;
 my $boundtree;
 
 
 if ($bbox) {
-    $bounds = 1 ;
     my ($minlon, $minlat, $maxlon, $maxlat) = split q{,}, $bbox;
     @bound = ( [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] );
     $boundtree = Math::Polygon::Tree->new( \@bound );
 }
 
 if ($bpolyfile) {
-    $bounds = 1;
     print STDERR "Initialising bounds...    ";
 
     # $boundtree = Math::Polygon::Tree->new( $bpolyfile );
@@ -855,7 +852,7 @@ while ( my $line = decode 'utf8', <$in> ) {
         my ($ref)  =  $line =~ / ref=["']([^"']*)["']/;
         if ( $node{$ref}  &&  ( !@chain || $ref ne $chain[-1] ) ) {
             push @chain, $ref;
-            if ($bounds) {
+            if ( @bound ) {
                 my $in = is_inside_bounds( $node{$ref} );
                 if ( !$inbounds &&  $in )   { push @chainlist, ($#chain ? $#chain-1 : 0); }
                 if (  $inbounds && !$in )   { push @chainlist, $#chain; }
@@ -869,7 +866,7 @@ while ( my $line = decode 'utf8', <$in> ) {
 
         my $name = name_from_list( 'label', \%waytag);
 
-        @chainlist = (0)            unless $bounds;
+        @chainlist = (0)            unless @bound;
         push @chainlist, $#chain    unless ($#chainlist % 2);
 
         if ( scalar @chain < 2 ) {
@@ -940,7 +937,7 @@ if ( $shorelines ) {
         my $line_end = $coast{ $line_start }->[-1];
         next  if  $line_end eq $line_start;
         next  unless  $coast{ $line_end };
-        next  unless  ( !$bounds  ||  is_inside_bounds( $node{$line_end} ) );
+        next  unless  ( !@bound  ||  is_inside_bounds( $node{$line_end} ) );
 
         pop  @{$coast{$line_start}};
         push @{$coast{$line_start}}, @{$coast{$line_end}};
@@ -950,7 +947,7 @@ if ( $shorelines ) {
 
 
     ##  tracing bounds
-    if ( $bounds ) {
+    if ( @bound ) {
 
         my @tbound;
         my $pos = 0;
@@ -1056,7 +1053,7 @@ if ( $shorelines ) {
         if ( $chain_ref->[0] ne $chain_ref->[-1] ) {
 
             report( sprintf( "Possible coastline break at (%s) or (%s)", @node{ @$chain_ref[0,-1] } ),
-                    ( $bounds ? 'ERROR' : 'WARNING' ) )
+                    ( @bound ? 'ERROR' : 'WARNING' ) )
                 unless  $#$chain_ref < 3;
 
             next;
@@ -1079,7 +1076,7 @@ if ( $shorelines ) {
     my @lakesort = sort { scalar @{$coast{$b}} <=> scalar @{$coast{$a}} } keys %lake;
 
     ##  adding sea background
-    if ( $waterback && $bounds && !$boundcross ) {
+    if ( $waterback && @bound && !$boundcross ) {
         $lake{'background'} = $boundtree;
         splice @lakesort, 0, 0, 'background';
     }
@@ -1578,7 +1575,7 @@ if ( $routing ) {
 ####    Background object (?)
 
 
-if ( $bounds && $background  &&  exists $config{types}->{background} ) {
+if ( @bound && $background  &&  exists $config{types}->{background} ) {
 
     print_section( 'Background' );
 
@@ -2415,7 +2412,7 @@ sub AddRoad {
     }
 
     # external nodes
-    if ( $bounds ) {
+    if ( @bound ) {
         if ( !is_inside_bounds( $node{ $param{chain}->[0] } ) ) {
             $xnode{ $param{chain}->[0] } = 1;
             $xnode{ $param{chain}->[1] } = 1;
@@ -2485,10 +2482,10 @@ sub WritePolygon {
     }
 
     #   test if inside bounds
-    my @inside = map { $bounds ? $boundtree->contains_polygon_rough( $_ ) : 1 } @{$param{areas}};
+    my @inside = map { @bound ? $boundtree->contains_polygon_rough( $_ ) : 1 } @{$param{areas}};
     return      if all { defined && $_==0 } @inside;
 
-    if ( $bounds  &&  $lessgpc  &&  any { !defined } @inside ) {
+    if ( @bound  &&  $lessgpc  &&  any { !defined } @inside ) {
         @inside = map { $boundtree->contains_points( @$_ ) } @{$param{areas}};
         return  if all { defined && $_ == 0 } @inside;
     }
@@ -2500,7 +2497,7 @@ sub WritePolygon {
     # TODO: filter bad holes
 
     #   clip
-    if ( $bounds  &&  any { !defined } @inside ) {
+    if ( @bound  &&  any { !defined } @inside ) {
         my $gpc = new_gpc();
 
         for my $area ( @{$param{areas}} ) {
@@ -2573,7 +2570,7 @@ sub WritePolygon {
 
         # entrances
         for my $entr ( @{ $param{entrance} } ) {
-            next unless !$bounds || is_inside_bounds( $entr->[0] );
+            next unless !@bound || is_inside_bounds( $entr->[0] );
             push @{$opts{EntryPoint}}, { coords => [ split /\s*,\s*/xms, $entr->[0] ], name => convert_string( $entr->[1] ) };
         }
     }
@@ -2825,7 +2822,7 @@ sub execute_action {
                 : join( q{,}, polygon_centroid( map {[ split /,/, $node{$_} ]} @$outer ) );
         }
 
-        return  unless $latlon && ( !$bounds || is_inside_bounds( $latlon ) );
+        return  unless $latlon && ( !@bound || is_inside_bounds( $latlon ) );
 
         my %tag = %{ $obj->{tag} };
         #$countpoi ++;
@@ -2874,7 +2871,7 @@ sub execute_action {
         || $param{action} ~~ [ qw{ write_line load_road modify_road } ]
     ) {
         @chains =
-            map { $bounds ? ( _split_chain($_) ) : ( $_ ) }
+            map { @bound ? ( _split_chain($_) ) : ( $_ ) }
             $ampoly{$obj->{id}}
                 ? ( @{$ampoly{$obj->{id}}->{outer}}, @{$ampoly{$obj->{id}}->{inner} || []} )
                 : ( $waychain{$obj->{id}} );
