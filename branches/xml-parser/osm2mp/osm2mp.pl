@@ -796,39 +796,6 @@ my @chain;
 
 
 
-# draw that should be drawn
-my $countpolygons = 0;
-while ( my ( $mpid, $mp ) = each %ampoly ) {
-
-    my $ampoly;
-
-    ## Polygon
-    my @alist;
-    for my $area ( @{ $ampoly->{outer} } ) {
-        push @alist, [ map { [reverse split q{,}, $node{$_}] } @$area ];
-    }
-    my @hlist;
-    for my $area ( @{ $ampoly->{inner} } ) {
-        push @hlist, [ map { [reverse split q{,}, $node{$_}] } @$area ];
-    }
-
-    process_config( $config{ways}, {
-            type    => "Rel",
-            id      => $mpid,
-            tag     => $mp->{tags},
-            areas   => \@alist,
-            holes   => \@hlist,
-        } );
-}
-
-printf STDERR "%d polygons written\n", $countpolygons;
-printf STDERR "                          %d cities and %d suburbs loaded\n", scalar keys %city, scalar keys %suburb
-    if $addressing;
-
-
-
-
-
 ####    3rd pass
 ###     loading and writing points
 
@@ -863,12 +830,6 @@ while ( my $line = decode 'utf8', <$in> ) {
     }
 }
 
-printf STDERR "%d POIs written\n", $countpoi;
-printf STDERR "                          %d POIs loaded\n", (sum map { scalar @$_ } values %poi) // 0
-    if $addrfrompoly;
-printf STDERR "                          %d barriers loaded\n", scalar keys %barrier
-    if $barriers;
-
 
 
 ####    Loading roads and coastlines, and writing other ways
@@ -881,7 +842,7 @@ print STDERR "Processing ways...        ";
 print_section( 'Lines and polygons' );
 
 my $countlines  = 0;
-$countpolygons  = 0;
+my $countpolygons  = 0;
 
 my $city;
 my @chainlist;
@@ -933,22 +894,6 @@ while ( my $line = decode 'utf8', <$in> ) {
                 tag     => \%waytag,
             } );
 
-        ## POI config
-        if ( $makepoi ) {
-            my $poi_data = {
-                type    => "Way",
-                id      => $wayid,
-                tag     => \%waytag,
-            };
-            if ( my $entrance_node = first { exists $main_entrance{$_} } @chain ) {
-                $poi_data->{latlon} = $node{$entrance_node};
-            }
-            else {
-                $poi_data->{latlon} = join q{,}, polygon_centroid( map { [ split q{,}, $node{$_} ] } @chain );
-            }
-            
-            process_config( $config{nodes}, $poi_data );
-        }
     } # </way>
 
     last  if $line =~ /<relation/;
@@ -2923,11 +2868,30 @@ sub execute_action {
         AddPOI ( \%objinfo );
     }
 
+    my @chains;
+    if ( 
+        $shorelines && $param{action} eq 'load_coastline'
+        || $param{action} ~~ [ qw{ write_line load_road modify_road } ]
+    ) {
+        @chains =
+            map { $bounds ? ( _split_chain($_) ) : ( $_ ) }
+            $ampoly{$obj->{id}}
+                ? ( @{$ampoly{$obj->{id}}->{outer}}, @{$ampoly{$obj->{id}}->{inner} || []} )
+                : ( $waychain{$obj->{id}} );
+
+        sub _split_chain {
+            my ($chain) = @_;
+            my @is_inside = map { is_inside_bounds($node{$_}) } @$chain;
+            my @begin = grep { $is_inside[$_] && ( $_ == 0        || !$is_inside[$_-1] ) } ( 0 .. $#$chain );
+            my @end   = grep { $is_inside[$_] && ( $_ == $#$chain || !$is_inside[$_+1] ) } ( 0 .. $#$chain );
+            return map {[ @$chain[($begin[$_] == 0 ? 0 : $begin[$_]-1) .. ($end[$_] == $#$chain ? $end[$_] : $end[$_]+1)] ]} (0 .. $#end);
+        }
+    }
+
     ##  Load coastline
     if ( $param{action} eq 'load_coastline' && $shorelines ) {
-        for my $part ( @{ $obj->{clist} } ) {
-            my ($start, $finish) = @$part;
-            $coast{$obj->{chain}->[$start]} = [ @{$obj->{chain}}[ $start .. $finish ] ];
+        for my $chain ( @chains ) {
+            $coast{$chain->[0]} = $chain;
         }
     }
 
@@ -2946,13 +2910,9 @@ sub execute_action {
             $objinfo{$option} = $action->{$option};
         }
 
-        my $part_no = 0;
-        for my $part ( @{ $obj->{clist} } ) {
-            my ($start, $finish) = @$part;
-
-            $objinfo{chain} = [ @{$obj->{chain}}[ $start .. $finish ] ];
+        for my $part_no ( 0 .. $#chains ) {
+            $objinfo{chain} = $chains[$part_no];
             $objinfo{id}    = "$obj->{id}:$part_no";
-            $part_no ++;
 
             if ( $routing && $param{action} eq 'load_road' ) {
                 AddRoad( \%objinfo );
