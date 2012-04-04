@@ -52,7 +52,7 @@ use List::Util qw{ first reduce sum min max };
 use List::MoreUtils qw{ all none any first_index last_index uniq };
 
 
-use Geo::Openstreetmap::Parser;
+use OSM;
 use WriterTT;
 
 
@@ -237,6 +237,7 @@ GetOptions (
     'mp-header=s%'      => sub { $mp_opts->{$_[1]} = $_[2] },
     'codepage=s'        => \$codepage,
     'nocodepage'        => sub { undef $codepage },
+    
     'ttable=s'          => \$ttable,
     'textfilter=s'      => sub { eval "require $_[1]" or eval "require PerlIO::via::$_[1]" or die $@; $text_filter .= ":via($_[1])"; },
     'filter|filters=s@' => \@filters,
@@ -334,10 +335,84 @@ $transport_mode = $transport_code{ $transport_mode }
     if defined $transport_mode && exists $transport_code{ $transport_mode };
 
 
-
 ####    Preparing templates
 
 my $ttc = WriterTT->new( filters => \@filters, templates => $config{output} );
+
+
+
+####    Loading OSM data
+
+my $infile = shift @ARGV;
+my ($in, $stream_msg) = $infile ~~ '-'
+    ? ( *STDIN, 'STDIN' )
+    : ( do{ open( my $fh, '<', $infile ); $fh }, "file $infile" );
+
+print STDERR "Processing $stream_msg\n\n";
+print STDERR "Loading OSM data...       ";
+
+my %extra_handlers;
+if ($osmbbox) {
+    %extra_handlers = (
+        bound  => sub {  $bbox = shift()->{attr}->{box}  },
+        bounds => sub {  $bbox = join q{,}, @{ shift()->{attr}}{qw/ minlat minlon maxlat maxlon / } },
+    );
+}
+
+my $osm = OSM->new(
+    fh => $in,
+    skip_tags => [ keys %{$config{skip_tags}} ],
+    handlers => \%extra_handlers,
+);
+
+close $in;
+
+print STDERR "Ok\n";
+
+
+
+
+####    Initializing bounds
+
+my @bound;
+my $boundtree;
+my $boundgpc;
+
+if ($bbox || $bpolyfile) {
+    print STDERR "Initialising bounds...    ";
+
+    if ($bbox) {
+        my ($minlon, $minlat, $maxlon, $maxlat) = split q{,}, $bbox;
+        @bound = ( [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] );
+    }
+    elsif ($bpolyfile) {
+        open my $pf, '<', $bpolyfile;
+
+        while ( my $line = readline $pf ) {
+            if ( $line =~ /^\d/ ) {
+                @bound = ();
+            }
+            elsif ( $line =~ /^\s+([0-9.E+-]+)\s+([0-9.E+-]+)/ ) {
+                push @bound, [ $1+0, $2+0 ];
+            }
+            elsif ( $line =~ /^END/ ) {
+                # !!! first ring only!
+                @bound = reverse @bound  if  Math::Polygon->new( @bound )->isClockwise();
+                last;
+            }
+        }
+
+        close $pf;
+    }
+
+    $boundtree = Math::Polygon::Tree->new( \@bound );
+    $boundgpc = new_gpc();
+    $boundgpc->add_polygon ( \@bound, 0 );
+
+    printf STDERR "%d segments\n", scalar @bound;
+}
+
+
 
 
 
@@ -354,104 +429,11 @@ if ( !$output_fn ) {
 }
 
 
-####    Opening input
 
-my $infile = shift @ARGV;
-my $in;
-if ( $infile ~~ '-' ) {
-    print STDERR "Processing STDIN\n\n";
-    $in = *STDIN;
-}
-else {
-    print STDERR "Processing file $infile\n\n";
-    open $in, '<', $infile;
-}
-
-
-
-
-####    Bounds
-
-my @bound;
-my $boundtree;
-
-
-if ($bbox) {
-    my ($minlon, $minlat, $maxlon, $maxlat) = split q{,}, $bbox;
-    @bound = ( [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] );
-    $boundtree = Math::Polygon::Tree->new( \@bound );
-}
-
-if ($bpolyfile) {
-    print STDERR "Initialising bounds...    ";
-
-    # $boundtree = Math::Polygon::Tree->new( $bpolyfile );
-
-    open my $pf, '<', $bpolyfile;
-
-    ## ??? need advanced polygon?
-    while (<$pf>) {
-        if (/^\d/) {
-            @bound = ();
-        }
-        elsif (/^\s+([0-9.E+-]+)\s+([0-9.E+-]+)/) {
-            push @bound, [ $1+0, $2+0 ];
-        }
-        elsif (/^END/) {
-            @bound = reverse @bound     if  Math::Polygon->new( @bound )->isClockwise();
-            $boundtree = Math::Polygon::Tree->new( \@bound );
-            last;
-        }
-    }
-    close $pf;
-    printf STDERR "%d segments\n", scalar @bound;
-}
-
-
-####    preloading osm
-
-print STDERR "Loading OSM data...       ";
 
 my (%nodetag, %waytag, %ampoly);
 
-my %parse_handler = (
-    node => sub {
-            my $obj = shift;
-            my $id = $obj->{attr}->{id};
-            $node{$id} = "$obj->{attr}->{lat},$obj->{attr}->{lon}";
-
-            return if !$obj->{tag};
-            return if !grep { !$config{skip_tags}->{$_} } keys %{$obj->{tag}};
-
-            $nodetag{$id} = $obj->{tag};
-            return;
-        },
-    way => sub {
-            my $obj = shift;
-            my $id = $obj->{attr}->{id};
-
-            if ( @{ $obj->{nd} || [] } < 2 ) {
-                report( "Collapsed way WayID=$id" );
-                return;
-            }
-
-            $waychain{$id} = $obj->{nd};
-
-            return if !$obj->{tag};
-            return if !grep { !$config{skip_tags}->{$_} } keys %{$obj->{tag}};
-
-            $waytag{$id} = $obj->{tag};
-            return;
-        },
-    relation => sub {
-            my $obj = shift;
-            my $id = $obj->{attr}->{id};
-
-            if ( !$obj->{tag} || !$obj->{tag}->{type} ) {
-                report( "No type defined for RelID=$id" );
-                return;
-            }
-
+=old
             for ( $obj->{tag}->{type} ) {
                 when ( [ qw/ multipolygon boundary / ] ) {
                     my %rings;
@@ -485,33 +467,8 @@ my %parse_handler = (
                 when ( 'turn_restriction' ) {};
                 # !!! etc
             }
-        },
-);
 
-if ( $osmbbox ) {
-    $parse_handler{bound} = sub {
-        my $obj = shift;
-        my ($minlat, $minlon, $maxlat, $maxlon) = split /,/x, $obj->{attr}->{box};
-        @bound = ([$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat]);
-        return;
-    };
-    $parse_handler{bounds} = sub {
-        my $obj = shift;
-        my ($minlat, $minlon, $maxlat, $maxlon) = @{$obj->{attr}}{qw/ minlat minlon maxlat maxlon /};
-        @bound = ([$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat]);
-        return;
-    };
-}
-
-my $parser = Geo::Openstreetmap::Parser->new( %parse_handler );
-$parser->parse($in);
-
-my $boundgpc = new_gpc();
-
-if ( @bound ) {
-    $boundtree = Math::Polygon::Tree->new(\@bound)  if @bound;
-    $boundgpc->add_polygon ( \@bound, 0 );
-}
+=cut
 
 
 print STDERR "Ok\n";
