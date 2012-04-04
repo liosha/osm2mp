@@ -127,9 +127,6 @@ my $transport_mode;
 my %yesno;
 my %taglist;
 
-my %node;
-my %waychain;
-
 my %city;
 my $city_rtree = Tree::R->new();
 my %suburb;
@@ -354,7 +351,7 @@ print STDERR "Loading OSM data...       ";
 my %extra_handlers;
 if ($osmbbox) {
     %extra_handlers = (
-        bound  => sub {  $bbox = shift()->{attr}->{box}  },
+        bound  => sub {  $bbox = join q{,}, @{[ split /,/, shift()->{attr}->{box} ]}[1,0,3,2]  },
         bounds => sub {  $bbox = join q{,}, @{ shift()->{attr}}{qw/ minlat minlon maxlat maxlon / } },
     );
 }
@@ -368,6 +365,9 @@ my $osm = OSM->new(
 close $in;
 
 print STDERR "Ok\n";
+
+my ($nodes, $chains) = @$osm{ qw/ nodes chains / };
+my ($nodetag, $waytag) = @{$osm->{tags}}{ qw/ node way / };
 
 
 
@@ -407,12 +407,10 @@ if ($bbox || $bpolyfile) {
 
     $boundtree = Math::Polygon::Tree->new( \@bound );
     $boundgpc = new_gpc();
-    $boundgpc->add_polygon ( \@bound, 0 );
+    $boundgpc->add_polygon( \@bound, 0 );
 
     printf STDERR "%d segments\n", scalar @bound;
 }
-
-
 
 
 
@@ -431,7 +429,6 @@ if ( !$output_fn ) {
 
 
 
-my (%nodetag, %waytag, %ampoly);
 
 =old
             for ( $obj->{tag}->{type} ) {
@@ -455,10 +452,10 @@ my (%nodetag, %waytag, %ampoly);
                     return if !$ampoly->{outer} || !@{$ampoly->{outer}};
                     
                     my $rid = "r$id";
-                    $waytag{$rid} = $obj->{tag};
+                    $waytag->{$rid} = $obj->{tag};
                     $ampoly{$rid} = $ampoly;
 
-                    if ( @{$rings{outer}} == 1 && $waytag{$rings{outer}->[0]} ) {
+                    if ( @{$rings{outer}} == 1 && $waytag->{$rings{outer}->[0]} ) {
                         # old-style multipolygon
                         my $wid = $rings{outer}->[0];
                         $ampoly{$wid} = $ampoly{$rid};
@@ -471,26 +468,25 @@ my (%nodetag, %waytag, %ampoly);
 =cut
 
 
-print STDERR "Ok\n";
-printf STDERR "Nodes: %s/%s\n", scalar keys %node, scalar keys %nodetag;
-printf STDERR "Ways:  %s/%s\n", scalar keys %waychain, scalar keys %waytag;
+printf STDERR "Nodes: %s/%s\n", scalar keys %$nodes, scalar keys %$nodetag;
+printf STDERR "Ways:  %s/%s\n", scalar keys %$chains, scalar keys %$waytag;
 
 
+my %ampoly;
 
 # load addressing polygons
 if ( $addressing && exists $config{address} ) {
     print STDERR "Loading address areas     ";
-    while ( my ($id, $tags) = each %waytag ) {
+    while ( my ($id, $tags) = each %$waytag ) {
         process_config( $config{address}, {
                 type    => 'Way', # !!!
                 id      => $id,
                 tag     => $tags,
-                outer   => ( $ampoly{$id} ? $ampoly{$id}->{outer} : [ $waychain{$id} ] ),
+                outer   => ( $ampoly{$id} ? $ampoly{$id}->{outer} : [ $chains->{$id} ] ),
             } );
     }
 }
 print STDERR "Ok\n";
-
 
 my %road;
 my %coast;
@@ -506,7 +502,7 @@ my %street;
 print_section( 'Simple objects' );
 # processing poi nodes
 print STDERR "Processing nodes          ";
-while ( my ($id, $tags) = each %nodetag ) {
+while ( my ($id, $tags) = each %$nodetag ) {
     process_config( $config{nodes}, {
             type    => 'Node',
             id      => $id,
@@ -516,7 +512,7 @@ while ( my ($id, $tags) = each %nodetag ) {
 print STDERR "Ok\n";
 
 print STDERR "Processing ways           ";
-while ( my ($id, $tags) = each %waytag ) {
+while ( my ($id, $tags) = each %$waytag ) {
     my $objinfo = {
         type    => "Way",
         id      => $id,
@@ -689,9 +685,6 @@ print  STDERR "                          $count_streets streets\n"              
 ###     loading cities, multipolygon parts and checking node dupes
 
 
-#                report( "WayID=$wayid has dupes at ($node{$ref})" );
-
-
 
 ####    3rd pass
 ###     loading and writing points
@@ -712,9 +705,9 @@ while ( my $line = decode 'utf8', <$in> ) {
 
         ##  Interpolation nodes
         if ( $addrinterpolation  &&  exists $interpolation_node{$nodeid} ) {
-            if ( exists $nodetag{'addr:housenumber'} ) {
-                if ( extract_number( $nodetag{'addr:housenumber'} ) ) {
-                    $interpolation_node{$nodeid} = { %nodetag };
+            if ( exists $nodetag->{'addr:housenumber'} ) {
+                if ( extract_number( $nodetag->{'addr:housenumber'} ) ) {
+                    $interpolation_node{$nodeid} = { %$nodetag };
                 }
                 else {
                     report( "Wrong house number on NodeID=$nodeid" );
@@ -745,10 +738,10 @@ while ( my $line = decode 'utf8', <$in> ) {
 
     if ( $line =~ /<nd/ ) {
         my ($ref)  =  $line =~ / ref=["']([^"']*)["']/;
-        if ( $node{$ref}  &&  ( !@chain || $ref ne $chain[-1] ) ) {
+        if ( $nodes->{$ref}  &&  ( !@chain || $ref ne $chain[-1] s->) ) {
             push @chain, $ref;
             if ( @bound ) {
-                my $in = is_inside_bounds( $node{$ref} );
+                my $in = is_inside_bounds( $nodes->{$ref} );
                 if ( !$inbounds &&  $in )   { push @chainlist, ($#chain ? $#chain-1 : 0); }
                 if (  $inbounds && !$in )   { push @chainlist, $#chain; }
                 $inbounds = $in;
@@ -759,17 +752,17 @@ while ( my $line = decode 'utf8', <$in> ) {
 
     if ( $line =~ /<\/way/ ) {
 
-        my $name = name_from_list( 'label', \%waytag);
+        my $name = name_from_list( 'label', $waytag);
 
         @chainlist = (0)            unless @bound;
         push @chainlist, $#chain    unless ($#chainlist % 2);
 
         if ( scalar @chain < 2 ) {
-            report( "WayID=$wayid has too few nodes at ($node{$chain[0]})" );
+            report( "WayID=$wayid has too few nodes at ($nodes->{$chain[0]})" );
             next;
         }
 
-        next unless scalar keys %waytag;
+        next unless scalar keys %$waytag;
         next unless scalar @chainlist;
 
         my @list = @chainlist;
@@ -782,7 +775,7 @@ while ( my $line = decode 'utf8', <$in> ) {
                 id      => $wayid,
                 chain   => \@chain,
                 clist   => \@clist,
-                tag     => \%waytag,
+                tag     => $waytag,
             } );
 
     } # </way>
@@ -793,8 +786,6 @@ while ( my $line = decode 'utf8', <$in> ) {
 print  STDERR "$countlines lines and $countpolygons polygons dumped\n";
 printf STDERR "                          %d roads loaded\n",      scalar keys %road     if  $routing;
 printf STDERR "                          %d coastlines loaded\n", scalar keys %coast    if  $shorelines;
-
-undef %waychain;
 
 
 =cut
@@ -832,7 +823,7 @@ if ( $shorelines ) {
         my $line_end = $coast{ $line_start }->[-1];
         next  if  $line_end eq $line_start;
         next  unless  $coast{ $line_end };
-        next  unless  ( !@bound  ||  is_inside_bounds( $node{$line_end} ) );
+        next  unless  ( !@bound  ||  is_inside_bounds( $nodes->{$line_end} ) );
 
         pop  @{$coast{$line_start}};
         push @{$coast{$line_start}}, @{$coast{$line_end}};
@@ -858,8 +849,8 @@ if ( $shorelines ) {
             for my $sline ( keys %coast ) {
 
                 # check start of coastline
-                my $p1      = [ reverse  split q{,}, $node{$coast{$sline}->[0]} ];
-                my $p2      = [ reverse  split q{,}, $node{$coast{$sline}->[1]} ];
+                my $p1      = [ reverse  split q{,}, $nodes->{$coast{$sline}->[0]} ];
+                my $p2      = [ reverse  split q{,}, $nodes->{$coast{$sline}->[1]} ];
                 my $ipoint  = segment_intersection( $bound[$i], $bound[$i+1], $p1, $p2 );
 
                 if ( $ipoint ) {
@@ -878,8 +869,8 @@ if ( $shorelines ) {
                 }
 
                 # check end of coastline
-                $p1      = [ reverse  split q{,}, $node{$coast{$sline}->[-1]} ];
-                $p2      = [ reverse  split q{,}, $node{$coast{$sline}->[-2]} ];
+                $p1      = [ reverse  split q{,}, $nodes->{$coast{$sline}->[-1]} ];
+                $p2      = [ reverse  split q{,}, $nodes->{$coast{$sline}->[-2]} ];
                 $ipoint  = segment_intersection( $bound[$i], $bound[$i+1], $p1, $p2 );
 
                 if ( $ipoint ) {
@@ -913,7 +904,7 @@ if ( $shorelines ) {
         $tmp = 0;
         for my $node ( sort { $a->{pos}<=>$b->{pos} } @tbound ) {
             my $latlon = join q{,}, reverse @{$node->{point}};
-            $node{$latlon} = $latlon;
+            $nodes->{$latlon} = $latlon;
 
             if ( $node->{type} eq 'start' ) {
                 $tmp = $node;
@@ -947,7 +938,7 @@ if ( $shorelines ) {
 
         if ( $chain_ref->[0] ne $chain_ref->[-1] ) {
 
-            report( sprintf( "Possible coastline break at (%s) or (%s)", @node{ @$chain_ref[0,-1] } ),
+            report( sprintf( "Possible coastline break at (%s) or (%s)", @$nodes{ @$chain_ref[0,-1] } ),
                     ( @bound ? 'ERROR' : 'WARNING' ) )
                 unless  $#$chain_ref < 3;
 
@@ -960,11 +951,11 @@ if ( $shorelines ) {
             next;
         }
 
-        if ( Math::Polygon->new( map { [ split q{,}, $node{$_} ] } @$chain_ref )->isClockwise() ) {
+        if ( Math::Polygon->new( map { [ split q{,}, $nodes->{$_} ] } @$chain_ref )->isClockwise() ) {
             $island{$loop} = 1;
         }
         else {
-            $lake{$loop} = Math::Polygon::Tree->new( [ map { [ reverse split q{,}, $node{$_} ] } @$chain_ref ] );
+            $lake{$loop} = Math::Polygon::Tree->new( [ map { [ reverse split q{,}, $nodes->{$_} ] } @$chain_ref ] );
         }
     }
 
@@ -986,13 +977,13 @@ if ( $shorelines ) {
                 comment => "sea $sea",
                 areas   => $sea eq 'background'
                     ?  [ \@bound ]
-                    :  [[ map { [ reverse split q{,} ] } @node{@{$coast{$sea}}} ]],
+                    :  [[ map { [ reverse split q{,} ] } @$nodes{@{$coast{$sea}}} ]],
             );
 
         for my $island  ( keys %island ) {
-            if ( $lake{$sea}->contains( [ reverse split q{,}, $node{$island} ] ) ) {
+            if ( $lake{$sea}->contains( [ reverse split q{,}, $nodes->{$island} ] ) ) {
                 $countislands ++;
-                push @{$objinfo{holes}}, [ map { [ reverse split q{,} ] } @node{@{$coast{$island}}} ];
+                push @{$objinfo{holes}}, [ map { [ reverse split q{,} ] } @$nodes{@{$coast{$island}}} ];
                 delete $island{$island};
             }
         }
@@ -1073,7 +1064,7 @@ if ( $routing ) {
                 @list  =  sort {  lcos( $p1->[-2], $p1->[-1], $road{$b}->{chain}->[1] )
                               <=> lcos( $p1->[-2], $p1->[-1], $road{$a}->{chain}->[1] )  }  @list;
 
-                report( sprintf( "Road WayID=$r1 may be merged with %s at (%s)", join( q{, }, @list ), $node{$p1->[-1]} ), 'FIX' );
+                report( sprintf( "Road WayID=$r1 may be merged with %s at (%s)", join( q{, }, @list ), $nodes->{$p1->[-1]} ), 'FIX' );
 
                 my $r2 = $list[0];
 
@@ -1181,7 +1172,7 @@ if ( $routing ) {
             my $roads    =  join q{, }, sort {$a cmp $b} @{$segway{$seg}};
             my ($point)  =  split q{:}, $seg;
             $roadseg{$roads} ++;
-            $roadpos{$roads} = $node{$point};
+            $roadpos{$roads} = $nodes->{$point};
         }
 
         for my $road ( keys %roadseg ) {
@@ -1227,7 +1218,7 @@ if ( $routing ) {
                         my $bnode = $road->{chain}->[$break];
                         $nodid{ $bnode }  =  $nodcount++;
                         $nodeways{ $bnode } = [ $roadid ];
-                        report( sprintf( "Added NodID=%d for NodeID=%s at (%s)", $nodid{$bnode}, $bnode, $node{$bnode} ), 'FIX' );
+                        report( sprintf( "Added NodID=%d for NodeID=%s at (%s)", $nodid{$bnode}, $bnode, $nodes->{$bnode} ), 'FIX' );
                     }
                     $rnod = 2;
                 }
@@ -1374,7 +1365,7 @@ if ( $routing ) {
             for my $node ( grep { $_ ne $cnode && $nodid{$_} } @{$road->{chain}}[1..$#{$road->{chain}}] ) {
                 if ( fix_close_nodes( $cnode, $node ) ) {
                     $countclose ++;
-                    report( "Too close nodes $cnode and $node, WayID=$roadid near (${node{$node}})" );
+                    report( "Too close nodes $cnode and $node, WayID=$roadid near ($nodes->{$node})" );
                 }
                 $cnode = $node;
             }
@@ -1659,8 +1650,8 @@ sub fix_close_nodes {                # NodeID1, NodeID2
 
     my ($id0, $id1) = @_;
 
-    my ($lat1, $lon1) = split q{,}, $node{$id0};
-    my ($lat2, $lon2) = split q{,}, $node{$id1};
+    my ($lat1, $lon1) = split q{,}, $nodes->{$id0};
+    my ($lat2, $lon2) = split q{,}, $nodes->{$id1};
 
     my ($clat, $clon) = ( ($lat1+$lat2)/2, ($lon1+$lon2)/2 );
     my ($dlat, $dlon) = ( ($lat2-$lat1),   ($lon2-$lon1)   );
@@ -1673,16 +1664,16 @@ sub fix_close_nodes {                # NodeID1, NodeID2
     # fixing
     if ( $res ) {
         if ( $dlon == 0 ) {
-            $node{$id0} = ($clat - $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) )) . q{,} . $clon;
-            $node{$id1} = ($clat + $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) )) . q{,} . $clon;
+            $nodes->{$id0} = ($clat - $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) )) . q{,} . $clon;
+            $nodes->{$id1} = ($clat + $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) )) . q{,} . $clon;
         }
         else {
             my $azim  = $dlat / $dlon;
             my $ndlon = sqrt( $ldist**2 / ($klon**2 + $azim**2) ) / 2;
             my $ndlat = $ndlon * abs($azim);
 
-            $node{$id0} = ($clat - $ndlat * ($dlat <=> 0)) . q{,} . ($clon - $ndlon * ($dlon <=> 0));
-            $node{$id1} = ($clat + $ndlat * ($dlat <=> 0)) . q{,} . ($clon + $ndlon * ($dlon <=> 0));
+            $nodes->{$id0} = ($clat - $ndlat * ($dlat <=> 0)) . q{,} . ($clon - $ndlon * ($dlon <=> 0));
+            $nodes->{$id1} = ($clat + $ndlat * ($dlat <=> 0)) . q{,} . ($clon + $ndlon * ($dlon <=> 0));
         }
     }
     return $res;
@@ -1694,9 +1685,9 @@ sub lcos {                      # NodeID1, NodeID2, NodeID3
 
     my ($id0, $id1, $id2) = @_;
 
-    my ($lat1, $lon1) = split q{,}, $node{$id0};
-    my ($lat2, $lon2) = split q{,}, $node{$id1};
-    my ($lat3, $lon3) = split q{,}, $node{$id2};
+    my ($lat1, $lon1) = split q{,}, $nodes->{$id0};
+    my ($lat2, $lon2) = split q{,}, $nodes->{$id1};
+    my ($lat3, $lon3) = split q{,}, $nodes->{$id2};
 
     my $klon = cos( ($lat1+$lat2+$lat3) / 3 * 3.14159 / 180 );
 
@@ -1870,7 +1861,7 @@ sub segment_intersection {
 
 sub FindCity {
     return unless keys %city;
-    my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $node{$_} ? $node{$_} : $_ ) ] } @_;
+    my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $nodes->{$_} ? $nodes->{$_} : $_ ) ] } @_;
 
     my @cities = ();
     for my $node ( @nodes ) {
@@ -1887,7 +1878,7 @@ sub FindCity {
 
 sub FindSuburb {
     return unless keys %suburb;
-    my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $node{$_} ? $node{$_} : $_ ) ] } @_;
+    my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $nodes->{$_} ? $nodes->{$_} : $_ ) ] } @_;
     return first {
             my $cbound = $suburb{$_}->{bound};
             all { $cbound->contains( $_ ) } @nodes;
@@ -1899,7 +1890,7 @@ sub AddPOI {
     my ($obj) = @_;
     if ( $addrfrompoly && exists $obj->{nodeid} && $obj->{add_contacts} && !$obj->{dont_inherit_address} ) {
         my $id = $obj->{nodeid};
-        my @bbox = ( reverse split q{,}, $node{$id} ) x 2;
+        my @bbox = ( reverse split q{,}, $nodes->{$id} ) x 2;
         push @{$poi{$id}}, $obj;
         $poi_rtree->insert( $id, @bbox );
     }
@@ -1924,7 +1915,7 @@ sub WritePOI {
         $comment .= "\n$key = $val";
     }
 
-    my $data = $param{latlon} || $node{$param{nodeid}};
+    my $data = $param{latlon} || $nodes->{$param{nodeid}};
     return unless $data;
 
     my %opts = (
@@ -2176,7 +2167,7 @@ sub WriteLine {
         $comment .= "\n$key = $val";
     }
 
-    $opts{chain} = [ map { [ split /\s*,\s*/xms ] } @node{ @{ $param{chain} } } ];
+    $opts{chain} = [ map { [ split /\s*,\s*/xms ] } @$nodes{ @{ $param{chain} } } ];
 
     $opts{Label}       = convert_string( $param{name} )   if defined $param{name} && $param{name} ne q{};
     $opts{RoadID}      = $param{roadid}         if exists $param{roadid};
@@ -2234,7 +2225,7 @@ sub AddRoad {
     }
 
     # navitel-style 3d interchanges
-    if ( my $layer = $interchange3d && extract_number($waytag{'layer'}) ) {
+    if ( my $layer = $interchange3d && extract_number($waytag->{'layer'}) ) {
         $layer *= 2     if $layer > 0;
         for my $node ( @{$param{chain}} ) {
             $hlevel{ $node } = $layer;
@@ -2308,11 +2299,11 @@ sub AddRoad {
 
     # external nodes
     if ( @bound ) {
-        if ( !is_inside_bounds( $node{ $param{chain}->[0] } ) ) {
+        if ( !is_inside_bounds( $nodes->{ $param{chain}->[0] } ) ) {
             $xnode{ $param{chain}->[0] } = 1;
             $xnode{ $param{chain}->[1] } = 1;
         }
-        if ( !is_inside_bounds( $node{ $param{chain}->[-1] } ) ) {
+        if ( !is_inside_bounds( $nodes->{ $param{chain}->[-1] } ) ) {
             $xnode{ $param{chain}->[-1] } = 1;
             $xnode{ $param{chain}->[-2] } = 1;
         }
@@ -2620,11 +2611,11 @@ sub execute_action {
                 region      =>  $param{region},
                 country     =>  $param{country},
                 bound       =>  Math::Polygon::Tree->new(
-                        map { [ map { [ split q{,}, $node{$_} ] } @$_ ] } @{ $obj->{outer} }
+                        map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} }
                     ),
             };
             $city_rtree->insert( $cityid, ( Math::Polygon::Tree::polygon_bbox(
-                map { map { [ split q{,}, $node{$_} ] } @$_ } @{ $obj->{outer} }
+                map { map { [ split q{,}, $nodes->{$_} ] } @$_ } @{ $obj->{outer} }
             ) ) );
         }
     }
@@ -2643,7 +2634,7 @@ sub execute_action {
             $suburb{ $obj->{type} . $obj->{id} } = {
                 name        =>  $param{name},
                 bound       =>  Math::Polygon::Tree->new(
-                        map { [ map { [ split q{,}, $node{$_} ] } @$_ ] } @{ $obj->{outer} }
+                        map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} }
                     ),
             };
 
@@ -2675,8 +2666,8 @@ sub execute_action {
                 my $step = ( $tag{'addr:interpolation'} eq 'all' ? 1 : 2 );
                 if ( $house1 > $house2 )    { $step *= -1 }
 
-                my ($lat1, $lon1) = split q{,}, $node{$node1};
-                my ($lat2, $lon2) = split q{,}, $node{$node2};
+                my ($lat1, $lon1) = split q{,}, $nodes->{$node1};
+                my ($lat2, $lon2) = split q{,}, $nodes->{$node2};
 
                 my $steplat = ($lat2-$lat1) / ($house2-$house1);
                 my $steplon = ($lon2-$lon1) / ($house2-$house1);
@@ -2708,13 +2699,13 @@ sub execute_action {
     ##  Write POI
     if ( $param{action} eq 'write_poi' ) {
 
-        my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $node{$obj->{id}} );
+        my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $nodes->{$obj->{id}} );
         if ( !$latlon && $obj->{type} eq 'Way' ) {
-            my $outer = $ampoly{$obj->{id}} ? $ampoly{$obj->{id}}->{outer}->[0] : $waychain{$obj->{id}};
+            my $outer = $ampoly{$obj->{id}} ? $ampoly{$obj->{id}}->{outer}->[0] : $chains->{$obj->{id}};
             my $entrance_node = first { exists $main_entrance{$_} } @$outer;
             $latlon = $entrance_node
-                ? $node{$entrance_node}
-                : join( q{,}, polygon_centroid( map {[ split /,/, $node{$_} ]} @$outer ) );
+                ? $nodes->{$entrance_node}
+                : join( q{,}, polygon_centroid( map {[ split /,/, $nodes->{$_} ]} @$outer ) );
         }
 
         return  unless $latlon && ( !@bound || is_inside_bounds( $latlon ) );
@@ -2769,11 +2760,11 @@ sub execute_action {
             map { @bound ? ( _split_chain($_) ) : ( $_ ) }
             $ampoly{$obj->{id}}
                 ? ( @{$ampoly{$obj->{id}}->{outer}}, @{$ampoly{$obj->{id}}->{inner} || []} )
-                : ( $waychain{$obj->{id}} );
+                : ( $chains->{$obj->{id}} );
 
         sub _split_chain {
             my ($chain) = @_;
-            my @is_inside = map { is_inside_bounds($node{$_}) } @$chain;
+            my @is_inside = map { is_inside_bounds($nodes->{$_}) } @$chain;
             my @begin = grep { $is_inside[$_] && ( $_ == 0        || !$is_inside[$_-1] ) } ( 0 .. $#$chain );
             my @end   = grep { $is_inside[$_] && ( $_ == $#$chain || !$is_inside[$_+1] ) } ( 0 .. $#$chain );
             return map {[ @$chain[($begin[$_] == 0 ? 0 : $begin[$_]-1) .. ($end[$_] == $#$chain ? $end[$_] : $end[$_]+1)] ]} (0 .. $#end);
@@ -2855,26 +2846,26 @@ sub execute_action {
         $objinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
 
         if ( $ampoly{$obj->{id}} ) {
-            $objinfo{areas} = [ map {[ map {[ reverse split q{,}, $node{$_} ]} @$_ ]} @{$ampoly{$obj->{id}}->{outer}} ];
-            $objinfo{holes} = [ map {[ map {[ reverse split q{,}, $node{$_} ]} @$_ ]} @{$ampoly{$obj->{id}}->{inner} || []} ];
+            $objinfo{areas} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$ampoly{$obj->{id}}->{outer}} ];
+            $objinfo{holes} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$ampoly{$obj->{id}}->{inner} || []} ];
             $objinfo{entrance} = [
-                map { [ $node{$_}, $entrance{$_} ] }
+                map { [ $nodes->{$_}, $entrance{$_} ] }
                 grep { exists $entrance{$_} }
                 map { @$_ } 
                 ( @{$ampoly{$obj->{id}}->{outer}}, @{$ampoly{$obj->{id}}->{inner} || []})
             ];
         }
         else {
-            if ( $waychain{$obj->{id}}->[0] ne $waychain{$obj->{id}}->[-1] ) {
-                report( "Area WayID=$obj->{id} is not closed at ($node{$waychain{$obj->{id}}->[0]})" );
+            if ( $chains->{$obj->{id}}->[0] ne $chains->{$obj->{id}}->[-1] ) {
+                report( "Area WayID=$obj->{id} is not closed at ($nodes->{$chains->{$obj->{id}}->[0]})" );
                 return;
             }
 
-            $objinfo{areas} = [ [ map {[ reverse split q{,}, $node{$_} ]} @{$waychain{$obj->{id}}} ] ];
+            $objinfo{areas} = [ [ map {[ reverse split q{,}, $nodes->{$_} ]} @{$chains->{$obj->{id}}} ] ];
             $objinfo{entrance} = [
-                map { [ $node{$_}, $entrance{$_} ] }
+                map { [ $nodes->{$_}, $entrance{$_} ] }
                 grep { exists $entrance{$_} }
-                @{$waychain{$obj->{id}}}
+                @{$chains->{$obj->{id}}}
             ];
         }
 
@@ -2884,8 +2875,8 @@ sub execute_action {
     ##  Address loaded POI
     if ( $param{action} eq 'address_poi' && exists $poi_rtree->{root} ) {
 
-        my $outer = $ampoly{$obj->{id}} ? $ampoly{$obj->{id}}->{outer}->[0] : $waychain{$obj->{id}};
-        my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $node{$_} ]} @$outer );
+        my $outer = $ampoly{$obj->{id}} ? $ampoly{$obj->{id}}->{outer}->[0] : $chains->{$obj->{id}};
+        my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $nodes->{$_} ]} @$outer );
         my @poilist;
 
         $poi_rtree->query_completely_within_rect( @bbox, \@poilist );
@@ -2893,8 +2884,8 @@ sub execute_action {
         for my $id ( @poilist ) {
             next unless exists $poi{$id};
             next unless Math::Polygon::Tree::polygon_contains_point(
-                    [ reverse split q{,}, $node{$id} ],
-                    map {[ reverse split q{,}, $node{$_} ]} @$outer
+                    [ reverse split q{,}, $nodes->{$id} ],
+                    map {[ reverse split q{,}, $nodes->{$_} ]} @$outer
                 );
 
             my %tag = %{ $obj->{tag} };
@@ -2942,12 +2933,12 @@ sub _merge_multipolygon {
 
     for my $contour_type ( 'outer', 'inner' ) {
         my $list_ref = $mp->{$contour_type};
-        my @list = grep { exists $waychain{$_} } @$list_ref;
+        my @list = grep { exists $chains->{$_} } @$list_ref;
 
         LIST:
         while ( @list ) {
             my $id = shift @list;
-            my @contour = @{$waychain{$id}};
+            my @contour = @{$chains->{$id}};
 
             CONTOUR:
             while ( 1 ) {
@@ -2957,28 +2948,28 @@ sub _merge_multipolygon {
                     next LIST;
                 }
 
-                my $add = first_index { $contour[-1] eq $waychain{$_}->[0] } @list;
+                my $add = first_index { $contour[-1] eq $chains->{$_}->[0] } @list;
                 if ( $add > -1 ) {
                     $id .= ":$list[$add]";
                     pop @contour;
-                    push @contour, @{$waychain{$list[$add]}};
+                    push @contour, @{$chains->{$list[$add]}};
 
                     splice  @list, $add, 1;
                     next CONTOUR;
                 }
 
-                $add = first_index { $contour[-1] eq $waychain{$_}->[-1] } @list;
+                $add = first_index { $contour[-1] eq $chains->{$_}->[-1] } @list;
                 if ( $add > -1 ) {
                     $id .= ":r$list[$add]";
                     pop @contour;
-                    push @contour, reverse @{$waychain{$list[$add]}};
+                    push @contour, reverse @{$chains->{$list[$add]}};
 
                     splice  @list, $add, 1;
                     next CONTOUR;
                 }
 
                 #report( "Multipolygon's RelID=$mpid part WayID=$id is not closed",
-                #    ( all { exists $waychain{$_} } @$list_ref ) ? 'ERROR' : 'WARNING' );
+                #    ( all { exists $chains->{$_} } @$list_ref ) ? 'ERROR' : 'WARNING' );
                 last CONTOUR;
             }
         }
