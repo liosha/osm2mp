@@ -361,12 +361,13 @@ my $osm = OSM->new(
     skip_tags => [ keys %{$config{skip_tags}} ],
     handlers => \%extra_handlers,
 );
+$osm->merge_multipolygons();
 
 close $in;
 
 print STDERR "Ok\n";
 
-my ($nodes, $chains) = @$osm{ qw/ nodes chains / };
+my ($nodes, $chains, $mpoly) = @$osm{ qw/ nodes chains mpoly / };
 my ($nodetag, $waytag) = @{$osm->{tags}}{ qw/ node way / };
 
 
@@ -428,51 +429,9 @@ if ( !$output_fn ) {
 
 
 
-
-
-=old
-            for ( $obj->{tag}->{type} ) {
-                when ( [ qw/ multipolygon boundary / ] ) {
-                    my %rings;
-                    for my $item ( [ outer => [q{}, 'outer', 'exclave'] ], [ inner => ['inner', 'enclave'] ] ) {
-                        my ($type, $roles) = @$item;
-                        $rings{$type} = [
-                            map { $_->{ref} }
-                            grep { $_->{type} ~~ 'way' && $_->{role} ~~ $roles }
-                            @{ $obj->{member} || [] }
-                        ];
-                    }
-
-                    if ( !@{$rings{outer}} ) {
-                        report( "Multipolygon RelID=$id doesn't have OUTER way" );
-                        return;
-                    }
-
-                    my $ampoly = _merge_multipolygon(\%rings);
-                    return if !$ampoly->{outer} || !@{$ampoly->{outer}};
-                    
-                    my $rid = "r$id";
-                    $waytag->{$rid} = $obj->{tag};
-                    $ampoly{$rid} = $ampoly;
-
-                    if ( @{$rings{outer}} == 1 && $waytag->{$rings{outer}->[0]} ) {
-                        # old-style multipolygon
-                        my $wid = $rings{outer}->[0];
-                        $ampoly{$wid} = $ampoly{$rid};
-                    }
-                };
-                when ( 'turn_restriction' ) {};
-                # !!! etc
-            }
-
-=cut
-
-
 printf STDERR "Nodes: %s/%s\n", scalar keys %$nodes, scalar keys %$nodetag;
 printf STDERR "Ways:  %s/%s\n", scalar keys %$chains, scalar keys %$waytag;
 
-
-my %ampoly;
 
 # load addressing polygons
 if ( $addressing && exists $config{address} ) {
@@ -482,7 +441,7 @@ if ( $addressing && exists $config{address} ) {
                 type    => 'Way', # !!!
                 id      => $id,
                 tag     => $tags,
-                outer   => ( $ampoly{$id} ? $ampoly{$id}->{outer} : [ $chains->{$id} ] ),
+                outer   => ( $mpoly->{$id} ? $mpoly->{$id}->[0] : [ $chains->{$id} ] ),
             } );
     }
 }
@@ -672,7 +631,7 @@ while ( my $line = decode 'utf8', <$in> ) {
     }
 }
 
-printf STDERR "%d multipolygons\n", scalar keys %ampoly;
+printf STDERR "%d multipolygons\n", scalar keys %$mpoly;
 print  STDERR "                          $counttrest turn restrictions\n"       if $restrictions;
 print  STDERR "                          $countsigns destination signs\n"       if $destsigns;
 print  STDERR "                          $countroutes transport routes\n"       if $transportstops;
@@ -2701,7 +2660,7 @@ sub execute_action {
 
         my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $nodes->{$obj->{id}} );
         if ( !$latlon && $obj->{type} eq 'Way' ) {
-            my $outer = $ampoly{$obj->{id}} ? $ampoly{$obj->{id}}->{outer}->[0] : $chains->{$obj->{id}};
+            my $outer = $mpoly->{$obj->{id}} ? $mpoly->{$obj->{id}}->[0]->[0] : $chains->{$obj->{id}};
             my $entrance_node = first { exists $main_entrance{$_} } @$outer;
             $latlon = $entrance_node
                 ? $nodes->{$entrance_node}
@@ -2758,8 +2717,8 @@ sub execute_action {
     ) {
         @chains =
             map { @bound ? ( _split_chain($_) ) : ( $_ ) }
-            $ampoly{$obj->{id}}
-                ? ( @{$ampoly{$obj->{id}}->{outer}}, @{$ampoly{$obj->{id}}->{inner} || []} )
+            $mpoly->{$obj->{id}}
+                ? ( map {@$_} @{$mpoly->{$obj->{id}}} )
                 : ( $chains->{$obj->{id}} );
 
         sub _split_chain {
@@ -2845,14 +2804,14 @@ sub execute_action {
         $objinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
         $objinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
 
-        if ( $ampoly{$obj->{id}} ) {
-            $objinfo{areas} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$ampoly{$obj->{id}}->{outer}} ];
-            $objinfo{holes} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$ampoly{$obj->{id}}->{inner} || []} ];
+        if ( $mpoly->{$obj->{id}} ) {
+            $objinfo{areas} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$mpoly->{$obj->{id}}->[0]} ];
+            $objinfo{holes} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$mpoly->{$obj->{id}}->[1]} ];
             $objinfo{entrance} = [
                 map { [ $nodes->{$_}, $entrance{$_} ] }
                 grep { exists $entrance{$_} }
                 map { @$_ } 
-                ( @{$ampoly{$obj->{id}}->{outer}}, @{$ampoly{$obj->{id}}->{inner} || []})
+                map { @$_ } @{$mpoly->{$obj->{id}}}
             ];
         }
         else {
@@ -2875,7 +2834,7 @@ sub execute_action {
     ##  Address loaded POI
     if ( $param{action} eq 'address_poi' && exists $poi_rtree->{root} ) {
 
-        my $outer = $ampoly{$obj->{id}} ? $ampoly{$obj->{id}}->{outer}->[0] : $chains->{$obj->{id}};
+        my $outer = $mpoly->{$obj->{id}} ? $mpoly->{$obj->{id}}->[0]->[0] : $chains->{$obj->{id}};
         my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $nodes->{$_} ]} @$outer );
         my @poilist;
 
@@ -2927,58 +2886,6 @@ sub process_config {
 }
 
 
-sub _merge_multipolygon {
-    my ($mp) = @_;
-    my %res;
-
-    for my $contour_type ( 'outer', 'inner' ) {
-        my $list_ref = $mp->{$contour_type};
-        my @list = grep { exists $chains->{$_} } @$list_ref;
-
-        LIST:
-        while ( @list ) {
-            my $id = shift @list;
-            my @contour = @{$chains->{$id}};
-
-            CONTOUR:
-            while ( 1 ) {
-                # closed way
-                if ( $contour[0] eq $contour[-1] ) {
-                    push @{$res{$contour_type}}, [ @contour ];
-                    next LIST;
-                }
-
-                my $add = first_index { $contour[-1] eq $chains->{$_}->[0] } @list;
-                if ( $add > -1 ) {
-                    $id .= ":$list[$add]";
-                    pop @contour;
-                    push @contour, @{$chains->{$list[$add]}};
-
-                    splice  @list, $add, 1;
-                    next CONTOUR;
-                }
-
-                $add = first_index { $contour[-1] eq $chains->{$_}->[-1] } @list;
-                if ( $add > -1 ) {
-                    $id .= ":r$list[$add]";
-                    pop @contour;
-                    push @contour, reverse @{$chains->{$list[$add]}};
-
-                    splice  @list, $add, 1;
-                    next CONTOUR;
-                }
-
-                #report( "Multipolygon's RelID=$mpid part WayID=$id is not closed",
-                #    ( all { exists $chains->{$_} } @$list_ref ) ? 'ERROR' : 'WARNING' );
-                last CONTOUR;
-            }
-        }
-    }
-
-    return \%res;
-}
-
-
 sub report {
     my ( $msg, $type ) = @_;
     $type ||= 'ERROR';
@@ -3013,53 +2920,6 @@ sub extract_number {
     return unless defined $str;
     my ($number) = $str =~ /^ ( [-+]? \d+ ) /x;
     return $number;
-}
-
-__END__
-
-sub merge_polygon_chains {
-
-    my @c1 = @{$_[0]};
-    my @c2 = @{$_[1]};
-
-    my %seg = map { join( q{:}, sort ( $c1[$_], $c1[$_+1] ) ) => $_ } ( 0 .. $#c1 - 1 );
-
-    for my $j ( 0 .. scalar $#c2 - 1 ) {
-        my $seg = join( q{:}, sort ( $c2[$j], $c2[$j+1] ) );
-        if ( exists $seg{$seg} ) {
-            my $i = $seg{$seg};
-
-            pop @c1;
-            @c1 = @c1[ $i+1 .. $#c1, 0 .. $i ]      if  $i < $#c1;
-            @c1 = reverse @c1                       if  $c1[0] ne $c2[$j];
-
-            # merge
-            splice @c2, $j, 2, @c1;
-            pop @c2;
-
-            # remove jitters
-            $i = 0;
-            JITTER:
-            while ( $i <= $#c2 ) {
-                if ( $c2[$i] eq $c2[($i+1) % scalar @c2] ) {
-                    splice @c2, $i, 1;
-                    $i--    if $i > 0;
-                    redo JITTER;
-                }
-                if ( $c2[$i] eq $c2[($i+2) % scalar @c2] ) {
-                    splice @c2, ($i+1) % scalar @c2, 1;
-                    $i--    if $i > $#c2;
-                    splice @c2, $i, 1;
-                    $i--    if $i > 0;
-                    redo JITTER;
-                }
-                $i++;
-            }
-            push @c2, $c2[0];
-            return \@c2;
-        }
-    }
-    return;
 }
 
 

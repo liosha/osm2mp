@@ -10,7 +10,7 @@ package OSM;
 # $Id$
 
 use Carp;
-use List::MoreUtils qw/ all /;
+use List::MoreUtils qw/ all notall first_index /;
 
 use Geo::Openstreetmap::Parser;
 
@@ -102,6 +102,7 @@ sub load {
 
                 if ( my $type = $tags->{type} ) {
                     my $id = $obj->{attr}->{id};
+                    $reltag->{$id} = $tags;
                     $relations->{$type}->{$id} = $obj->{member};
                 }
                 return;
@@ -114,6 +115,94 @@ sub load {
 
     return;
 }
+
+
+=method merge_multipolygons
+
+Process multipolygons
+
+=cut
+
+sub merge_multipolygons {
+    my ($self) = @_;
+
+    my $waytag = $self->{tags}->{way};
+    my $reltag = $self->{tags}->{relation};
+
+    for my $type ( qw/ multipolygon boundary / ) {
+        while ( my ($id, $members) = each %{ $self->{relations}->{$type} } ) {
+            my @outers = map {$_->{ref}} grep { $_->{type} ~~ 'way' && $_->{role} ~~ [ q{}, 'outer', 'exclave' ] } @$members;
+            next if !@outers;
+
+            my @inners = map {$_->{ref}} grep { $_->{type} ~~ 'way' && $_->{role} ~~ [ 'inner', 'enclave' ] } @$members;
+
+            my $mpoly = _merge_multipolygon($self, \@outers, \@inners);
+            next if !$mpoly;
+
+            my $rid = "r$id";
+            $self->{mpoly}->{$rid} = $mpoly;
+            $self->{mpoly}->{$outers[0]} = $mpoly   if @outers == 1 && @inners;
+            $waytag->{$rid} = $reltag->{$id};
+        }
+    }
+    return;
+}
+
+
+sub _merge_multipolygon {
+    my ($self, $outers, $inners) = @_;
+
+    my $chains = $self->{chains};
+
+    my @result;
+    for my $list_ref ( [@$outers], [@$inners] ) {
+        my @rings;
+
+        # skip incomplete objects
+        return if notall { exists $chains->{$_} } @$list_ref;
+
+        LIST:
+        while ( @$list_ref ) {
+            my $id = shift @$list_ref;
+            my @contour = @{$chains->{$id}};
+
+            CONTOUR: {
+                if ( $contour[0] eq $contour[-1] ) {
+                    push @rings, \@contour;
+                    next LIST;
+                }
+
+                my $add = first_index { $contour[-1] eq $chains->{$_}->[0] } @$list_ref;
+                if ( $add > -1 ) {
+                    my $add_id = $list_ref->[$add];
+                    $id .= ":$add_id";
+                    pop @contour;
+                    push @contour, @{$chains->{$add_id}};
+                    splice @$list_ref, $add, 1;
+                    redo CONTOUR;
+                }
+
+                $add = first_index { $contour[-1] eq $chains->{$_}->[-1] } @$list_ref;
+                if ( $add > -1 ) {
+                    my $add_id = $list_ref->[$add];
+                    $id .= ":r$add_id";
+                    pop @contour;
+                    push @contour, reverse @{$chains->{$add_id}};
+                    splice @$list_ref, $add, 1;
+                    redo CONTOUR;
+                }
+
+                # skip broken multipolygons
+                return;
+            }
+        }
+
+        push @result, \@rings;
+    }
+
+    return \@result;
+}
+
 
 
 1;
