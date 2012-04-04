@@ -8,7 +8,7 @@
 
 ##
 ##  Required packages:
-##    * Template-toolkit
+##    * Template
 ##    * Getopt::Long
 ##    * YAML
 ##    * Encode::Locale
@@ -35,8 +35,6 @@ use autodie;
 use FindBin qw{ $Bin };
 use lib $Bin;
 
-use Geo::Openstreetmap::Parser;
-
 use POSIX;
 use YAML 0.72;
 use Getopt::Long qw{ :config pass_through };
@@ -45,9 +43,6 @@ use File::Spec;
 use Encode;
 use Encode::Locale;
 
-use Template::Context;
-use Template::Provider;
-
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 use Math::Polygon::Tree  0.041  qw{ polygon_centroid };
@@ -55,6 +50,10 @@ use Tree::R;
 
 use List::Util qw{ first reduce sum min max };
 use List::MoreUtils qw{ all none any first_index last_index uniq };
+
+
+use Geo::Openstreetmap::Parser;
+use WriterTT;
 
 
 
@@ -338,53 +337,20 @@ $transport_mode = $transport_code{ $transport_mode }
 
 ####    Preparing templates
 
-my $ttc = Template::Context->new();
-
-##  loading filters
-my $ttf = $ttc->{LOAD_FILTERS}->[0];
-$ttf->store( 'upcase', sub {  my $text = uc shift;  $text =~ s/ \b 0X (?=\w)/0x/xms;  return $text;  } );
-$ttf->store( 'translit', sub {  require Text::Unidecode; return Text::Unidecode::unidecode( shift );  } );
-
-#@filters = map { split q{,}, $_ } @filters;
-for my $filter ( @filters ) {
-    my ($filter_sub) = $ttf->fetch( $filter );
-    next if $filter_sub;
-    my $filter_package = "Template::Plugin::Filter::$filter";
-    eval "require $filter"
-        or eval "require $filter_package"
-        or die $@;
-    my $filter_object = $filter_package->new( $ttc ); #!!! @args
-    $filter_object->init( $filter );
-}
-
-##  master chain filter
-$ttf->store( 'mp_filter', sub {
-    my $text = shift;
-    for my $filter ( @filters ) {
-        $text = $ttf->fetch($filter)->($text);
-    }
-    return $text;
-});
-
-##  precompiling blocks
-my $ttp = $ttc->{LOAD_TEMPLATES}->[0];
-$ttp->{STAT_TTL} = 2**31;
-for my $template ( keys %{ $config{output} } ) {
-    $ttp->store( $template, $ttc->template( \$config{output}->{$template} ) );
-}
+my $ttc = WriterTT->new( filters => \@filters, templates => $config{output} );
 
 
-    
+
 ####    Creating simple multiwriter output
 
 $mp_opts->{DefaultCityCountry} = $country_code{uc $mp_opts->{DefaultCityCountry}}
     if $mp_opts->{DefaultCityCountry} && $country_code{uc $mp_opts->{DefaultCityCountry}};
-    
+
 my $out = {};
 if ( !$output_fn ) {
     $out->{q{}} = *STDOUT{IO};
     binmode $out->{q{}}, $binmode;
-    print {$out->{q{}}} $ttc->process( header => { opts => $mp_opts, version => $VERSION } );
+    $ttc->print( $out->{q{}}, header => { opts => $mp_opts, version => $VERSION } );
 }
 
 
@@ -608,32 +574,7 @@ print STDERR "Ok\n";
 
 =old_code
 
-my $waypos;
-my $relpos;
-
-
-# multipolygons
-my %mpoly;
-
-# turn restrictions
-my $counttrest = 0;
-my $countsigns = 0;
-
-# transport
-my $countroutes = 0;
-
-# streets
-my $count_streets = 0;
-
-# roads numbers
-my $count_ref_roads = 0;
-
-my %reltag;
-
 while ( my $line = decode 'utf8', <$in> ) {
-
-    my %relmember;
-    my $relid;
 
     if ( $line =~ /<\/relation/ ) {
 
@@ -790,9 +731,6 @@ print  STDERR "                          $count_streets streets\n"              
 
 ###     loading cities, multipolygon parts and checking node dupes
 
-my $wayid;
-#my %waytag;
-my @chain;
 
 #                report( "WayID=$wayid has dupes at ($node{$ref})" );
 
@@ -1704,7 +1642,7 @@ if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
 
 
 for my $file ( keys %$out ) {
-    print {$out->{$file}} $ttc->process( 'footer' );
+    $ttc->print( $out->{$file}, footer => {} );
 }
 
 print STDERR "All done!!\n\n";
@@ -3115,10 +3053,10 @@ sub output {
         my $fn = $output_fn;
         $fn =~ s/ (?<= . ) ( \. .* $ | $ ) /.$group$1/xms   if $group;
         open $out->{$group}, ">:$binmode", $fn;
-        print {$out->{$group}} $ttc->process( header => { opts => $mp_opts, ($multiout // q{}) => $group, version => $VERSION } );
+        $ttc->print( $out->{$group}, header => { opts => $mp_opts, ($multiout // q{}) => $group, version => $VERSION } );
     }
 
-    print {$out->{$group}} $ttc->process( $template => $data );
+    $ttc->print( $out->{$group}, $template => $data );
 }
 
 
