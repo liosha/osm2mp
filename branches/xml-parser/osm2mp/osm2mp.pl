@@ -142,7 +142,7 @@ my $poi_rtree = Tree::R->new();
 
 
 
-print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2012 liosha, xliosha\@gmail.com\n\n";
+print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2012 liosha, xliosha\@gmail.com\n";
 
 
 
@@ -154,7 +154,7 @@ GetOptions (
     'config=s@'         => \$config,
 );
 
-print STDERR "Loading configuration...  ";
+say STDERR "\nLoading configuration...";
 
 my %config;
 my $ft_config = FeatureConfig->new(
@@ -238,8 +238,6 @@ if ( $country_list ) {
     close $cl;
 }
 
-
-print STDERR "Ok\n\n";
 
 
 
@@ -362,8 +360,7 @@ my ($in, $stream_msg) = $infile ~~ '-'
     ? ( *STDIN, 'STDIN' )
     : ( do{ open( my $fh, '<', $infile ); $fh }, "file $infile" );
 
-print STDERR "Processing $stream_msg\n\n";
-print STDERR "Loading OSM data...       ";
+say STDERR "\nLoading OSM data from $stream_msg...";
 
 my %extra_handlers;
 if ($osmbbox) {
@@ -382,13 +379,13 @@ $osm->merge_multipolygons();
 
 close $in;
 
-print STDERR "Ok\n";
+my ($nodes, $chains, $mpoly, $relations) = @$osm{ qw/ nodes chains mpoly relations / };
+my ($nodetag, $waytag, $reltag) = @{$osm->{tags}}{ qw/ node way relation / };
 
-my ($nodes, $chains, $mpoly) = @$osm{ qw/ nodes chains mpoly / };
-my ($nodetag, $waytag) = @{$osm->{tags}}{ qw/ node way / };
-
-printf STDERR "Nodes: %s/%s\n", scalar keys %$nodes, scalar keys %$nodetag;
-printf STDERR "Ways:  %s/%s\n", scalar(keys %$chains) + scalar(keys %$mpoly), scalar keys %$waytag;
+printf STDERR "  Nodes: %s/%s\n", scalar keys %$nodes, scalar keys %$nodetag;
+printf STDERR "  Ways: %s/%s\n", scalar keys %$chains, scalar(keys %$waytag) - scalar(keys %$mpoly);
+printf STDERR "  Relations: %s\n", scalar keys %$reltag;
+printf STDERR "  Multipolygons: %s\n", scalar keys %$mpoly;
 
 
 
@@ -400,7 +397,8 @@ my $boundtree;
 my $boundgpc;
 
 if ($bbox || $bpolyfile) {
-    print STDERR "Initialising bounds...    ";
+    my $bounds_msg = $bbox ? 'bbox' : $bpolyfile;
+    say STDERR "\nInitialising bounds from $bounds_msg...";
 
     if ($bbox) {
         my ($minlon, $minlat, $maxlon, $maxlat) = split q{,}, $bbox;
@@ -430,7 +428,7 @@ if ($bbox || $bpolyfile) {
     $boundgpc = new_gpc();
     $boundgpc->add_polygon( \@bound, 0 );
 
-    printf STDERR "%d segments\n", scalar @bound;
+    printf STDERR "  %d segments\n", scalar @bound;
 }
 
 
@@ -452,7 +450,7 @@ if ( !$output_fn ) {
 
 # load addressing polygons
 if ( $addressing ) {
-    print STDERR "Loading address areas     ";
+    say STDERR "\nLoading address areas...";
     while ( my ($id, $tags) = each %$waytag ) {
         $ft_config->process( address => {
                 type    => 'Way', # !!!
@@ -462,7 +460,9 @@ if ( $addressing ) {
             } );
     }
 }
-print STDERR "Ok\n";
+printf STDERR "  %d cities\n", scalar keys %city;
+
+
 
 my %road;
 my %coast;
@@ -475,9 +475,11 @@ my %road_ref;
 my %trstop;
 my %street;
 
+
+
 print_section( 'Simple objects' );
 # processing poi nodes
-print STDERR "Processing nodes          ";
+say STDERR "\nProcessing nodes...";
 while ( my ($id, $tags) = each %$nodetag ) {
     $ft_config->process( nodes => {
             type    => 'Node',
@@ -485,9 +487,9 @@ while ( my ($id, $tags) = each %$nodetag ) {
             tag     => $tags,
         });
 }
-print STDERR "Ok\n";
+printf STDERR "  %d POI loaded\n", scalar keys %poi;
 
-print STDERR "Processing ways           ";
+say STDERR "\nProcessing ways...";
 while ( my ($id, $tags) = each %$waytag ) {
     my $objinfo = {
         type    => "Way",
@@ -498,7 +500,6 @@ while ( my ($id, $tags) = each %$waytag ) {
     $ft_config->process( ways  => $objinfo );
     $ft_config->process( nodes => $objinfo )  if $makepoi;
 }
-print STDERR "Ok\n";
 
 
 =old_code
@@ -648,7 +649,6 @@ while ( my $line = decode 'utf8', <$in> ) {
     }
 }
 
-printf STDERR "%d multipolygons\n", scalar keys %$mpoly;
 print  STDERR "                          $counttrest turn restrictions\n"       if $restrictions;
 print  STDERR "                          $countsigns destination signs\n"       if $destsigns;
 print  STDERR "                          $countroutes transport routes\n"       if $transportstops;
@@ -770,6 +770,7 @@ printf STDERR "                          %d coastlines loaded\n", scalar keys %c
 ####    Writing non-addressed POIs
 
 if ( %poi ) {
+    say STDERR "\nWriting rest POIs...";
     print_section( 'Non-addressed POIs' );
     while ( my ($id,$list) = each %poi ) {
         for my $poi ( @$list ) {
@@ -2874,5 +2875,5 @@ sub extract_number {
     my ($number) = $str =~ /^ ( [-+]? \d+ ) /x;
     return $number;
 }
-
-
+  
+  
