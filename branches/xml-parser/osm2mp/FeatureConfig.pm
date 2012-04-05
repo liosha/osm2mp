@@ -1,0 +1,138 @@
+use 5.010;
+use strict;
+use warnings;
+
+package FeatureConfig;
+
+# ABSTRACT: feature type selector
+
+# $Id$
+
+
+use Carp;
+use List::MoreUtils qw/ any all notall first_index /;
+
+
+our $RULE_CONDITIONS_KEY = 'condition';
+our $RULE_ACTIONS_KEY    = 'action';
+
+
+
+=method new
+
+    my $ft_selector = FeatureConfig->new( %options );
+
+Create instance.
+Options:
+    actions => { $action_id => \&execute_action_id, ... }
+    rules => { $section => \@rules, ... }
+
+=cut
+
+sub new {
+    my ($class, %opt) = @_;
+
+    my $self = bless { actions => $opt{actions} }, $class;
+
+    while ( my ($section, $rules) = each %{ $opt{rules} || {} } ) {
+        $self->add( $section => $rules );
+    }
+
+    return $self;
+}
+
+
+=method add_rules
+
+    $ft_selector->add_rules( $section => \@rules );
+
+Add rules to config section. Replace rules with same id
+
+=cut
+
+sub add_rules {
+    my ($self, $section, $new_rules) = @_;
+    
+    my $rules = $self->{rules}->{$section} //= [];
+    for my $rule ( @$new_rules ) {
+
+        for my $condition ( @{ $rule->{$RULE_CONDITIONS_KEY} } ) {
+            $condition = _precompile_condition($condition);
+        }
+
+        if ( $rule->{id} && (my $index = first_index { $_->{id} ~~ $rule->{id} } @$rules) >= 0 ) {
+            $rules->[$index] = $rule;
+        }
+        else {
+            push @$rules, $rule;
+        }
+    }
+    return;
+}
+
+sub _precompile_condition {
+    my ($condition) = @_;
+
+    # direct code
+    return $condition if ref $condition eq 'CODE';
+
+    # tag matching
+    if ( my ($key, $neg, $val) = $condition =~ m/ (\S+) \s* (!?) = \s* (.+) /xms ) {
+        return sub { !!$neg xor exists shift()->{tag}->{$key} }  if $val eq q{*};
+        my $re = qr/^(?:$val)$/xms;
+        return sub { !!$neg xor any { $_ =~ $re } split(/;/, shift()->{tag}->{$key} // q{}) };
+    }
+
+    # recursive
+    if ( ref $condition eq 'HASH' && exists $condition->{or} ) {
+        my @list = map { _precompile_condition($_) } @{ $condition->{or} };
+        return sub { my $object = shift; any { $_->($object) } @list };
+    }
+    if ( ref $condition eq 'HASH' && exists $condition->{and} ) {
+        my @list = map { _precompile_condition($_) } @{ $condition->{and} };
+        return sub { my $object = shift; all { $_->($object) } @list };
+    }
+
+    # id codes
+    if ( my ($neg, $code) = $condition =~ / (\~?) \s* (\w+) /xms ) {
+        return sub { !!$neg xor shift()->{type} ~~ 'Node' }     if $code ~~ 'only_node';
+        return sub { !!$neg xor !(shift()->{type} ~~ 'Node') }  if $code ~~ [ 'only_way', 'no_node' ];
+    
+        # !!! allow callback conditions!
+        return sub {1}  if $code ~~ [qw/ named inside_city only_rel /];
+    }
+
+    croak "Unknown condition: $condition";
+}
+
+
+=method process
+
+    $ft_config->process( $section => $object );
+
+Check rules for object and execute actions if matches
+
+=cut
+
+sub process {
+    my ($self, $section, $object) = @_;
+
+    my $rules = $self->{rules}->{$section};
+    for my $rule ( @$rules ) {
+        next if notall { $_->($object) } @{ $rule->{$RULE_CONDITIONS_KEY} };
+        for my $action ( @{ $rule->{$RULE_ACTIONS_KEY} } ) {
+            my $action_code = $action->{action};
+
+            use YAML; say STDERR Dump $action, $object if !exists $self->{actions}->{$action_code};
+
+            croak "Unknown action: $action_code" if !exists $self->{actions}->{$action_code};
+            $self->{actions}->{$action_code}->($object, $action);
+        }
+    }
+
+    return;
+}
+
+
+1;
+

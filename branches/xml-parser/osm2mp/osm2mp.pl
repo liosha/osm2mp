@@ -54,6 +54,7 @@ use List::MoreUtils qw{ all none any first_index last_index uniq };
 
 use OSM;
 use WriterTT;
+use FeatureConfig;
 
 
 
@@ -153,8 +154,27 @@ GetOptions (
     'config=s@'         => \$config,
 );
 
-my %config;
 print STDERR "Loading configuration...  ";
+
+my %config;
+my $ft_config = FeatureConfig->new(
+    actions => {
+        load_interpolation      => \&execute_action,
+        load_city               => \&execute_action,
+        load_barrier            => \&execute_action,
+        load_building_entrance  => \&execute_action,
+        write_poi               => \&execute_action,
+        write_polygon           => \&execute_action,
+        write_line              => \&execute_action,
+        address_poi             => \&execute_action,
+        load_road               => \&execute_action,
+        modify_road             => \&execute_action,
+        load_coastline          => \&execute_action,
+        force_external_node     => \&execute_action,
+        load_main_entrance      => \&execute_action,
+        process_interpolation   => \&execute_action,
+    },
+);
 
 while ( my $cfgfile = shift @$config ) {
     my ( $cfgvol, $cfgdir, undef ) = File::Spec->splitpath( $cfgfile );
@@ -186,16 +206,8 @@ while ( my $cfgfile = shift @$config ) {
                 $taglist{$key} = $val;
             }
         }
-        elsif ( $key eq 'nodes' || $key eq 'ways' ) {
-            for my $rule ( @$item ) {
-                if ( exists $rule->{id}
-                        &&  (my $index = first_index { exists $_->{id} && $_->{id} eq $rule->{id} } @{$config{$key}}) >= 0 ) {
-                    $config{$key}->[$index] = $rule;
-                }
-                else {
-                    push @{$config{$key}}, $rule;
-                }
-            }
+        elsif ( $key ~~ [ qw/ nodes ways address / ] ) {
+            $ft_config->add_rules( $key => $item );
         }
         else {
             %config = ( %config, $key => $item );
@@ -434,10 +446,10 @@ printf STDERR "Ways:  %s/%s\n", scalar keys %$chains, scalar keys %$waytag;
 
 
 # load addressing polygons
-if ( $addressing && exists $config{address} ) {
+if ( $addressing ) {
     print STDERR "Loading address areas     ";
     while ( my ($id, $tags) = each %$waytag ) {
-        process_config( $config{address}, {
+        $ft_config->process( address => {
                 type    => 'Way', # !!!
                 id      => $id,
                 tag     => $tags,
@@ -462,7 +474,7 @@ print_section( 'Simple objects' );
 # processing poi nodes
 print STDERR "Processing nodes          ";
 while ( my ($id, $tags) = each %$nodetag ) {
-    process_config( $config{nodes}, {
+    $ft_config->process( nodes => {
             type    => 'Node',
             id      => $id,
             tag     => $tags,
@@ -478,8 +490,8 @@ while ( my ($id, $tags) = each %$waytag ) {
         tag     => $tags,
     };
     
-    process_config( $config{ways}, $objinfo );
-    process_config( $config{nodes}, $objinfo )  if $makepoi;
+    $ft_config->process( ways  => $objinfo );
+    $ft_config->process( nodes => $objinfo )  if $makepoi;
 }
 print STDERR "Ok\n";
 
@@ -729,7 +741,7 @@ while ( my $line = decode 'utf8', <$in> ) {
         push @clist, [ (shift @list), (shift @list) ]  while @list;
 
         ## Way config
-        process_config( $config{ways}, {
+        $ft_config->process( ways => {
                 type    => "Way",
                 id      => $wayid,
                 chain   => \@chain,
@@ -2449,39 +2461,11 @@ sub WritePolygon {
 
 ####    Config processing
 
+=del
+
 sub condition_matches {
 
     my ($condition, $obj) = @_;
-
-
-    # hash-based
-    if ( ref $condition ) {
-        # precompiled tag match
-        if ( exists $condition->{tag} ) {
-            my $result = exists $obj->{tag}->{ $condition->{tag} }
-                && ( !$condition->{re}
-                    || any { $_ =~ $condition->{re} } split( /\s*;\s*/xms, $obj->{tag}->{ $condition->{tag} } ) );
-            return( $result xor $condition->{neg} );
-        }
-        # or
-        elsif ( exists $condition->{or} ) {
-            return any { condition_matches( $_, $obj ) } @{ $condition->{or} };
-        }
-        # and
-        elsif ( exists $condition->{and} ) {
-            return all { condition_matches( $_, $obj ) } @{ $condition->{and} };
-        }
-    }
-
-    # tag =/!= value or *
-    if ( my ($key, $neg, $val) =  $condition =~ m/ (\S+) \s* (!?) = \s* (.+) /xms ) {
-        $_[0] = {
-            tag => $key,
-            neg => $neg,
-            re  => ( $val eq q{*} ? q{} : qr/^(?:$val)$/xms ),
-        };
-        return &condition_matches;
-    }
 
 
     # inside_city (smart)
@@ -2505,22 +2489,13 @@ sub condition_matches {
         return( $neg xor name_from_list( 'label', $obj->{tag} ));
     }
 
-    # only_way etc
-    if ( my ( $type ) = $condition =~ 'only_(\w+)' ) {
-        return (uc $obj->{type}) eq (uc $type);
-    }
-
-    # no_way etc
-    if ( my ( $type ) = $condition =~ 'no_(\w+)' ) {
-        return (uc $obj->{type}) ne (uc $type);
-    }
-    return;
 }
 
+=cut
 
 sub execute_action {
 
-    my ($action, $obj, $condition) = @_;
+    my ($obj, $action, $condition) = @_;
 
     my %param = %{ $action };
 
@@ -2646,7 +2621,7 @@ sub execute_action {
                         tag     => { %tag, 'addr:housenumber' => $chouse, },
                     };
 
-                    execute_action( $new_action, $new_obj, $condition );
+                    execute_action( $new_obj, $new_action, $condition );
                 }
             }
         }
@@ -2859,27 +2834,6 @@ sub execute_action {
             }
 
             delete $poi{$id};
-        }
-    }
-    return;
-}
-
-
-sub process_config {
-
-    my ($cfg, $obj) = @_;
-
-    CFG:
-    for my $cfg_item ( @$cfg ) {
-
-        CONDITION:
-        for my $cfg_condition ( @{ $cfg_item->{condition} } ) {
-            next CFG    unless  condition_matches( $cfg_condition, $obj );
-        }
-
-        ACTION:
-        for my $cfg_action ( @{ $cfg_item->{action} } ) {
-            execute_action( $cfg_action, $obj, $cfg_item->{condition} );
         }
     }
     return;
