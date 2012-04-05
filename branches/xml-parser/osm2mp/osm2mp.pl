@@ -174,6 +174,11 @@ my $ft_config = FeatureConfig->new(
         load_main_entrance      => \&execute_action,
         process_interpolation   => \&execute_action,
     },
+    conditions => {
+        named       => \&_cond_is_named,
+        only_rel    => \&_cond_is_multipolygon,
+        inside_city => \&_cond_is_inside_city,
+    },
 );
 
 while ( my $cfgfile = shift @$config ) {
@@ -382,6 +387,9 @@ print STDERR "Ok\n";
 my ($nodes, $chains, $mpoly) = @$osm{ qw/ nodes chains mpoly / };
 my ($nodetag, $waytag) = @{$osm->{tags}}{ qw/ node way / };
 
+printf STDERR "Nodes: %s/%s\n", scalar keys %$nodes, scalar keys %$nodetag;
+printf STDERR "Ways:  %s/%s\n", scalar(keys %$chains) + scalar(keys %$mpoly), scalar keys %$waytag;
+
 
 
 
@@ -440,9 +448,6 @@ if ( !$output_fn ) {
 }
 
 
-
-printf STDERR "Nodes: %s/%s\n", scalar keys %$nodes, scalar keys %$nodetag;
-printf STDERR "Ways:  %s/%s\n", scalar keys %$chains, scalar keys %$waytag;
 
 
 # load addressing polygons
@@ -2461,37 +2466,31 @@ sub WritePolygon {
 
 ####    Config processing
 
-=del
+sub _cond_is_inside_city {
+    my ($obj) = @_;
 
-sub condition_matches {
-
-    my ($condition, $obj) = @_;
-
-
-    # inside_city (smart)
-    if ( my ($neg) = $condition =~ /(~?)\s*inside_city/ ) {
-        my $res;
-        if ( $obj->{type} eq 'Node' ) {
-            $res = FindCity( $obj->{id} );
-        }
-        elsif ( exists $obj->{latlon} ) {
-            $res = FindCity( $obj->{latlon} );
-        }
-        elsif ( $obj->{type} eq 'Way' && exists $obj->{chain} ) {
-            $res = FindCity( $obj->{chain}->[ floor $#{$obj->{chain}}/3 ] )
-                && FindCity( $obj->{chain}->[ ceil $#{$obj->{chain}}*2/3 ] );
-        }
-        return( $neg xor $res );
+    return FindCity($obj->{latlon})  if exists $obj->{latlon};
+    return FindCity($obj->{id})      if $obj->{type} eq 'Node';
+    
+    if ( $obj->{type} eq 'Way' ) {
+        my $id = $obj->{id};
+        my $chain = $mpoly->{$id} ? $mpoly->{$id}->[0]->[0] : $chains->{$id};
+        return FindCity($chain->[ floor($#$chain/3) ]) && FindCity($chain->[ ceil($#$chain*2/3) ]);
     }
-
-    # named
-    if ( my ($neg) = $condition =~ /(~?)\s*named/ ) {
-        return( $neg xor name_from_list( 'label', $obj->{tag} ));
-    }
-
+    return;
 }
 
-=cut
+sub _cond_is_named {
+    my ($obj) = @_;
+    return !!( name_from_list( label => $obj->{tag} ) );
+}
+
+sub _cond_is_multipolygon {
+    my ($obj) = @_;
+    return exists $mpoly->{$obj->{id}};
+}
+
+
 
 sub execute_action {
 

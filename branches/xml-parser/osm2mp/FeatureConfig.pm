@@ -25,6 +25,7 @@ our $RULE_ACTIONS_KEY    = 'action';
 Create instance.
 Options:
     actions => { $action_id => \&execute_action_id, ... }
+    conditions => { $condition_id => \&is_condition_id, ... }
     rules => { $section => \@rules, ... }
 
 =cut
@@ -32,10 +33,10 @@ Options:
 sub new {
     my ($class, %opt) = @_;
 
-    my $self = bless { actions => $opt{actions} }, $class;
+    my $self = bless { actions => $opt{actions}, conditions => $opt{conditions} || {} }, $class;
 
     while ( my ($section, $rules) = each %{ $opt{rules} || {} } ) {
-        $self->add( $section => $rules );
+        $self->add_rules( $section => $rules );
     }
 
     return $self;
@@ -57,7 +58,7 @@ sub add_rules {
     for my $rule ( @$new_rules ) {
 
         for my $condition ( @{ $rule->{$RULE_CONDITIONS_KEY} } ) {
-            $condition = _precompile_condition($condition);
+            $condition = $self->_precompile_condition($condition);
         }
 
         if ( $rule->{id} && (my $index = first_index { $_->{id} ~~ $rule->{id} } @$rules) >= 0 ) {
@@ -71,7 +72,7 @@ sub add_rules {
 }
 
 sub _precompile_condition {
-    my ($condition) = @_;
+    my ($self, $condition) = @_;
 
     # direct code
     return $condition if ref $condition eq 'CODE';
@@ -85,21 +86,19 @@ sub _precompile_condition {
 
     # recursive
     if ( ref $condition eq 'HASH' && exists $condition->{or} ) {
-        my @list = map { _precompile_condition($_) } @{ $condition->{or} };
+        my @list = map { $self->_precompile_condition($_) } @{ $condition->{or} };
         return sub { my $object = shift; any { $_->($object) } @list };
     }
     if ( ref $condition eq 'HASH' && exists $condition->{and} ) {
-        my @list = map { _precompile_condition($_) } @{ $condition->{and} };
+        my @list = map { $self->_precompile_condition($_) } @{ $condition->{and} };
         return sub { my $object = shift; all { $_->($object) } @list };
     }
 
     # id codes
-    if ( my ($neg, $code) = $condition =~ / (\~?) \s* (\w+) /xms ) {
-        return sub { !!$neg xor shift()->{type} ~~ 'Node' }     if $code ~~ 'only_node';
-        return sub { !!$neg xor !(shift()->{type} ~~ 'Node') }  if $code ~~ [ 'only_way', 'no_node' ];
-    
-        # !!! allow callback conditions!
-        return sub {1}  if $code ~~ [qw/ named inside_city only_rel /];
+    if ( my ($neg, $cond_id) = $condition =~ / (\~?) \s* (\w+) /xms ) {
+        return sub { !!$neg xor &{$self->{conditions}->{$cond_id}} }  if exists $self->{conditions}->{$cond_id};
+        return sub { !!$neg xor shift()->{type} ~~ 'Node' }     if $cond_id ~~ 'only_node';
+        return sub { !!$neg xor !(shift()->{type} ~~ 'Node') }  if $cond_id ~~ [ 'only_way', 'no_node' ];    
     }
 
     croak "Unknown condition: $condition";
@@ -122,9 +121,6 @@ sub process {
         next if notall { $_->($object) } @{ $rule->{$RULE_CONDITIONS_KEY} };
         for my $action ( @{ $rule->{$RULE_ACTIONS_KEY} } ) {
             my $action_code = $action->{action};
-
-            use YAML; say STDERR Dump $action, $object if !exists $self->{actions}->{$action_code};
-
             croak "Unknown action: $action_code" if !exists $self->{actions}->{$action_code};
             $self->{actions}->{$action_code}->($object, $action);
         }
