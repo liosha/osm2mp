@@ -476,6 +476,27 @@ my %trstop;
 my %street;
 
 
+say STDERR "\nProcessing relations...";
+
+if ( $streetrelations ) {
+    for my $type ( qw{ street associatedStreet } ) {
+        my $list = $relations->{$type};
+        next if !$list;
+
+        while ( my ($relation_id, $members) = each %$list ) {
+            my $tags = $reltag->{$relation_id};
+            my $street_name = name_from_list( 'street', $tags );
+            next if !$street_name;
+            
+            for my $member ( @$members ) {
+                next if !( $member->{role} ~~ [ 'house', 'address' ] );
+                $street{"$member->{type}:$member->{ref}"} = $street_name;
+            }
+        }
+    }
+    printf STDERR "  %d house-street associations\n", scalar keys %street;
+}
+
 
 print_section( 'Simple objects' );
 # processing poi nodes
@@ -627,21 +648,6 @@ while ( my $line = decode 'utf8', <$in> ) {
                 for my $way ( @{ $relmember{$role} } ) {
                     push @{ $road_ref{$way} }, $reltag{'ref'}       if exists $reltag{'ref'};
                     push @{ $road_ref{$way} }, $reltag{'int_ref'}   if exists $reltag{'int_ref'};
-                }
-            }
-        }
-
-        # streets
-        if ( $streetrelations
-                &&  $reltag{'type'}  ~~ [ qw{ street associatedStreet } ]
-                &&  name_from_list( 'street', \%reltag ) ) {
-            $count_streets ++;
-            my $street_name = name_from_list( 'street', \%reltag );
-            for my $role ( keys %relmember ) {
-                next unless $role =~ /:(house|address)/;
-                my ($obj) = $role =~ /(.+):/;
-                for my $member ( @{ $relmember{$role} } ) {
-                    $street{ "$obj:$member" } = $street_name;
                 }
             }
         }
