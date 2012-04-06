@@ -131,7 +131,6 @@ my %city;
 my $city_rtree = Tree::R->new();
 my %suburb;
 
-my %interpolation_node;
 my %entrance;
 my %main_entrance;
 
@@ -158,7 +157,6 @@ say STDERR "\nLoading configuration...";
 my %config;
 my $ft_config = FeatureConfig->new(
     actions => {
-        load_interpolation      => \&execute_action,
         load_city               => \&execute_action,
         load_barrier            => \&execute_action,
         load_building_entrance  => \&execute_action,
@@ -616,32 +614,6 @@ while ( my ($id, $tags) = each %$waytag ) {
     $ft_config->process( ways  => $objinfo );
     $ft_config->process( nodes => $objinfo )  if $makepoi;
 }
-
-
-=old_code
-
-###     checking node dupes
-
-while ( my $line = decode 'utf8', <$in> ) {
-
-    if ( $line =~ /<\/node/ ) {
-
-        ##  Interpolation nodes
-        if ( $addrinterpolation  &&  exists $interpolation_node{$nodeid} ) {
-            if ( exists $nodetag->{'addr:housenumber'} ) {
-                if ( extract_number( $nodetag->{'addr:housenumber'} ) ) {
-                    $interpolation_node{$nodeid} = { %$nodetag };
-                }
-                else {
-                    report( "Wrong house number on NodeID=$nodeid" );
-                }
-            }
-        }
-
-    }
-}
-
-=cut
 
 
 ####    Writing non-addressed POIs
@@ -2458,61 +2430,6 @@ sub execute_action {
         }
     }
 
-    ##  Load interpolation nodes
-    if ( $addrinterpolation && $param{action} eq 'load_interpolation' ) {
-        @interpolation_node{ @{ $obj->{outer}->[0] } } = undef;
-    }
-
-    ##  Create interpolated objects
-    if ( $addrinterpolation && $param{action} eq 'process_interpolation' ) {
-
-        my @chain = grep { defined $interpolation_node{$_} && exists $interpolation_node{$_}->{'addr:housenumber'} } @{ $obj->{chain} };
-
-        if ( @chain >= 2 ) {
-
-            my $new_action = { %$action, action => 'write_poi' };
-
-            for my $i ( 0 .. $#chain-1 ) {
-                my ( $node1, $node2 ) = @chain[ $i, $i+1 ];
-                my ( $house1, $house2 ) = map { my $x = $interpolation_node{$_}->{'addr:housenumber'}; $x =~ s/^(\d+).*/$1/x; $x } ( $node1, $node2 );
-
-                next if $house1 == $house2;
-
-                my %tag = ( %{$interpolation_node{$node2}}, %{$interpolation_node{$node1}}, %{$obj->{tag}} );
-
-                my $step = ( $tag{'addr:interpolation'} eq 'all' ? 1 : 2 );
-                if ( $house1 > $house2 )    { $step *= -1 }
-
-                my ($lat1, $lon1) = split q{,}, $nodes->{$node1};
-                my ($lat2, $lon2) = split q{,}, $nodes->{$node2};
-
-                my $steplat = ($lat2-$lat1) / ($house2-$house1);
-                my $steplon = ($lon2-$lon1) / ($house2-$house1);
-
-                for my $j ( 0 .. ($house2-$house1)/$step ) {
-
-                    next if $i > 0 && $j == 0;
-
-                    my $chouse = $house1 + $step * $j;
-                    my $clat = $lat1 + $steplat * $j * $step;
-                    my $clon = $lon1 + $steplon * $j * $step;
-
-                    my $new_obj = {
-                        id      => $obj->{id},
-                        type    => 'Way',
-                        latlon  => join( q{,}, $clat, $clon ),
-                        tag     => { %tag, 'addr:housenumber' => $chouse, },
-                    };
-
-                    execute_action( $new_obj, $new_action, $condition );
-                }
-            }
-        }
-        else {
-            report( "Wrong interpolation on WayID=$obj->{id}" );
-        }
-    }
-
     ##  Write POI
     if ( $param{action} eq 'write_poi' ) {
 
@@ -2571,6 +2488,7 @@ sub execute_action {
     my @chains;
     if ( 
         $shorelines && $param{action} eq 'load_coastline'
+        || $addrinterpolation && $param{action} eq 'process_interpolation'
         || $param{action} ~~ [ qw{ write_line load_road modify_road } ]
     ) {
         @chains =
@@ -2585,6 +2503,57 @@ sub execute_action {
             my @begin = grep { $is_inside[$_] && ( $_ == 0        || !$is_inside[$_-1] ) } ( 0 .. $#$chain );
             my @end   = grep { $is_inside[$_] && ( $_ == $#$chain || !$is_inside[$_+1] ) } ( 0 .. $#$chain );
             return map {[ @$chain[($begin[$_] == 0 ? 0 : $begin[$_]-1) .. ($end[$_] == $#$chain ? $end[$_] : $end[$_]+1)] ]} (0 .. $#end);
+        }
+    }
+
+    ##  Create interpolated objects
+    if ( $addrinterpolation && $param{action} eq 'process_interpolation' ) {
+
+        my @chain = grep { exists $nodetag->{$_}->{'addr:housenumber'} } @{ $chains[0] || [] };
+
+        if ( @chain >= 2 ) {
+            my $new_action = { %$action, action => 'write_poi' };
+
+            for my $i ( 0 .. $#chain-1 ) {
+                my ( $node1, $node2 ) = @chain[ $i, $i+1 ];
+                my ( $house1, $house2 ) =
+                    map { my $x = $nodetag->{$_}->{'addr:housenumber'}; $x =~ s/^(\d+).*/$1/x; $x }
+                    ( $node1, $node2 );
+
+                next if $house1 == $house2;
+
+                my %tag = ( %{$nodetag->{$node2}}, %{$nodetag->{$node1}}, %{$obj->{tag}} );
+
+                my $step = ( $tag{'addr:interpolation'} eq 'all' ? 1 : 2 );
+                if ( $house1 > $house2 )    { $step *= -1 }
+
+                my ($lat1, $lon1) = split q{,}, $nodes->{$node1};
+                my ($lat2, $lon2) = split q{,}, $nodes->{$node2};
+
+                my $steplat = ($lat2-$lat1) / ($house2-$house1);
+                my $steplon = ($lon2-$lon1) / ($house2-$house1);
+
+                for my $j ( 0 .. ($house2-$house1)/$step ) {
+
+                    next if $i > 0 && $j == 0;
+
+                    my $chouse = $house1 + $step * $j;
+                    my $clat = $lat1 + $steplat * $j * $step;
+                    my $clon = $lon1 + $steplon * $j * $step;
+
+                    my $new_obj = {
+                        id      => $obj->{id},
+                        type    => 'Way',
+                        latlon  => join( q{,}, $clat, $clon ),
+                        tag     => { %tag, 'addr:housenumber' => $chouse, },
+                    };
+
+                    execute_action( $new_obj, $new_action, $condition );
+                }
+            }
+        }
+        else {
+            report( "Wrong interpolation on WayID=$obj->{id}" );
         }
     }
 

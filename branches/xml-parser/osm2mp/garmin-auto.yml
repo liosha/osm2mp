@@ -243,9 +243,3 @@ cattle_grid:    0,0,0,0,0,0,0,0
 #      name:         %suburb
 
 
-- condition:
-    - addr:interpolation = all|even|odd
-    - only_way
-  action:
-    - action:       load_interpolation
-

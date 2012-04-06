@@ -1,13 +1,13 @@
-use 5.010;
-use strict;
-use warnings;
-
 package FeatureConfig;
 
 # ABSTRACT: feature type selector
 
 # $Id$
 
+
+use 5.010;
+use strict;
+use warnings;
 
 use Carp;
 use List::MoreUtils qw/ any all notall first_index /;
