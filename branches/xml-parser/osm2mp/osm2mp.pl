@@ -406,7 +406,7 @@ if ($bbox || $bpolyfile) {
     $boundgpc = new_gpc();
     $boundgpc->add_polygon( \@bound, 0 );
 
-    printf STDERR "  %d segments\n", scalar @bound;
+    printf STDERR "  %d segments\n", scalar @bound - 1;
 }
 
 
@@ -425,7 +425,7 @@ if ( !$output_fn ) {
 
 
 
-# load addressing polygons
+##  Load address polygons
 if ( $addressing ) {
     say STDERR "\nLoading address areas...";
     while ( my ($id, $tags) = each %$waytag ) {
@@ -453,6 +453,8 @@ my %trstop;
 my %street;
 
 
+##  Process relations
+
 say STDERR "\nProcessing relations...";
 
 if ( $streetrelations ) {
@@ -474,9 +476,47 @@ if ( $streetrelations ) {
 }
 
 
-print_section( 'Simple objects' );
-# processing poi nodes
+if ( $roadshields ) {
+    while ( my ($relation_id, $members) = each %{ $relations->{route} || {} } ) {
+        my $tags = $reltag->{$relation_id};
+        next if !( $tags->{route} ~~ 'road' );
+
+        my @ref = grep {$_} @$tags{'ref', 'int_ref'};
+        next if !@ref;
+        
+        for my $member ( @$members ) {
+            next if $member->{type} ne 'way';
+            push @{$road_ref{$member->{ref}}}, @ref;
+        }
+    }
+    printf STDERR "  %d highways indexed\n", scalar keys %road_ref;
+}
+
+
+if ( $transportstops ) {
+    while ( my ($relation_id, $members) = each %{ $relations->{route} || {} } ) {
+        my $tags = $reltag->{$relation_id};
+        next if !( $tags->{route} ~~ [ qw/ bus / ] );
+
+        my $ref = $tags->{ref};
+        next if !$ref;
+
+        for my $member ( @$members ) {
+            next if $member->{type} ne 'node';
+            next if $member->{role} !~ /stop|platform/x;
+            push @{ $trstop{$member->{ref}} }, $ref;
+        }
+    }
+    printf STDERR "  %d transport stops\n", scalar keys %trstop;
+}
+
+
+
+##  Process POI nodes
+
 say STDERR "\nProcessing nodes...";
+
+print_section( 'Simple objects' );
 while ( my ($id, $tags) = each %$nodetag ) {
     $ft_config->process( nodes => {
             type    => 'Node',
@@ -485,6 +525,9 @@ while ( my ($id, $tags) = each %$nodetag ) {
         });
 }
 printf STDERR "  %d POI loaded\n", scalar keys %poi;
+
+
+##  Process ways
 
 say STDERR "\nProcessing ways...";
 while ( my ($id, $tags) = each %$waytag ) {
@@ -599,63 +642,18 @@ while ( my $line = decode 'utf8', <$in> ) {
             push @{$nodetr{ $node }}, $relid;
         }
 
-        # transport stops
-        if ( $transportstops
-                &&  $reltag{'type'} eq 'route'
-                &&  $reltag{'route'} ~~ [ qw{ bus } ]
-                &&  exists $reltag{'ref'}  ) {
-            $countroutes ++;
-            for my $role ( keys %relmember ) {
-                next unless $role =~ /^node:.*(?:stop|platform)/;
-                for my $stop ( @{ $relmember{$role} } ) {
-                    push @{ $trstop{$stop} }, $reltag{'ref'};
-                }
-            }
-        }
-
-        # road refs
-        if ( $roadshields
-                &&  $reltag{'type'}  eq 'route'
-                &&  $reltag{'route'}  &&  $reltag{'route'} eq 'road'
-                &&  ( exists $reltag{'ref'}  ||  exists $reltag{'int_ref'} )  ) {
-            $count_ref_roads ++;
-            for my $role ( keys %relmember ) {
-                next unless $role =~ /^way:/;
-                for my $way ( @{ $relmember{$role} } ) {
-                    push @{ $road_ref{$way} }, $reltag{'ref'}       if exists $reltag{'ref'};
-                    push @{ $road_ref{$way} }, $reltag{'int_ref'}   if exists $reltag{'int_ref'};
-                }
-            }
-        }
-
     }
 }
 
 print  STDERR "                          $counttrest turn restrictions\n"       if $restrictions;
 print  STDERR "                          $countsigns destination signs\n"       if $destsigns;
-print  STDERR "                          $countroutes transport routes\n"       if $transportstops;
-print  STDERR "                          $count_ref_roads numbered roads\n"     if $roadshields;
-print  STDERR "                          $count_streets streets\n"              if $streetrelations;
 
 
 
 
-###     loading cities, multipolygon parts and checking node dupes
+###     checking node dupes
 
 
-
-####    3rd pass
-###     loading and writing points
-
-
-
-print STDERR "Processing nodes...       ";
-print_section( 'Points' );
-
-my $countpoi = 0;
-my $nodeid;
-
-seek $in, 0, 0;
 
 while ( my $line = decode 'utf8', <$in> ) {
 
@@ -2224,15 +2222,10 @@ sub AddRoad {
 
     # road shield
     if ( $roadshields  &&  !$city ) {
-        my @ref;
-        @ref = @{ $road_ref{$orig_id} }     if exists $road_ref{$orig_id};
-        push @ref, $tag{'ref'}              if exists $tag{'ref'};
-        push @ref, $tag{'int_ref'}          if exists $tag{'int_ref'};
-
-        if ( @ref ) {
-            my $ref = join q{-}, sort( uniq( map { my $s=$_; $s =~ s/[\s\-]//gx; split /[,;]/, $s } @ref ) );
-            $param{name} = '~[0x06]' . $ref . ( $param{name} ? q{ } . $param{name} : q{} );
-        }
+        my @ref =
+            map { my $s = $_; $s =~ s/[\s\-]//gx; split /[,;]/, $s }
+            grep {$_} ( @{ $road_ref{$orig_id} || [] }, @tag{'ref', 'int_ref'} );
+        $param{name} = '~[0x06]' . join( q{ }, grep {$_} ( join(q{-}, sort uniq @ref), $param{name} ) )  if @ref;
     }
 
     if ( $full_karlsruhe && !$city && $tag{'addr:city'} ) {
