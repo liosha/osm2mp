@@ -162,19 +162,19 @@ my $ft_config = FeatureConfig->new(
         load_building_entrance  => \&execute_action,
         write_poi               => \&execute_action,
         write_polygon           => \&execute_action,
-        write_line              => \&execute_action,
+        write_line              => \&action_write_line,
         address_poi             => \&execute_action,
         load_road               => \&execute_action,
         modify_road             => \&execute_action,
-        load_coastline          => \&_action_load_coastline,
+        load_coastline          => \&action_load_coastline,
         force_external_node     => \&execute_action,
         load_main_entrance      => \&execute_action,
         process_interpolation   => \&execute_action,
     },
     conditions => {
-        named       => \&_cond_is_named,
-        only_rel    => \&_cond_is_multipolygon,
-        inside_city => \&_cond_is_inside_city,
+        named       => \&cond_is_named,
+        only_rel    => \&cond_is_multipolygon,
+        inside_city => \&cond_is_inside_city,
     },
 );
 
@@ -2322,7 +2322,7 @@ sub WritePolygon {
 
 ####    Config processing
 
-sub _cond_is_inside_city {
+sub cond_is_inside_city {
     my ($obj) = @_;
 
     return FindCity($obj->{latlon})  if exists $obj->{latlon};
@@ -2336,12 +2336,12 @@ sub _cond_is_inside_city {
     return;
 }
 
-sub _cond_is_named {
+sub cond_is_named {
     my ($obj) = @_;
     return !!( name_from_list( label => $obj->{tag} ) );
 }
 
-sub _cond_is_multipolygon {
+sub cond_is_multipolygon {
     my ($obj) = @_;
     return exists $mpoly->{$obj->{id}};
 }
@@ -2359,7 +2359,7 @@ sub _get_line_parts_inside_bounds {
 }
 
 
-sub _action_load_coastline {
+sub action_load_coastline {
     my ($obj, $action) = @_;
     return if !$shorelines;
 
@@ -2371,6 +2371,47 @@ sub _action_load_coastline {
     for my $part ( @parts ) {
         $coast{$part->[0]} = $part;
     }
+    return;
+}
+
+
+sub _get_result_object_params {
+    my ($obj, $action) = @_;
+    
+    my %info = ( %$action,
+        tags    => $obj->{tag},
+        comment => "$obj->{type}ID = $obj->{id}",
+    );
+    
+    $info{name} //= '%label';
+    for my $key ( keys %info ) {
+        next if !defined $info{$key};
+        $info{$key} =~ s[%(\w+)][ name_from_list($1, $obj->{tag}) // q{} ]ge;
+    }
+    delete $info{name} if !$info{name};
+
+    $info{region} .= q{ } . $obj->{tag}->{'addr:district'}
+        if $info{region} && $obj->{tag}->{'addr:district'};
+
+    return \%info;
+}
+
+
+sub action_write_line {
+    my ($obj, $action) = @_;
+
+    my $id = $obj->{id};
+
+    my @parts = map { _get_line_parts_inside_bounds($_) }
+        ( $mpoly->{$id} ? ( map {@$_} @{$mpoly->{$id}} ) : ( $chains->{$id} ) );
+    return if !@parts;
+
+    my $info = _get_result_object_params($obj, $action);
+    for my $part ( @parts ) {
+        $info->{chain} = $part;
+        WriteLine( $info );
+    }
+    return;
 }
 
 
@@ -2513,7 +2554,7 @@ sub execute_action {
     my @chains;
     if ( 
         $addrinterpolation && $param{action} eq 'process_interpolation'
-        || $param{action} ~~ [ qw{ write_line load_road modify_road } ]
+        || $param{action} ~~ [ qw{ load_road modify_road } ]
     ) {
         @chains =
             map { @bound ? ( _get_line_parts_inside_bounds($_) ) : ( $_ ) }
@@ -2575,7 +2616,7 @@ sub execute_action {
     }
 
     ##  Write line or load road
-    if ( $param{action} ~~ [ qw{ write_line load_road modify_road } ] ) {
+    if ( $param{action} ~~ [ qw{ load_road modify_road } ] ) {
 
         %objinfo = ( %objinfo, (
                 type        => $action->{type},
