@@ -166,7 +166,7 @@ my $ft_config = FeatureConfig->new(
         address_poi             => \&execute_action,
         load_road               => \&execute_action,
         modify_road             => \&execute_action,
-        load_coastline          => \&execute_action,
+        load_coastline          => \&_action_load_coastline,
         force_external_node     => \&execute_action,
         load_main_entrance      => \&execute_action,
         process_interpolation   => \&execute_action,
@@ -2348,8 +2348,33 @@ sub _cond_is_multipolygon {
 
 
 
-sub execute_action {
+sub _get_line_parts_inside_bounds {
+    my ($chain) = @_;
+    return $chain  if !@bound;
 
+    my @is_inside = map { is_inside_bounds($nodes->{$_}) } @$chain;
+    my @begin = grep { $is_inside[$_] && ( $_ == 0        || !$is_inside[$_-1] ) } ( 0 .. $#$chain );
+    my @end   = grep { $is_inside[$_] && ( $_ == $#$chain || !$is_inside[$_+1] ) } ( 0 .. $#$chain );
+    return map {[ @$chain[($begin[$_] == 0 ? 0 : $begin[$_]-1) .. ($end[$_] == $#$chain ? $end[$_] : $end[$_]+1)] ]} (0 .. $#end);
+}
+
+
+sub _action_load_coastline {
+    my ($obj, $action) = @_;
+    return if !$shorelines;
+
+    my $id = $obj->{id};
+    my $chain = $chains->{$id};
+    return if !$chain;
+
+    my @parts = _get_line_parts_inside_bounds( $chain );
+    for my $part ( @parts ) {
+        $coast{$part->[0]} = $part;
+    }
+}
+
+
+sub execute_action {
     my ($obj, $action, $condition) = @_;
 
     my %param = %{ $action };
@@ -2487,23 +2512,15 @@ sub execute_action {
 
     my @chains;
     if ( 
-        $shorelines && $param{action} eq 'load_coastline'
-        || $addrinterpolation && $param{action} eq 'process_interpolation'
+        $addrinterpolation && $param{action} eq 'process_interpolation'
         || $param{action} ~~ [ qw{ write_line load_road modify_road } ]
     ) {
         @chains =
-            map { @bound ? ( _split_chain($_) ) : ( $_ ) }
+            map { @bound ? ( _get_line_parts_inside_bounds($_) ) : ( $_ ) }
             $mpoly->{$obj->{id}}
                 ? ( map {@$_} @{$mpoly->{$obj->{id}}} )
                 : ( $chains->{$obj->{id}} );
 
-        sub _split_chain {
-            my ($chain) = @_;
-            my @is_inside = map { is_inside_bounds($nodes->{$_}) } @$chain;
-            my @begin = grep { $is_inside[$_] && ( $_ == 0        || !$is_inside[$_-1] ) } ( 0 .. $#$chain );
-            my @end   = grep { $is_inside[$_] && ( $_ == $#$chain || !$is_inside[$_+1] ) } ( 0 .. $#$chain );
-            return map {[ @$chain[($begin[$_] == 0 ? 0 : $begin[$_]-1) .. ($end[$_] == $#$chain ? $end[$_] : $end[$_]+1)] ]} (0 .. $#end);
-        }
     }
 
     ##  Create interpolated objects
@@ -2554,13 +2571,6 @@ sub execute_action {
         }
         else {
             report( "Wrong interpolation on WayID=$obj->{id}" );
-        }
-    }
-
-    ##  Load coastline
-    if ( $param{action} eq 'load_coastline' && $shorelines ) {
-        for my $chain ( @chains ) {
-            $coast{$chain->[0]} = $chain;
         }
     }
 

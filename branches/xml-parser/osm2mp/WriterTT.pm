@@ -1,15 +1,16 @@
-use 5.010;
-use strict;
-use warnings;
-
 package WriterTT;
-
-# $Id$
 
 # ABSTRACT: writer via Template-toolkit
 
-use Carp;
+# $Id$
 
+
+use 5.010;
+use strict;
+use warnings;
+use autodie;
+
+use Carp;
 use Template::Context;
 
 

@@ -1,13 +1,14 @@
-use 5.010;
-use strict;
-use warnings;
-use autodie;
-
 package OSM;
 
 # ABSTRACT: preload OSM data in useful way
 
 # $Id$
+
+
+use 5.010;
+use strict;
+use warnings;
+use autodie;
 
 use Carp;
 use List::MoreUtils qw/ all notall first_index /;

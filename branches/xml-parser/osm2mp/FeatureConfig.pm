@@ -81,7 +81,7 @@ sub _precompile_condition {
     if ( my ($key, $neg, $val) = $condition =~ m/ (\S+) \s* (!?) = \s* (.+) /xms ) {
         return sub { !!$neg xor exists shift()->{tag}->{$key} }  if $val eq q{*};
         my $re = qr/^(?:$val)$/xms;
-        return sub { !!$neg xor any { $_ =~ $re } split(/;/, shift()->{tag}->{$key} // q{}) };
+        return sub { !!$neg xor any { $_ =~ $re } split(/;/x, shift()->{tag}->{$key} // q{}) };
     }
 
     # recursive
