@@ -49,7 +49,7 @@ use Math::Polygon::Tree  0.041  qw{ polygon_centroid };
 use Tree::R;
 
 use List::Util qw{ first reduce sum min max };
-use List::MoreUtils qw{ all none any first_index last_index uniq };
+use List::MoreUtils qw{ all notall none any first_index last_index uniq };
 
 
 use OSM;
@@ -457,6 +457,46 @@ my %street;
 
 say STDERR "\nProcessing relations...";
 
+if ( $routing  &&  $restrictions ) {
+    while ( my ($relation_id, $members) = each %{ $relations->{restriction} || {} } ) {
+        my $tags = $reltag->{$relation_id};
+
+        my ($type) = ($tags->{restriction} // 'no') =~ /^(only | no)/xms;
+        next if !$type;
+
+        my $from_member = first { $_->{type} eq 'way' && $_->{role} eq 'from' } @$members;
+        next if !$from_member;
+
+        my $to_member = first { $_->{type} eq 'way' && $_->{role} eq 'to' } @$members;
+        $to_member //= $from_member  if $tags->{restriction} ~~ 'no_u_turn';
+        next if !$to_member;
+
+        my $via_member = first { $_->{type} eq 'node' && $_->{role} eq 'via' } @$members;
+        next if !$via_member;
+
+        my @acc = ( 0,0,0,0,0,1,0,0 );      # !!! foot
+        @acc = CalcAccessRules( { map {( $_ => 'no' )} split( /\s* [,;] \s*/x, $tags->{except} ) }, \@acc )
+            if  exists $tags->{except};
+
+        next if all {$_} @acc;
+        
+        push @{$nodetr{$via_member->{ref}}}, $relation_id;
+        $trest{$relation_id} = {
+            node    => $via_member->{ref},
+            type    => $type,
+            fr_way  => $from_member->{ref},
+            fr_dir  => 0,
+            fr_pos  => -1,
+            to_way  => $to_member->{ref},
+            to_dir  => 0,
+            to_pos  => -1,
+        };
+        $trest{$relation_id}->{param} = join q{,}, @acc  if any {$_} @acc;
+    }
+    printf STDERR "  %d turn restrictions\n", scalar keys %trest;
+}
+
+
 if ( $streetrelations ) {
     for my $type ( qw{ street associatedStreet } ) {
         my $list = $relations->{$type};
@@ -547,57 +587,6 @@ while ( my ($id, $tags) = each %$waytag ) {
 while ( my $line = decode 'utf8', <$in> ) {
 
     if ( $line =~ /<\/relation/ ) {
-
-        # turn restrictions
-        if ( $routing  &&  $restrictions  &&  $reltag{'type'} eq 'restriction' ) {
-            unless ( exists $reltag{'restriction'} ) {
-                report( "Restriction RelID=$relid type not specified" );
-                $reltag{'restriction'} = 'no_';
-            }
-            unless ( $relmember{'way:from'} ) {
-                report( "Turn restriction RelID=$relid doesn't have FROM way" );
-                next;
-            }
-            if ( $relmember{'way:via'} ) {
-                report( "VIA ways is still not supported (RelID=$relid)", 'WARNING' );
-                next;
-            }
-            unless ( $relmember{'node:via'} ) {
-                report( "Turn restriction RelID=$relid doesn't have VIA node" );
-                next;
-            }
-            if ( $reltag{'restriction'} eq 'no_u_turn'  &&  !$relmember{'way:to'} ) {
-                $relmember{'way:to'} = $relmember{'way:from'};
-            }
-            unless ( $relmember{'way:to'} ) {
-                report( "Turn restriction RelID=$relid doesn't have TO way" );
-                next;
-            }
-
-            my @acc = ( 0,0,0,0,0,1,0,0 );      # foot
-            @acc = CalcAccessRules( { map { $_ => 'no' } split( /\s*[,;]\s*/, $reltag{'except'} ) }, \@acc )
-                if  exists $reltag{'except'};
-
-            if ( any { !$_ } @acc ) {
-
-                $counttrest ++;
-                $trest{$relid} = {
-                    node    => $relmember{'node:via'}->[0],
-                    type    => ($reltag{'restriction'} =~ /^only_/) ? 'only' : 'no',
-                    fr_way  => $relmember{'way:from'}->[0],
-                    fr_dir  => 0,
-                    fr_pos  => -1,
-                    to_way  => $relmember{'way:to'}->[0],
-                    to_dir  => 0,
-                    to_pos  => -1,
-                };
-
-                $trest{$relid}->{param} = join q{,}, @acc
-                    if  any { $_ } @acc;
-            }
-
-            push @{$nodetr{ $relmember{'node:via'}->[0] }}, $relid;
-        }
 
         # destination signs
         if ( $routing  &&  $destsigns  &&  $reltag{'type'} eq 'destination_sign' ) {
