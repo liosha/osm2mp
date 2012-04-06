@@ -479,10 +479,11 @@ if ( $routing  &&  $restrictions ) {
             if  exists $tags->{except};
 
         next if all {$_} @acc;
-        
-        push @{$nodetr{$via_member->{ref}}}, $relation_id;
+       
+        my $node = $via_member->{ref};
+        push @{$nodetr{$node}}, $relation_id;
         $trest{$relation_id} = {
-            node    => $via_member->{ref},
+            node    => $node,
             type    => $type,
             fr_way  => $from_member->{ref},
             fr_dir  => 0,
@@ -494,6 +495,41 @@ if ( $routing  &&  $restrictions ) {
         $trest{$relation_id}->{param} = join q{,}, @acc  if any {$_} @acc;
     }
     printf STDERR "  %d turn restrictions\n", scalar keys %trest;
+}
+
+
+if ( $routing && $destsigns ) {
+    my $crossroads_cnt = scalar keys %trest;
+    while ( my ($relation_id, $members) = each %{ $relations->{destination_sign} || {} } ) {
+        my $tags = $reltag->{$relation_id};
+
+        my $from_member = first { $_->{type} eq 'way' && $_->{role} eq 'from' } @$members;
+        next if !$from_member;
+
+        my $to_member = first { $_->{type} eq 'way' && $_->{role} eq 'to' } @$members;
+        next if !$to_member;
+
+        my $via_member = first { $_->{type} eq 'node' && $_->{role} ~~ [qw/ sign intersection /] } @$members;
+        next if !$via_member;
+
+        my $name = name_from_list( destination => $tags );
+        next if !$name;
+
+        my $node = $via_member->{ref};
+        $trest{$relation_id} = {
+            name    => $name,
+            node    => $node,
+            type    => 'sign',
+            fr_way  => $from_member->{ref},
+            fr_dir  => 0,
+            fr_pos  => -1,
+            to_way  => $to_member->{ref},
+            to_dir  => 0,
+            to_pos  => -1,
+        };
+        push @{$nodetr{ $node }}, $relation_id;
+    }
+    printf STDERR "  %d destination signs\n", scalar(keys %trest) - $crossroads_cnt;
 }
 
 
@@ -512,7 +548,7 @@ if ( $streetrelations ) {
             }
         }
     }
-    printf STDERR "  %d house-street associations\n", scalar keys %street;
+    printf STDERR "  %d houses with associated street\n", scalar keys %street;
 }
 
 
@@ -529,7 +565,7 @@ if ( $roadshields ) {
             push @{$road_ref{$member->{ref}}}, @ref;
         }
     }
-    printf STDERR "  %d highways indexed\n", scalar keys %road_ref;
+    printf STDERR "  %d road ways with ref\n", scalar keys %road_ref;
 }
 
 
@@ -584,65 +620,7 @@ while ( my ($id, $tags) = each %$waytag ) {
 
 =old_code
 
-while ( my $line = decode 'utf8', <$in> ) {
-
-    if ( $line =~ /<\/relation/ ) {
-
-        # destination signs
-        if ( $routing  &&  $destsigns  &&  $reltag{'type'} eq 'destination_sign' ) {
-            unless ( $relmember{'way:from'} ) {
-                report( "Destination sign RelID=$relid has no FROM ways" );
-                next;
-            }
-            unless ( $relmember{'way:to'} ) {
-                report( "Destination sign RelID=$relid doesn't have TO way" );
-                next;
-            }
-
-            my $node;
-            $node = $relmember{'node:sign'}->[0]            if $relmember{'node:sign'};
-            $node = $relmember{'node:intersection'}->[0]    if $relmember{'node:intersection'};
-            unless ( $node ) {
-                report( "Destination sign RelID=$relid doesn't have SIGN or INTERSECTION node" );
-                next;
-            }
-
-            my $name = name_from_list( 'destination', \%reltag );
-            unless ( $name ) {
-                report( "Destination sign RelID=$relid doesn't have label tag" );
-                next;
-            }
-
-            $countsigns ++;
-            for my $from ( @{ $relmember{'way:from'} } ) {
-                $trest{$relid} = {
-                    name    => $name,
-                    node    => $node,
-                    type    => 'sign',
-                    fr_way  => $from,
-                    fr_dir  => 0,
-                    fr_pos  => -1,
-                    to_way  => $relmember{'way:to'}->[0],
-                    to_dir  => 0,
-                    to_pos  => -1,
-                };
-            }
-
-            push @{$nodetr{ $node }}, $relid;
-        }
-
-    }
-}
-
-print  STDERR "                          $counttrest turn restrictions\n"       if $restrictions;
-print  STDERR "                          $countsigns destination signs\n"       if $destsigns;
-
-
-
-
 ###     checking node dupes
-
-
 
 while ( my $line = decode 'utf8', <$in> ) {
 
@@ -662,76 +640,6 @@ while ( my $line = decode 'utf8', <$in> ) {
 
     }
 }
-
-
-
-####    Loading roads and coastlines, and writing other ways
-
-
-print STDERR "Processing ways...        ";
-print_section( 'Lines and polygons' );
-
-my $countlines  = 0;
-
-my $city;
-my @chainlist;
-my $inbounds;
-
-seek $in, $waypos, 0;
-
-while ( my $line = decode 'utf8', <$in> ) {
-
-    if ( $line =~ /<nd/ ) {
-        my ($ref)  =  $line =~ / ref=["']([^"']*)["']/;
-        if ( $nodes->{$ref}  &&  ( !@chain || $ref ne $chain[-1] s->) ) {
-            push @chain, $ref;
-            if ( @bound ) {
-                my $in = is_inside_bounds( $nodes->{$ref} );
-                if ( !$inbounds &&  $in )   { push @chainlist, ($#chain ? $#chain-1 : 0); }
-                if (  $inbounds && !$in )   { push @chainlist, $#chain; }
-                $inbounds = $in;
-            }
-        }
-        next;
-    }
-
-    if ( $line =~ /<\/way/ ) {
-
-        my $name = name_from_list( 'label', $waytag);
-
-        @chainlist = (0)            unless @bound;
-        push @chainlist, $#chain    unless ($#chainlist % 2);
-
-        if ( scalar @chain < 2 ) {
-            report( "WayID=$wayid has too few nodes at ($nodes->{$chain[0]})" );
-            next;
-        }
-
-        next unless scalar keys %$waytag;
-        next unless scalar @chainlist;
-
-        my @list = @chainlist;
-        my @clist = ();
-        push @clist, [ (shift @list), (shift @list) ]  while @list;
-
-        ## Way config
-        $ft_config->process( ways => {
-                type    => "Way",
-                id      => $wayid,
-                chain   => \@chain,
-                clist   => \@clist,
-                tag     => $waytag,
-            } );
-
-    } # </way>
-
-    last  if $line =~ /<relation/;
-}
-
-print  STDERR "$countlines lines and $countpolygons polygons dumped\n";
-printf STDERR "                          %d roads loaded\n",      scalar keys %road     if  $routing;
-printf STDERR "                          %d coastlines loaded\n", scalar keys %coast    if  $shorelines;
-
 
 =cut
 
