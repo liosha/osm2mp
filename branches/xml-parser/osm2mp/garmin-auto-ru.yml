@@ -5,6 +5,8 @@
 --- load
 ---
 
+- country-names-ru.yml
+
 - polish-mp/output-polish.yml
 
 - polish-mp/nodes-common.yml
@@ -29,7 +31,6 @@
 
 --- command-line
 --- > 
-  --countrylist "iso-3166-1-a2-ru.txt"
   --disableuturns
   --shorelines
   --hugesea 100000

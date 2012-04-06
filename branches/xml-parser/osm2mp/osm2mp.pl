@@ -111,7 +111,6 @@ my $navitel         = 0;
 my $addrfrompoly    = 1;
 my $addrinterpolation = 1;
 my $makepoi         = 1;
-my $country_list;
 
 my $default_city;
 my $default_region;
@@ -195,7 +194,7 @@ while ( my $cfgfile = shift @$config ) {
         elsif ( $key eq 'command-line' ) {
             my @args = grep {defined} ( $item =~ m{ (?: '([^']*)' | "([^"]*)" | (\S+) ) }gxms );
             for my $i ( 0 .. $#args ) {
-                next if $args[$i] !~ / --? (?: countrylist|ttable|bpoly ) /xms;
+                next if $args[$i] !~ / --? (?: ttable|bpoly ) /xms;
                 next if !length($args[$i+1]);
                 next if File::Spec->file_name_is_absolute( $args[$i+1] );
                 $args[$i+1] = File::Spec->catpath( $cfgvol, $cfgdir, $args[$i+1] );
@@ -215,27 +214,9 @@ while ( my $cfgfile = shift @$config ) {
             $ft_config->add_rules( $key => $item );
         }
         else {
-            %config = ( %config, $key => $item );
+            $config{$key} = $item;
         }
     }
-}
-
-
-GetOptions (
-    'countrylist=s'     => \$country_list,
-);
-
-my %country_code;
-if ( $country_list ) {
-    open my $cl, '<:encoding(utf8)', $country_list;
-    while ( my $line = <$cl> ) {
-        next if $line =~ / ^ \# /xms;
-        chomp $line;
-        my ($code, $name) = split /\s+/xms, $line, 2;
-        next unless $code;
-        $country_code{uc $code} = $name;
-    }
-    close $cl;
 }
 
 
@@ -276,7 +257,7 @@ GetOptions (
 
     'defaultcity=s'     => \$default_city,
     'defaultregion=s'   => \$default_region,
-    'defaultcountry=s'  => \$default_country,
+    'defaultcountry=s'  => sub { $default_country = rename_country($_[1]) },
 
     'bbox=s'            => \$bbox,
     'bpoly=s'           => \$bpolyfile,
@@ -306,9 +287,6 @@ GetOptions (
     'mapid=s'           => sub { push @ARGV, '--mp-header', "ID=$_[1]" },
     'mapname=s'         => sub { push @ARGV, '--mp-header', "Name=$_[1]" },
 );
-
-$default_country = $country_code{uc $default_country}
-    if $default_country && $country_code{uc $default_country};
 
 
 usage() unless (@ARGV);
@@ -435,8 +413,7 @@ if ($bbox || $bpolyfile) {
 
 ####    Creating simple multiwriter output
 
-$mp_opts->{DefaultCityCountry} = $country_code{uc $mp_opts->{DefaultCityCountry}}
-    if $mp_opts->{DefaultCityCountry} && $country_code{uc $mp_opts->{DefaultCityCountry}};
+$mp_opts->{DefaultCityCountry} = rename_country($mp_opts->{DefaultCityCountry}) if $mp_opts->{DefaultCityCountry};
 
 my $out = {};
 if ( !$output_fn ) {
@@ -484,8 +461,7 @@ if ( $streetrelations ) {
         next if !$list;
 
         while ( my ($relation_id, $members) = each %$list ) {
-            my $tags = $reltag->{$relation_id};
-            my $street_name = name_from_list( 'street', $tags );
+            my $street_name = name_from_list( 'street', $reltag->{$relation_id} );
             next if !$street_name;
             
             for my $member ( @$members ) {
@@ -1621,9 +1597,21 @@ sub name_from_list {
 
     return unless $key;
 
-    my $name;
-    $name = $tag_ref->{$key}            if  $key;
-    $name = $country_code{uc $name}     if  $list_name eq 'country'  &&  exists $country_code{uc $name};
+    my $name = $tag_ref->{$key};
+    $name = rename_country($name) if  $list_name eq 'country';
+    return $name;
+}
+
+
+sub rename_country {
+    my ($name) = @_;
+    return $name  if !$name;
+    
+    my $table = $config{country_name};
+    return $name  if !$table;
+
+    my $full_name = $table->{uc $name};
+    return $full_name  if $full_name;
     return $name;
 }
 
@@ -1779,7 +1767,6 @@ Available options [defaults]:
  --defaultcity <name>      default city for addresses        [${ \($default_city    // '') }]
  --defaultregion <name>    default region                    [${ \($default_region  // '') }]
  --defaultcountry <name>   default country                   [${ \($default_country // '') }]
- --countrylist <file>      replace country code by name
 
  --routing                 produce routable map                      [$onoff[$routing]]
  --oneway                  enable oneway attribute for roads         [$onoff[$oneway]]

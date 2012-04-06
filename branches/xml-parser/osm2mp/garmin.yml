@@ -4,6 +4,7 @@
 
 --- load
 ---
+- country-names-en.yml
 
 - polish-mp/output-polish.yml
 
@@ -39,7 +40,6 @@
 
 --- command-line
 --- > 
-  --countrylist "iso-3166-1-a2-en.txt"
   --disableuturns
   --shorelines
   --hugesea 100000
