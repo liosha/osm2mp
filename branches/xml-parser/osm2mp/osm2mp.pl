@@ -158,8 +158,8 @@ my %config;
 my $ft_config = FeatureConfig->new(
     actions => {
         load_city               => \&execute_action,
-        load_barrier            => \&execute_action,
-        load_building_entrance  => \&execute_action,
+        load_barrier            => \&action_load_barrier,
+        load_building_entrance  => \&action_load_building_entrance,
         write_poi               => \&execute_action,
         write_polygon           => \&execute_action,
         write_line              => \&action_write_line,
@@ -167,8 +167,8 @@ my $ft_config = FeatureConfig->new(
         load_road               => \&execute_action,
         modify_road             => \&execute_action,
         load_coastline          => \&action_load_coastline,
-        force_external_node     => \&execute_action,
-        load_main_entrance      => \&execute_action,
+        force_external_node     => \&action_force_external_node,
+        load_main_entrance      => \&action_load_main_entrance,
         process_interpolation   => \&execute_action,
     },
     conditions => {
@@ -2415,6 +2415,37 @@ sub action_write_line {
 }
 
 
+sub action_load_main_entrance {
+    my ($obj, $action) = @_;
+    $main_entrance{$obj->{id}} = 1;
+    return;
+}
+
+
+sub action_load_building_entrance {
+    my ($obj, $action) = @_;
+    return if !$navitel;
+    $entrance{$obj->{id}} = name_from_list(entrance => $obj->{tag}) // q{};
+    return;
+}
+
+
+sub action_force_external_node {
+    my ($obj, $action) = @_;
+    return if !$routing;
+    $xnode{$obj->{id}} = 1;
+    return;
+}
+
+
+sub action_load_barrier {
+    my ($obj, $action) = @_;
+    return if !$routing || !$barriers;
+    AddBarrier({ nodeid => $obj->{id}, tags => $obj->{tag} });
+    return;
+}
+
+
 sub execute_action {
     my ($obj, $action, $condition) = @_;
 
@@ -2430,21 +2461,6 @@ sub execute_action {
         if exists $param{region} && exists $obj->{tag}->{'addr:district'};
 
     my %objinfo = map { $_ => $param{$_} } grep { /^_*[A-Z]/ } keys %param;
-
-
-    if ( $routing && $barriers && $param{action} eq 'load_barrier' ) {
-        AddBarrier({ nodeid => $obj->{id}, tags => $obj->{tag} });
-    }
-    if ( $routing && $param{action} eq 'force_external_node' ) {
-        $xnode{$obj->{id}} = 1;
-    }
-    if ( $navitel && $param{action} eq 'load_building_entrance' ) {
-        $entrance{$obj->{id}} = $param{name};
-    }
-    if ( $param{action} eq 'load_main_entrance' ) {
-        $main_entrance{$obj->{id}} = 1;
-    }
-
 
     ##  Load area as city
     if ( $param{action} eq 'load_city' ) {
