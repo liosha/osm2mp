@@ -83,11 +83,15 @@ sub load {
                 my $obj = shift;
                 my $id = $obj->{attr}->{id};
 
-                my $chain = $obj->{nd};
-                return if !$chain || @$chain < 2;
-                # !!! filter dupes!
+                my $prev;
+                my @chain =
+                    grep { my $is_dupe = $_ ~~ $prev; $prev = $_; !$is_dupe }
+                    grep { exists $nodes->{$_} }
+                    @{ $obj->{nd} || [] };
 
-                $chains->{$id} = $chain;
+                return if @chain < 2;
+
+                $chains->{$id} = \@chain;
 
                 if ( my $tags = $obj->{tag} ) {
                     return if all { $skip_tag{$_} } keys %$tags;
@@ -101,10 +105,21 @@ sub load {
                 my $tags = $obj->{tag};
                 return if !$tags;
 
+                my @members =
+                    grep {
+                            my ($id, $t) = @$_{'ref', 'type'};
+                            $t ~~ 'node'     ? exists $nodes->{$id} : 
+                            $t ~~ 'way'      ? exists $chains->{$id} :
+                            $t ~~ 'relation' ? exists $reltag->{$id} :
+                            0;
+                        }
+                    @{ $obj->{member} || [] };
+                return if !@members;
+
                 if ( my $type = $tags->{type} ) {
                     my $id = $obj->{attr}->{id};
                     $reltag->{$id} = $tags;
-                    $relations->{$type}->{$id} = $obj->{member};
+                    $relations->{$type}->{$id} = \@members;
                 }
                 return;
             },
