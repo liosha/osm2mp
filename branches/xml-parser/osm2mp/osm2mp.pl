@@ -33,7 +33,7 @@ use warnings;
 use autodie;
 
 use FindBin qw{ $Bin };
-use lib $Bin;
+use lib "$Bin/lib";
 
 use POSIX;
 use YAML 0.72;
