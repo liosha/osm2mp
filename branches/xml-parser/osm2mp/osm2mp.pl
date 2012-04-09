@@ -157,7 +157,7 @@ say STDERR "\nLoading configuration...";
 my %config;
 my $ft_config = FeatureConfig->new(
     actions => {
-        load_city               => \&execute_action,
+        load_city               => \&action_load_city,
         load_barrier            => \&action_load_barrier,
         load_building_entrance  => \&action_load_building_entrance,
         write_poi               => \&execute_action,
@@ -2399,7 +2399,6 @@ sub _get_result_object_params {
 
 sub action_write_line {
     my ($obj, $action) = @_;
-
     my $id = $obj->{id};
 
     my @parts = map { _get_line_parts_inside_bounds($_) }
@@ -2411,6 +2410,33 @@ sub action_write_line {
         $info->{chain} = $part;
         WriteLine( $info );
     }
+    return;
+}
+
+
+sub action_load_city {
+    my ($obj, $action) = @_;
+    my $id = $obj->{id};
+
+    my $info = _get_result_object_params($obj, $action);
+    return if !$info->{name};
+
+    return if $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1];
+
+    my $cityid = $obj->{type} . $obj->{id};
+    $city{ $cityid } = {
+        name        =>  $info->{name},
+        region      =>  $info->{region},
+        country     =>  $info->{country},
+        bound       =>  Math::Polygon::Tree->new(
+            map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} }
+        ),
+    };
+    
+    $city_rtree->insert( $cityid, ( Math::Polygon::Tree::polygon_bbox(
+                map { map { [ split q{,}, $nodes->{$_} ] } @$_ } @{ $obj->{outer} }
+            ) ) );
+
     return;
 }
 
@@ -2461,35 +2487,6 @@ sub execute_action {
         if exists $param{region} && exists $obj->{tag}->{'addr:district'};
 
     my %objinfo = map { $_ => $param{$_} } grep { /^_*[A-Z]/ } keys %param;
-
-    ##  Load area as city
-    if ( $param{action} eq 'load_city' ) {
-
-        if ( !$param{name} ) {
-            report( "City without name $obj->{type}ID=$obj->{id}" );
-        }
-        elsif ( $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1] ) {
-            report( "City polygon $obj->{type}ID=$obj->{id} is not closed" );
-        }
-        else {
-            report( sprintf( "Found city: $obj->{type}ID=$obj->{id} - %s [ %s, %s ]",
-                convert_string( $param{name}),
-                convert_string( $param{country} ),
-                convert_string( $param{region} ) ), 'INFO' );
-            my $cityid = $obj->{type} . $obj->{id};
-            $city{ $cityid } = {
-                name        =>  $param{name},
-                region      =>  $param{region},
-                country     =>  $param{country},
-                bound       =>  Math::Polygon::Tree->new(
-                        map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} }
-                    ),
-            };
-            $city_rtree->insert( $cityid, ( Math::Polygon::Tree::polygon_bbox(
-                map { map { [ split q{,}, $nodes->{$_} ] } @$_ } @{ $obj->{outer} }
-            ) ) );
-        }
-    }
 
     ##  Load area as suburb
     if ( $param{action} eq 'load_suburb' ) {
