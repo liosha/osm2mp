@@ -55,6 +55,7 @@ use List::MoreUtils qw{ all notall none any first_index last_index uniq };
 use OSM;
 use WriterTT;
 use FeatureConfig;
+use AreaTree;
 
 
 
@@ -127,8 +128,10 @@ my $transport_mode;
 my %yesno;
 my %taglist;
 
-my %city;
-my $city_rtree = Tree::R->new();
+my %search_area = (
+    city => AreaTree->new(),
+);
+
 my %suburb;
 
 my %entrance;
@@ -342,7 +345,7 @@ my %extra_handlers;
 if ($osmbbox) {
     %extra_handlers = (
         bound  => sub {  $bbox = join q{,}, @{[ split /,/, shift()->{attr}->{box} ]}[1,0,3,2]  },
-        bounds => sub {  $bbox = join q{,}, @{ shift()->{attr}}{qw/ minlat minlon maxlat maxlon / } },
+        bounds => sub {  $bbox = join q{,}, @{ shift()->{attr}}{qw/ minlon minlat maxlon maxlat / } },
     );
 }
 
@@ -435,7 +438,7 @@ if ( $addressing ) {
             } );
     }
 }
-printf STDERR "  %d cities\n", scalar keys %city;
+#printf STDERR "  %d cities\n", scalar keys %city;
 
 
 
@@ -1234,7 +1237,7 @@ if ( $routing ) {
         $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
 
         if ( $road->{city} ) {
-            my $city = ref $road->{city} eq 'HASH' ? $road->{city} : $city{ $road->{city} };
+            my $city = $road->{city};
             my $region  = $city->{region}  || $default_region;
             my $country = $city->{country} || $default_country;
 
@@ -1697,20 +1700,8 @@ sub segment_intersection {
 
 
 sub FindCity {
-    return unless keys %city;
-    my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $nodes->{$_} ? $nodes->{$_} : $_ ) ] } @_;
-
-    my @cities = ();
-    for my $node ( @nodes ) {
-        my @res;
-        $city_rtree->query_point( @$node, \@res );
-        @cities = ( @cities, @res );
-    }
-
-    return first {
-            my $cbound = $city{$_}->{bound};
-            all { $cbound->contains( $_ ) } @nodes;
-        } uniq @cities;
+    my @points = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $nodes->{$_} ? $nodes->{$_} : $_ ) ] } @_;
+    return $search_area{city}->find_area(@points);
 }
 
 sub FindSuburb {
@@ -1798,13 +1789,9 @@ sub WritePOI {
 
     # contact information: address, phone
     if ( $poicontacts  &&  $param{add_contacts} ) {
-        my $cityid = FindCity( $param{nodeid} || $param{latlon} );
+        my $city = FindCity( $param{nodeid} || $param{latlon} );
 
-        my $city;
-        if ( $cityid ) {
-            $city = $city{ $cityid };
-        }
-        elsif ( $full_karlsruhe && $tag{'addr:city'} ) {
+        if ( !$city && $full_karlsruhe && $tag{'addr:city'} ) {
             $city = {
                 name    => $tag{'addr:city'},
                 region  => name_from_list( 'region', \%tag )  || $default_region,
@@ -2045,7 +2032,8 @@ sub AddRoad {
     # determine city
     my $city = FindCity(
         $param{chain}->[ floor $#{$param{chain}}/3 ],
-        $param{chain}->[ ceil $#{$param{chain}}*2/3 ] );
+        $param{chain}->[ ceil $#{$param{chain}}*2/3 ]
+    );
 
     # calculate speed class
     my %speed_coef = (
@@ -2249,9 +2237,7 @@ sub WritePolygon {
         my $housenumber = name_from_list( 'house', \%tag );
 
         if ( $housenumber ) {
-
-            my $cityid = FindCity( $plist[0]->[0] );
-            my $city = $cityid ? $city{$cityid} : undef;
+            my $city = FindCity( $plist[0]->[0] );
 
             if ( $full_karlsruhe && !$city && $tag{'addr:city'} ) {
                 $city = {
@@ -2423,21 +2409,10 @@ sub action_load_city {
 
     return if $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1];
 
-    my $cityid = $obj->{type} . $obj->{id};
-    $city{ $cityid } = {
-        name        =>  $info->{name},
-        region      =>  $info->{region},
-        country     =>  $info->{country},
-        bound       =>  Math::Polygon::Tree->new(
-            map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} }
-        ),
-    };
-    
-    $city_rtree->insert( $cityid, ( Math::Polygon::Tree::polygon_bbox(
-                map { map { [ split q{,}, $nodes->{$_} ] } @$_ } @{ $obj->{outer} }
-            ) ) );
-
+    my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
+    $search_area{city}->add_area( $info, @contours );
     return;
+=cut
 }
 
 
