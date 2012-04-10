@@ -602,12 +602,17 @@ while ( my ($id, $tags) = each %$nodetag ) {
             tag     => $tags,
         });
 }
-printf STDERR "  %d POI loaded\n", scalar keys %poi;
+my $countpoi = $ttc->{_count}->{point} // 0;
+printf STDERR "  %d POI written\n", $countpoi;
+printf STDERR "  %d POI loaded for addressing\n", scalar keys %poi      if $addrfrompoly;
+printf STDERR "  %d building entrances loaded\n", scalar keys %entrance if $navitel;
+printf STDERR "  %d main entrances loaded\n", scalar keys %main_entrance;
 
 
 ##  Process ways
 
 say STDERR "\nProcessing ways...";
+
 while ( my ($id, $tags) = each %$waytag ) {
     my $objinfo = {
         type    => "Way",
@@ -618,12 +623,16 @@ while ( my ($id, $tags) = each %$waytag ) {
     $ft_config->process( ways  => $objinfo );
     $ft_config->process( nodes => $objinfo )  if $makepoi;
 }
+printf STDERR "  %d POI written\n", ($ttc->{_count}->{point} // 0) - $countpoi;
+printf STDERR "  %d lines written\n", $ttc->{_count}->{polyline} // 0;
+printf STDERR "  %d polygons written\n", $ttc->{_count}->{polygon} // 0;
 
 
 ####    Writing non-addressed POIs
 
 if ( %poi ) {
     say STDERR "\nWriting rest POIs...";
+    my $count = keys %poi;
     print_section( 'Non-addressed POIs' );
     while ( my ($id,$list) = each %poi ) {
         for my $poi ( @$list ) {
@@ -631,6 +640,7 @@ if ( %poi ) {
         }
     }
     undef %poi;
+    printf STDERR "  %d POI written\n", $count;
 }
 
 

@@ -78,6 +78,7 @@ sub new {
 
 sub process {
     my ($self, $tt_name, $vars) = @_;
+    $self->{_count}->{$tt_name} ++;
     return $self->{tt_context}->process($tt_name => $vars);
 }
 
