@@ -165,7 +165,7 @@ my $ft_config = FeatureConfig->new(
         load_barrier            => \&action_load_barrier,
         load_building_entrance  => \&action_load_building_entrance,
         write_poi               => \&execute_action,
-        write_polygon           => \&execute_action,
+        write_polygon           => \&action_write_polygon,
         write_line              => \&action_write_line,
         address_poi             => \&execute_action,
         load_road               => \&execute_action,
@@ -2423,6 +2423,39 @@ sub action_write_line {
         $info->{chain} = $part;
         WriteLine( $info );
     }
+    return;
+}
+
+
+sub action_write_polygon {
+
+    my ($obj, $action) = @_;
+
+    my $info = _get_result_object_params($obj, $action);
+
+    my $id = $obj->{id};
+    if ( $mpoly->{$id} ) {
+        $info->{areas} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$mpoly->{$id}->[0]} ];
+        $info->{holes} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$mpoly->{$id}->[1]} ];
+        $info->{entrance} = [
+            map { [ $nodes->{$_}, $entrance{$_} ] }
+            grep { exists $entrance{$_} }
+            map { @$_ }
+            map { @$_ } @{$mpoly->{$id}}
+        ];
+    }
+    else {
+        return if $chains->{$id}->[0] ne $chains->{$id}->[-1];
+        
+        $info->{areas} = [ [ map {[ reverse split q{,}, $nodes->{$_} ]} @{$chains->{$id}} ] ];
+        $info->{entrance} = [
+            map { [ $nodes->{$_}, $entrance{$_} ] }
+            grep { exists $entrance{$_} }
+            @{$chains->{$id}}
+        ];
+    }
+    
+    WritePolygon( $info );
     return;
 }
 
