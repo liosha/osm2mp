@@ -130,9 +130,8 @@ my %taglist;
 
 my %search_area = (
     city => AreaTree->new(),
+    suburb => AreaTree->new(),
 );
-
-my %suburb;
 
 my %entrance;
 my %main_entrance;
@@ -161,6 +160,7 @@ my %config;
 my $ft_config = FeatureConfig->new(
     actions => {
         load_city               => \&action_load_city,
+        load_suburb             => \&action_load_suburb,
         load_barrier            => \&action_load_barrier,
         load_building_entrance  => \&action_load_building_entrance,
         write_poi               => \&execute_action,
@@ -437,8 +437,9 @@ if ( $addressing ) {
                 outer   => ( $mpoly->{$id} ? $mpoly->{$id}->[0] : [ $chains->{$id} ] ),
             } );
     }
+    printf STDERR "  %d cities\n", $search_area{city}->{_count} // 0;
+    printf STDERR "  %d suburbs\n", $search_area{suburb}->{_count} // 0;
 }
-#printf STDERR "  %d cities\n", scalar keys %city;
 
 
 
@@ -1699,18 +1700,24 @@ sub segment_intersection {
 }
 
 
-sub FindCity {
+sub _find_area {
+    my $tree = shift;
     my @points = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $nodes->{$_} ? $nodes->{$_} : $_ ) ] } @_;
-    return $search_area{city}->find_area(@points);
+    return $search_area{$tree}->find_area(@points);
+}
+
+sub FindCity {
+    return _find_area( city => @_ );
 }
 
 sub FindSuburb {
-    return unless keys %suburb;
-    my @nodes = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $nodes->{$_} ? $nodes->{$_} : $_ ) ] } @_;
-    return first {
-            my $cbound = $suburb{$_}->{bound};
-            all { $cbound->contains( $_ ) } @nodes;
-        } keys %suburb;
+    my $tags = shift;
+    my $suburb = $tags->{'addr:suburb'};
+    return $suburb  if $suburb;
+
+    my $suburb_object = _find_area( suburb => @_ );
+    return if !$suburb_object;
+    return $suburb_object->{name};
 }
 
 
@@ -1818,8 +1825,8 @@ sub WritePOI {
 
         my $street = $param{street} || $tag{'addr:street'} || ( $city ? $city->{name} : $default_city );
         if ( $street ) {
-            my $suburb = FindSuburb( $param{nodeid} || $param{latlon} );
-            $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
+            my $suburb = FindSuburb( \%tag, $param{nodeid} || $param{latlon} );
+            $street .= " ($suburb)"      if $suburb;
             $opts{StreetDesc} = convert_string( $street );
         }
 
@@ -2062,18 +2069,10 @@ sub AddRoad {
 
     # determine suburb
     if ( $city && $param{name} ) {
-        my $suburb;
-        if ( exists $tag{'addr:suburb'}) {
-            $suburb = $tag{'addr:suburb'};
-        }
-        else {
-            my $sub_ref = FindSuburb(
-                $param{chain}->[ floor $#{$param{chain}}/3 ],
-                $param{chain}->[ ceil $#{$param{chain}}*2/3 ]
-            );
-            $suburb = $suburb{$sub_ref}->{name} if $sub_ref;
-        }
-
+        my $suburb = FindSuburb( \%tag,
+            $param{chain}->[ floor $#{$param{chain}}/3 ],
+            $param{chain}->[ ceil $#{$param{chain}}*2/3 ]
+        );
         $param{name} .= qq{ ($suburb)} if $suburb;
     }
 
@@ -2251,8 +2250,8 @@ sub WritePolygon {
             #$street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
             $street //= ( $city ? $city->{name} : $default_city );
 
-            my $suburb = FindSuburb( $plist[0]->[0] );
-            $street .= qq{ ($suburb{$suburb}->{name})}      if $suburb;
+            my $suburb = FindSuburb( \%tag, $plist[0]->[0] );
+            $street .= qq{ ($suburb)}      if $suburb;
 
             $opts{HouseNumber} = convert_string( $housenumber );
             $opts{StreetDesc}  = convert_string( $street )     if defined $street && $street ne q{};
@@ -2400,19 +2399,26 @@ sub action_write_line {
 }
 
 
-sub action_load_city {
-    my ($obj, $action) = @_;
-    my $id = $obj->{id};
-
+sub _load_area {
+    my ($tree, $obj, $action) = @_;
     my $info = _get_result_object_params($obj, $action);
     return if !$info->{name};
 
     return if $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1];
 
     my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
-    $search_area{city}->add_area( $info, @contours );
+    $search_area{$tree}->add_area( $info, @contours );
     return;
-=cut
+}
+
+
+sub action_load_city {
+    return _load_area( city => @_ );
+}
+
+
+sub action_load_suburb {
+    return _load_area( suburb => @_ );
 }
 
 
@@ -2463,26 +2469,6 @@ sub execute_action {
 
     my %objinfo = map { $_ => $param{$_} } grep { /^_*[A-Z]/ } keys %param;
 
-    ##  Load area as suburb
-    if ( $param{action} eq 'load_suburb' ) {
-
-        if ( !$param{name} ) {
-            report( "Suburb without name $obj->{type}ID=$obj->{id}" );
-        }
-        elsif ( $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1] ) {
-            report( "Suburb polygon $obj->{type}ID=$obj->{id} is not closed" );
-        }
-        else {
-            report( sprintf( "Found suburb: $obj->{type}ID=$obj->{id} - %s", convert_string( $param{name} ) ), 'INFO' );
-            $suburb{ $obj->{type} . $obj->{id} } = {
-                name        =>  $param{name},
-                bound       =>  Math::Polygon::Tree->new(
-                        map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} }
-                    ),
-            };
-
-        }
-    }
 
     ##  Write POI
     if ( $param{action} eq 'write_poi' ) {

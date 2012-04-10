@@ -34,6 +34,7 @@ sub add_area {
         bound => Math::Polygon::Tree->new( @contours ),
     };
     $self->insert( $area, @bbox );
+    $self->{_count} ++;
     return;
 }
 
@@ -48,6 +49,7 @@ Returns object for area containing all points
 
 sub find_area {
     my ($self, @points) = @_;
+    return if !$self->{_count};
 
     my $possible_areas =
         reduce { [ grep { "$_" ~~ [ map {"$_"} @$b ] } @$a ] }
