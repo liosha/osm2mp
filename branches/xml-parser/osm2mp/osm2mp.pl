@@ -2375,6 +2375,9 @@ sub _get_field_content {
     return if !$field;
 
     for ( ref $field ) {
+        # !!!
+        return $field when 'ARRAY';
+
         when (q{}) {
             $field =~ s[%(\w+)][ name_from_list($1, $obj->{tag}) // q{} ]ge;
             return $field;
@@ -2398,6 +2401,7 @@ sub _get_result_object_params {
     for my $key ( keys %info ) {
         next if !defined $info{$key};
         $info{$key} &&= _get_field_content($info{$key}, $obj);
+        delete $info{$key} if !defined $info{$key};
     }
     delete $info{name} if !$info{name};
     
@@ -2704,45 +2708,6 @@ sub execute_action {
         }
     }
 
-    ##  Write polygon
-    if ( $param{action} eq 'write_polygon' ) {
-
-        %objinfo = ( %objinfo, (
-                type        => $action->{type},
-                name        => $param{name},
-                tags        => $obj->{tag},
-                comment     => "$obj->{type}ID = $obj->{id}",
-            ));
-
-        $objinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
-        $objinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
-
-        if ( $mpoly->{$obj->{id}} ) {
-            $objinfo{areas} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$mpoly->{$obj->{id}}->[0]} ];
-            $objinfo{holes} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$mpoly->{$obj->{id}}->[1]} ];
-            $objinfo{entrance} = [
-                map { [ $nodes->{$_}, $entrance{$_} ] }
-                grep { exists $entrance{$_} }
-                map { @$_ } 
-                map { @$_ } @{$mpoly->{$obj->{id}}}
-            ];
-        }
-        else {
-            if ( $chains->{$obj->{id}}->[0] ne $chains->{$obj->{id}}->[-1] ) {
-                report( "Area WayID=$obj->{id} is not closed at ($nodes->{$chains->{$obj->{id}}->[0]})" );
-                return;
-            }
-
-            $objinfo{areas} = [ [ map {[ reverse split q{,}, $nodes->{$_} ]} @{$chains->{$obj->{id}}} ] ];
-            $objinfo{entrance} = [
-                map { [ $nodes->{$_}, $entrance{$_} ] }
-                grep { exists $entrance{$_} }
-                @{$chains->{$obj->{id}}}
-            ];
-        }
-
-        WritePolygon( \%objinfo );
-    }
 
     ##  Address loaded POI
     if ( $param{action} eq 'address_poi' && exists $poi_rtree->{root} ) {
