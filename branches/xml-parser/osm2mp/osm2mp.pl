@@ -35,6 +35,7 @@ use autodie;
 use FindBin qw{ $Bin };
 use lib "$Bin/lib";
 
+use Carp;
 use POSIX;
 use YAML 0.72;
 use Getopt::Long qw{ :config pass_through };
@@ -180,6 +181,12 @@ my $ft_config = FeatureConfig->new(
         inside_city => \&cond_is_inside_city,
     },
 );
+
+
+{
+    no warnings 'once';
+    $YAML::LoadCode = 1;
+}
 
 while ( my $cfgfile = shift @$config ) {
     my ( $cfgvol, $cfgdir, undef ) = File::Spec->splitpath( $cfgfile );
@@ -2293,14 +2300,6 @@ sub WritePolygon {
         push @{ $opts{contours} }, [ map { [ reverse @{$_} ] } @$polygon ];
     }
 
-    ## Rusa - floors
-    if ( my $levels = $tag{'building:levels'} ) {
-        $opts{Floors} = extract_number($levels);
-    }
-    elsif ( my $height = $tag{'building:height'} || $tag{'height'} ) {
-        $opts{Floors} = int(extract_number($height)/3);
-    }
-
     for my $key ( keys %param ) {
         next unless $key =~ /^_*[A-Z]/;
         delete $opts{$key} and next if !defined $param{$key} || $param{$key} eq q{};
@@ -2370,21 +2369,40 @@ sub action_load_coastline {
 }
 
 
+sub _get_field_content {
+    my ($field, $obj) = @_;
+
+    return if !$field;
+
+    for ( ref $field ) {
+        when (q{}) {
+            $field =~ s[%(\w+)][ name_from_list($1, $obj->{tag}) // q{} ]ge;
+            return $field;
+        }
+        when ('CODE') {
+            return $field->($obj);
+        }
+
+        say STDERR Dump \@_;
+        confess "Bad field type: $_";
+    }
+}
+
+
 sub _get_result_object_params {
     my ($obj, $action) = @_;
-    
-    my %info = ( %$action,
-        tags    => $obj->{tag},
-        comment => "$obj->{type}ID = $obj->{id}",
-    );
-    
+
+    my %info = %$action;
     $info{name} //= '%label';
+
     for my $key ( keys %info ) {
         next if !defined $info{$key};
-        $info{$key} =~ s[%(\w+)][ name_from_list($1, $obj->{tag}) // q{} ]ge;
+        $info{$key} &&= _get_field_content($info{$key}, $obj);
     }
     delete $info{name} if !$info{name};
-
+    
+    $info{tags} = $obj->{tag};
+    $info{comment} = "$obj->{type}ID = $obj->{id}";
     $info{region} .= q{ } . $obj->{tag}->{'addr:district'}
         if $info{region} && $obj->{tag}->{'addr:district'};
 
