@@ -164,7 +164,7 @@ my $ft_config = FeatureConfig->new(
         load_suburb             => \&action_load_suburb,
         load_barrier            => \&action_load_barrier,
         load_building_entrance  => \&action_load_building_entrance,
-        write_poi               => \&execute_action,
+        write_poi               => \&action_write_poi,
         write_polygon           => \&action_write_polygon,
         write_line              => \&action_write_line,
         address_poi             => \&execute_action,
@@ -2432,7 +2432,6 @@ sub action_write_line {
 
 
 sub action_write_polygon {
-
     my ($obj, $action) = @_;
 
     my $info = _get_result_object_params($obj, $action);
@@ -2460,6 +2459,53 @@ sub action_write_polygon {
     }
     
     WritePolygon( $info );
+    return;
+}
+
+
+sub action_write_poi {
+    my ($obj, $action) = @_;
+
+    my $info = _get_result_object_params($obj, $action);
+
+    my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $nodes->{$obj->{id}} );
+    if ( !$latlon && $obj->{type} eq 'Way' ) {
+        my $outer = $mpoly->{$obj->{id}} ? $mpoly->{$obj->{id}}->[0]->[0] : $chains->{$obj->{id}};
+        my $entrance_node = first { exists $main_entrance{$_} } @$outer;
+        $latlon = $entrance_node
+            ? $nodes->{$entrance_node}
+            : join( q{,}, polygon_centroid( map {[ split /,/, $nodes->{$_} ]} @$outer ) );
+    }
+
+    return  unless $latlon && ( !@bound || is_inside_bounds( $latlon ) );
+
+    $info->{latlon} = $latlon;
+    $info->{nodeid} = $obj->{id}  if $obj->{type} eq 'Node';
+
+    if ( exists $action->{'city'} ) {
+        $info->{City}          = 'Y';
+        $info->{add_region}    = 1;
+    }
+    if ( exists $action->{'transport'} ) {
+        $info->{add_stops}     = 1;
+    }
+    if ( exists $action->{'contacts'} ) {
+        $info->{add_contacts}  = 1;
+    }
+    if ( exists $action->{'inherit_address'} && !$yesno{$action->{'inherit_address'}} ) {
+        $info->{dont_inherit_address}  = 1;
+    }
+    if ( exists $action->{'marine_buoy'} ) {
+        $info->{add_buoy}      = 1;
+    }
+    if ( exists $action->{'marine_light'} ) {
+        $info->{add_light}     = 1;
+    }
+    if ( exists $action->{'ele'} ) {
+        $info->{add_elevation} = 1;
+    }
+
+    AddPOI ($info);
     return;
 }
 
@@ -2535,61 +2581,6 @@ sub execute_action {
     my %objinfo = map { $_ => $param{$_} } grep { /^_*[A-Z]/ } keys %param;
 
 
-    ##  Write POI
-    if ( $param{action} eq 'write_poi' ) {
-
-        my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $nodes->{$obj->{id}} );
-        if ( !$latlon && $obj->{type} eq 'Way' ) {
-            my $outer = $mpoly->{$obj->{id}} ? $mpoly->{$obj->{id}}->[0]->[0] : $chains->{$obj->{id}};
-            my $entrance_node = first { exists $main_entrance{$_} } @$outer;
-            $latlon = $entrance_node
-                ? $nodes->{$entrance_node}
-                : join( q{,}, polygon_centroid( map {[ split /,/, $nodes->{$_} ]} @$outer ) );
-        }
-
-        return  unless $latlon && ( !@bound || is_inside_bounds( $latlon ) );
-
-        my %tag = %{ $obj->{tag} };
-        #$countpoi ++;
-
-        %objinfo = ( %objinfo, (
-                latlon      => $latlon,
-                type        => $action->{type},
-                name        => $param{name},
-                tags        => \%tag,
-                comment     => "$obj->{type}ID = $obj->{id}",
-            ));
-
-        $objinfo{nodeid}  = $obj->{id}              if $obj->{type} eq 'Node';
-        $objinfo{level_l} = $action->{level_l}      if exists $action->{level_l};
-        $objinfo{level_h} = $action->{level_h}      if exists $action->{level_h};
-
-        if ( exists $action->{'city'} ) {
-            $objinfo{City}          = 'Y';
-            $objinfo{add_region}    = 1;
-        }
-        if ( exists $action->{'transport'} ) {
-            $objinfo{add_stops}     = 1;
-        }
-        if ( exists $action->{'contacts'} ) {
-            $objinfo{add_contacts}  = 1;
-        }
-        if ( exists $action->{'inherit_address'} && !$yesno{$action->{'inherit_address'}} ) {
-            $objinfo{dont_inherit_address}  = 1;
-        }
-        if ( exists $action->{'marine_buoy'} ) {
-            $objinfo{add_buoy}      = 1;
-        }
-        if ( exists $action->{'marine_light'} ) {
-            $objinfo{add_light}     = 1;
-        }
-        if ( exists $action->{'ele'} ) {
-            $objinfo{add_elevation} = 1;
-        }
-
-        AddPOI ( \%objinfo );
-    }
-
     my @chains;
     if ( 
         $addrinterpolation && $param{action} eq 'process_interpolation'
@@ -2645,7 +2636,7 @@ sub execute_action {
                         tag     => { %tag, 'addr:housenumber' => $chouse, },
                     };
 
-                    execute_action( $new_obj, $new_action, $condition );
+                    action_write_poi($new_obj, $new_action);
                 }
             }
         }
