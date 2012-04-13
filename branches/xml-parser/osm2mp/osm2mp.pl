@@ -167,7 +167,7 @@ my $ft_config = FeatureConfig->new(
         write_poi               => \&action_write_poi,
         write_polygon           => \&action_write_polygon,
         write_line              => \&action_write_line,
-        address_poi             => \&execute_action,
+        address_poi             => \&action_address_poi,
         load_road               => \&execute_action,
         modify_road             => \&execute_action,
         load_coastline          => \&action_load_coastline,
@@ -2463,6 +2463,43 @@ sub action_write_polygon {
 }
 
 
+sub action_address_poi {
+    my ($obj, $action) = @_;
+
+    return if !exists $poi_rtree->{root};
+
+    my $outer = $mpoly->{$obj->{id}} ? $mpoly->{$obj->{id}}->[0]->[0] : $chains->{$obj->{id}};
+    my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $nodes->{$_} ]} @$outer );
+
+    my @poilist;
+    $poi_rtree->query_completely_within_rect( @bbox, \@poilist );
+
+    for my $id ( @poilist ) {
+        next unless exists $poi{$id};
+        next unless Math::Polygon::Tree::polygon_contains_point(
+            [ reverse split q{,}, $nodes->{$id} ],
+            map {[ reverse split q{,}, $nodes->{$_} ]} @$outer
+        );
+
+        my $housenumber = name_from_list( 'house', $obj->{tag} );
+        my $street = $obj->{tag}->{'addr:street'};
+
+        my $street_id = "way:$obj->{id}";
+        $street = $street{$street_id}     if exists $street{$street_id};
+
+        for my $poiobj ( @{ $poi{$id} } ) {
+            $poiobj->{street} ||= $street;
+            $poiobj->{housenumber} ||= $housenumber;
+            $poiobj->{comment} .= "\nAddressed by $obj->{type}ID = $obj->{id}";
+            say STDERR Dump $poiobj;
+            WritePOI( $poiobj );
+        }
+        delete $poi{$id};
+    }
+    return;
+}
+
+
 sub action_write_poi {
     my ($obj, $action) = @_;
 
@@ -2696,38 +2733,6 @@ sub execute_action {
                 # $countlines ++;
                 WriteLine( \%objinfo );
             }
-        }
-    }
-
-
-    ##  Address loaded POI
-    if ( $param{action} eq 'address_poi' && exists $poi_rtree->{root} ) {
-
-        my $outer = $mpoly->{$obj->{id}} ? $mpoly->{$obj->{id}}->[0]->[0] : $chains->{$obj->{id}};
-        my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $nodes->{$_} ]} @$outer );
-        my @poilist;
-
-        $poi_rtree->query_completely_within_rect( @bbox, \@poilist );
-
-        for my $id ( @poilist ) {
-            next unless exists $poi{$id};
-            next unless Math::Polygon::Tree::polygon_contains_point(
-                    [ reverse split q{,}, $nodes->{$id} ],
-                    map {[ reverse split q{,}, $nodes->{$_} ]} @$outer
-                );
-
-            my %tag = %{ $obj->{tag} };
-            my $housenumber = name_from_list( 'house', \%tag );
-            my $street = $tag{'addr:street'};
-            #$street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
-
-            for my $poiobj ( @{ $poi{$id} } ) {
-                $poiobj->{street} = $street;
-                $poiobj->{housenumber} = $housenumber;
-                WritePOI( $poiobj );
-            }
-
-            delete $poi{$id};
         }
     }
     return;
