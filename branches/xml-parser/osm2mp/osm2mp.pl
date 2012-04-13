@@ -160,8 +160,8 @@ say STDERR "\nLoading configuration...";
 my %config;
 my $ft_config = FeatureConfig->new(
     actions => {
-        load_city               => \&action_load_city,
-        load_suburb             => \&action_load_suburb,
+        load_city               => sub { _load_area( city   => @_ ) },
+        load_suburb             => sub { _load_area( suburb => @_ ) },
         load_barrier            => \&action_load_barrier,
         load_building_entrance  => \&action_load_building_entrance,
         write_poi               => \&action_write_poi,
@@ -1742,7 +1742,7 @@ sub FindSuburb {
 
 sub AddPOI {
     my ($obj) = @_;
-    if ( $addrfrompoly && exists $obj->{nodeid} && $obj->{add_contacts} && !$obj->{dont_inherit_address} ) {
+    if ( $addrfrompoly && $obj->{nodeid} && $obj->{contacts} && (!defined $obj->{inherit_address} || $yesno{$obj->{inherit_address}}) ) {
         my $id = $obj->{nodeid};
         my @bbox = ( reverse split q{,}, $nodes->{$id} ) x 2;
         push @{$poi{$id}}, $obj;
@@ -1781,10 +1781,10 @@ sub WritePOI {
 
     my $label = defined $param{name} ? $param{name} : q{};
 
-    if ( exists $param{add_elevation} && exists $tag{'ele'} ) {
+    if ( exists $param{ele} && exists $tag{'ele'} ) {
         $label .= '~[0x1f]' . $tag{'ele'};
     }
-    if ( $transportstops && exists $param{add_stops} ) {
+    if ( $transportstops && exists $param{transport} ) {
         my @stops;
         @stops = ( @{ $trstop{$param{nodeid}} } )
             if exists $param{nodeid}  &&  exists $trstop{$param{nodeid}};
@@ -1800,7 +1800,7 @@ sub WritePOI {
     $opts{Label}    = convert_string( $label )  if $label;
 
     # region and country - for cities
-    if ( $poiregion  &&  $label  &&  $param{add_region} && !$param{add_contacts} ) {
+    if ( $poiregion  &&  $label  &&  $param{city} && !$param{contacts} ) {
         my $country = name_from_list( 'country', $param{tags} );
         my $region  = name_from_list( 'region', $param{tags} );
         $region .= " $tag{'addr:district'}"         if $tag{'addr:district'};
@@ -1809,12 +1809,13 @@ sub WritePOI {
         $region  ||= $default_region;
         $country ||= $default_country;
 
+        $opts{City} = 'Y';
         $opts{RegionName}  = convert_string( $region )      if $region;
         $opts{CountryName} = convert_string( $country )     if $country;
     }
 
     # contact information: address, phone
-    if ( $poicontacts  &&  $param{add_contacts} ) {
+    if ( $poicontacts  &&  $param{contacts} ) {
         my $city = FindCity( $param{nodeid} || $param{latlon} );
 
         if ( !$city && $full_karlsruhe && $tag{'addr:city'} ) {
@@ -1896,7 +1897,7 @@ sub WritePOI {
     );
 
     ## Buoys
-    if ( $marine  &&  $param{add_buoy} ) {
+    if ( $marine  &&  $param{marine_buoy} ) {
         if ( my $buoy_type = ( $tag{'buoy'} or $tag{'beacon'} ) ) {
             $opts{FoundationColor} = $buoy_color{$buoy_type};
         }
@@ -1910,7 +1911,7 @@ sub WritePOI {
     }
 
     ## Lights
-    if ( $marine  &&  $param{add_light} ) {
+    if ( $marine  &&  $param{marine_light} ) {
         my @sectors =
             sort { $a->[1] <=> $b->[1] }
                 grep { $_->[3] }
@@ -2630,29 +2631,6 @@ sub action_write_poi {
     $info->{latlon} = $latlon;
     $info->{nodeid} = $obj->{id}  if $obj->{type} eq 'Node';
 
-    if ( exists $action->{'city'} ) {
-        $info->{City}          = 'Y';
-        $info->{add_region}    = 1;
-    }
-    if ( exists $action->{'transport'} ) {
-        $info->{add_stops}     = 1;
-    }
-    if ( exists $action->{'contacts'} ) {
-        $info->{add_contacts}  = 1;
-    }
-    if ( exists $action->{'inherit_address'} && !$yesno{$action->{'inherit_address'}} ) {
-        $info->{dont_inherit_address}  = 1;
-    }
-    if ( exists $action->{'marine_buoy'} ) {
-        $info->{add_buoy}      = 1;
-    }
-    if ( exists $action->{'marine_light'} ) {
-        $info->{add_light}     = 1;
-    }
-    if ( exists $action->{'ele'} ) {
-        $info->{add_elevation} = 1;
-    }
-
     AddPOI ($info);
     return;
 }
@@ -2668,16 +2646,6 @@ sub _load_area {
     my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
     $search_area{$tree}->add_area( $info, @contours );
     return;
-}
-
-
-sub action_load_city {
-    return _load_area( city => @_ );
-}
-
-
-sub action_load_suburb {
-    return _load_area( suburb => @_ );
 }
 
 
