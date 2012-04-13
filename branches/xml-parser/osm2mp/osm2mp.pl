@@ -168,7 +168,7 @@ my $ft_config = FeatureConfig->new(
         write_polygon           => \&action_write_polygon,
         write_line              => \&action_write_line,
         address_poi             => \&action_address_poi,
-        load_road               => \&execute_action,
+        load_road               => \&action_load_road,
         modify_road             => \&execute_action,
         load_coastline          => \&action_load_coastline,
         force_external_node     => \&action_force_external_node,
@@ -633,6 +633,8 @@ while ( my ($id, $tags) = each %$waytag ) {
 printf STDERR "  %d POI written\n", ($ttc->{_count}->{point} // 0) - $countpoi;
 printf STDERR "  %d lines written\n", $ttc->{_count}->{polyline} // 0;
 printf STDERR "  %d polygons written\n", $ttc->{_count}->{polygon} // 0;
+printf STDERR "  %d roads loaded\n", scalar keys %road          if $routing;
+printf STDERR "  %d coastlines loaded\n", scalar keys %coast    if $shorelines;
 
 
 ####    Writing non-addressed POIs
@@ -2431,6 +2433,25 @@ sub action_write_line {
 }
 
 
+sub action_load_road {
+    my ($obj, $action) = @_;
+    return action_write_line(@_)  if !$routing;
+
+    my $id = $obj->{id};
+    my @parts = map { _get_line_parts_inside_bounds($_) }
+        ( $mpoly->{$id} ? ( map {@$_} @{$mpoly->{$id}} ) : ( $chains->{$id} ) );
+    return if !@parts;
+
+    my $info = _get_result_object_params($obj, $action);
+    for my $part_no ( 0 .. $#parts ) {
+        $info->{chain} = $parts[$part_no];
+        $info->{id}    = "$id:$part_no";
+        AddRoad( $info );
+    }
+    return;
+}
+
+
 sub action_process_interpolation {
     my ($obj, $action) = @_;
     return if !$addrinterpolation;
@@ -2698,10 +2719,7 @@ sub execute_action {
             $objinfo{chain} = $chains[$part_no];
             $objinfo{id}    = "$obj->{id}:$part_no";
 
-            if ( $routing && $param{action} eq 'load_road' ) {
-                AddRoad( \%objinfo );
-            }
-            elsif ( $routing && $param{action} eq 'modify_road' && exists $road{ $objinfo{id} } ) {
+            if ( $routing && $param{action} eq 'modify_road' && exists $road{ $objinfo{id} } ) {
                 # reverse
                 if ( exists $action->{reverse} ) {
                     $road{ $objinfo{id} }->{chain} = [ reverse @{ $road{ $objinfo{id} }->{chain} } ];
@@ -2725,10 +2743,6 @@ sub execute_action {
                     next unless defined $objinfo{$key};
                     $road{ $objinfo{id} }->{$key} = $objinfo{$key};
                 }
-            }
-            elsif ( $param{action} ne 'modify_road' ) {
-                # $countlines ++;
-                WriteLine( \%objinfo );
             }
         }
     }
