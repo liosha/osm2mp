@@ -57,6 +57,7 @@ use OSM;
 use WriterTT;
 use FeatureConfig;
 use AreaTree;
+use Coastlines;
 
 
 
@@ -449,9 +450,10 @@ if ( $addressing ) {
 }
 
 
+my $coast = Coastlines->new( \@bound );
+
 
 my %road;
-my %coast;
 my %trest;
 my %barrier;
 my %xnode;
@@ -633,8 +635,8 @@ while ( my ($id, $tags) = each %$waytag ) {
 printf STDERR "  %d POI written\n", ($ttc->{_count}->{point} // 0) - $countpoi;
 printf STDERR "  %d lines written\n", $ttc->{_count}->{polyline} // 0;
 printf STDERR "  %d polygons written\n", $ttc->{_count}->{polygon} // 0;
-printf STDERR "  %d roads loaded\n", scalar keys %road          if $routing;
-printf STDERR "  %d coastlines loaded\n", scalar keys %coast    if $shorelines;
+printf STDERR "  %d roads loaded\n", scalar keys %road                      if $routing;
+printf STDERR "  %d coastlines loaded\n", scalar keys %{$coast->{lines}}    if $shorelines;
 
 
 ####    Writing non-addressed POIs
@@ -656,6 +658,17 @@ if ( %poi ) {
 
 ####    Processing coastlines
 
+if ( $shorelines ) {
+    say STDERR "\nProcessing coastlines...";
+
+    my @result = $coast->generate_polygons( water_background => !!$waterback );
+    print_section( 'Sea areas generated from coastlines' );
+    print Dump \@result; exit;
+    # !!! write
+}
+
+
+my %coast;
 if ( $shorelines ) {
 
     my $boundcross = 0;
@@ -2360,13 +2373,12 @@ sub action_load_coastline {
     my ($obj, $action) = @_;
     return if !$shorelines;
 
-    my $id = $obj->{id};
-    my $chain = $chains->{$id};
+    my $chain = $chains->{$obj->{id}};
     return if !$chain;
 
     my @parts = _get_line_parts_inside_bounds( $chain );
     for my $part ( @parts ) {
-        $coast{$part->[0]} = $part;
+        $coast->add_coastline([ map {[ reverse split /,/x, $nodes->{$_} ]} @$part ]);
     }
     return;
 }
