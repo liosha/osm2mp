@@ -112,12 +112,11 @@ sub generate_polygons {
             };
 
             for my $key ( keys %$coast ) {
-
                 my $line = $coast->{$key};
                 
                 # check start of coastline
                 my $p1     = $line->[0];
-                my $p2     = $line->[1]; # [ reverse  split q{,}, $nodes->{$coast{$sline}->[1]} ];
+                my $p2     = $line->[1];
                 my $ipoint = _segment_intersection( $bound->[$i], $bound->[$i+1], $p1, $p2 );
 
                 if ( $ipoint ) {
@@ -160,38 +159,38 @@ sub generate_polygons {
         }
 
         # rotate if sea at $tbound[0]
-        my $tmp  =  reduce { $a->{pos} < $b->{pos} ? $a : $b }  grep { $_->{type} ne 'bound' } @tbound;
+        my $tmp = reduce { $a->{pos} < $b->{pos} ? $a : $b }  grep { $_->{type} ne 'bound' } @tbound;
         if ( $tmp->{type} && $tmp->{type} eq 'end' ) {
             for ( grep { $_->{pos} <= $tmp->{pos} } @tbound ) {
                  $_->{pos} += $pos;
             }
         }
+        @tbound = sort { $a->{pos}<=>$b->{pos} } @tbound;
 
         # merge lines
-        $tmp = 0;
-        for my $node ( sort { $a->{pos}<=>$b->{pos} } @tbound ) {
-            #my $latlon = join q{,}, reverse @{$node->{point}};
-            #$nodes->{$latlon} = $latlon;
-
+        my $line_key;
+        for my $node ( @tbound ) {
             if ( $node->{type} eq 'start' ) {
-                $tmp = $node;
-                $coast->{$tmp->{line}}->[0] = $tmp->{point};
+                $line_key = $node->{line};
+                $coast->{$line_key}->[0] = $node->{point};
             }
-            if ( $node->{type} eq 'bound'  &&  $tmp ) {
-                unshift @{$coast->{$tmp->{line}}}, ($tmp->{point});
+            elsif ( $node->{type} eq 'bound' && $line_key ) {
+                unshift @{$coast->{$line_key}}, $node->{point};
             }
-            if ( $node->{type} eq 'end'  &&  $tmp ) {
-                $coast->{$node->{line}}->[-1] = $tmp->{point};
-                if ( $node->{line} eq $tmp->{line} ) {
+            elsif ( $node->{type} eq 'end' && $line_key ) {
+                $coast->{$node->{line}}->[-1] = $node->{point};
+                if ( $node->{line} eq $line_key ) {
                     push @{$coast->{$node->{line}}}, $coast->{$node->{line}}->[0];
                 } else {
-                    push @{$coast->{$node->{line}}}, @{$coast->{$tmp->{line}}};
-                    delete $coast->{$tmp->{line}};
-                    for ( grep { $_->{line} && $tmp->{line} && $_->{line} eq $tmp->{line} } @tbound ) {
-                        $_->{line} = $node->{line};
+                    push @{$coast->{$node->{line}}}, @{$coast->{$line_key}};
+                    delete $coast->{$line_key};
+                    for my $tnode ( @tbound ) {
+                        next if !$tnode->{line};
+                        next if $tnode->{line} ne $line_key;
+                        $tnode->{line} = $node->{line};
                     }
                 }
-                $tmp = 0;
+                $line_key = undef;
             }
         }
     }
@@ -213,7 +212,6 @@ sub generate_polygons {
             $island{$key} = 1;
         }
         else {
-            #$lake{$key} = Math::Polygon::Tree->new( [ map { [ reverse split q{,}, $nodes->{$_} ] } @$chain_ref ] );
             $lake{$key} = Math::Polygon::Tree->new( $chain );
         }
     }
@@ -227,33 +225,17 @@ sub generate_polygons {
     }
 
     ##  writing
-    #my $countislands = 0;
     my @result;
     for my $sea_key ( @lakesort ) {
         my @poly = $coast->{$sea_key};
-        #my %objinfo = (
-        #        type    => $config{types}->{sea}->{type},
-        #        level_h => $config{types}->{sea}->{endlevel},
-        #        comment => "sea $sea",
-        #        areas   => $sea eq 'background'
-        #            ?  [ \@bound ]
-        #            :  [[ map { [ reverse split q{,} ] } @$nodes{@{$coast{$sea}}} ]],
-        #    );
-
         for my $island_key ( keys %island ) {
             if ( $lake{$sea_key}->contains( $coast->{$island_key}->[0] ) ) {
-                #$countislands ++;
                 push @poly, $coast->{$island_key};
-                #push @{$objinfo{holes}}, [ map { [ reverse split q{,} ] } @$nodes{@{$coast{$island}}} ];
                 delete $island{$island_key};
             }
         }
-        #WritePolygon( \%objinfo );
         push @result, \@poly;
     }
-
-    #printf STDERR "%d lakes, %d islands\n", scalar keys %lake, $countislands;
-
     return @result;
 }
 

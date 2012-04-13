@@ -450,9 +450,8 @@ if ( $addressing ) {
 }
 
 
+
 my $coast = Coastlines->new( \@bound );
-
-
 my %road;
 my %trest;
 my %barrier;
@@ -661,203 +660,22 @@ if ( %poi ) {
 if ( $shorelines ) {
     say STDERR "\nProcessing coastlines...";
 
-    my @result = $coast->generate_polygons( water_background => !!$waterback );
+    my @sea_areas = $coast->generate_polygons( water_background => !!$waterback );
+
     print_section( 'Sea areas generated from coastlines' );
-    print Dump \@result; exit;
-    # !!! write
-}
-
-
-my %coast;
-if ( $shorelines ) {
-
-    my $boundcross = 0;
-
-    print STDERR "Processing shorelines...  ";
-    print_section( 'Sea areas generated from coastlines' );
-
-
-    ##  merging
-    my @keys = keys %coast;
-    for my $line_start ( @keys ) {
-        next  unless  $coast{ $line_start };
-
-        my $line_end = $coast{ $line_start }->[-1];
-        next  if  $line_end eq $line_start;
-        next  unless  $coast{ $line_end };
-        next  unless  ( !@bound  ||  is_inside_bounds( $nodes->{$line_end} ) );
-
-        pop  @{$coast{$line_start}};
-        push @{$coast{$line_start}}, @{$coast{$line_end}};
-        delete $coast{$line_end};
-        redo;
-    }
-
-
-    ##  tracing bounds
-    if ( @bound ) {
-
-        my @tbound;
-        my $pos = 0;
-
-        for my $i ( 0 .. $#bound-1 ) {
-
-            push @tbound, {
-                type    =>  'bound',
-                point   =>  $bound[$i],
-                pos     =>  $pos,
-            };
-
-            for my $sline ( keys %coast ) {
-
-                # check start of coastline
-                my $p1      = [ reverse  split q{,}, $nodes->{$coast{$sline}->[0]} ];
-                my $p2      = [ reverse  split q{,}, $nodes->{$coast{$sline}->[1]} ];
-                my $ipoint  = segment_intersection( $bound[$i], $bound[$i+1], $p1, $p2 );
-
-                if ( $ipoint ) {
-                    if ( any { $_->{type} eq 'end'  &&  $_->{point} ~~ $ipoint } @tbound ) {
-                        @tbound = grep { !( $_->{type} eq 'end'  &&  $_->{point} ~~ $ipoint ) } @tbound;
-                    }
-                    else {
-                        $boundcross ++;
-                        push @tbound, {
-                            type    =>  'start',
-                            point   =>  $ipoint,
-                            pos     =>  $pos + segment_length( $bound[$i], $ipoint ),
-                            line    =>  $sline,
-                        };
-                    }
-                }
-
-                # check end of coastline
-                $p1      = [ reverse  split q{,}, $nodes->{$coast{$sline}->[-1]} ];
-                $p2      = [ reverse  split q{,}, $nodes->{$coast{$sline}->[-2]} ];
-                $ipoint  = segment_intersection( $bound[$i], $bound[$i+1], $p1, $p2 );
-
-                if ( $ipoint ) {
-                    if ( any { $_->{type} eq 'start'  &&  $_->{point} ~~ $ipoint } @tbound ) {
-                        @tbound = grep { !( $_->{type} eq 'start'  &&  $_->{point} ~~ $ipoint ) } @tbound;
-                    }
-                    else {
-                        $boundcross ++;
-                        push @tbound, {
-                            type    =>  'end',
-                            point   =>  $ipoint,
-                            pos     =>  $pos + segment_length( $bound[$i], $ipoint ),
-                            line    =>  $sline,
-                        };
-                    }
-                }
-            }
-
-            $pos += segment_length( $bound[$i], $bound[$i+1] );
-        }
-
-        # rotate if sea at $tbound[0]
-        my $tmp  =  reduce { $a->{pos} < $b->{pos} ? $a : $b }  grep { $_->{type} ne 'bound' } @tbound;
-        if ( $tmp->{type} && $tmp->{type} eq 'end' ) {
-            for ( grep { $_->{pos} <= $tmp->{pos} } @tbound ) {
-                 $_->{pos} += $pos;
-            }
-        }
-
-        # merge lines
-        $tmp = 0;
-        for my $node ( sort { $a->{pos}<=>$b->{pos} } @tbound ) {
-            my $latlon = join q{,}, reverse @{$node->{point}};
-            $nodes->{$latlon} = $latlon;
-
-            if ( $node->{type} eq 'start' ) {
-                $tmp = $node;
-                $coast{$tmp->{line}}->[0] = $latlon;
-            }
-            if ( $node->{type} eq 'bound'  &&  $tmp ) {
-                unshift @{$coast{$tmp->{line}}}, ($latlon);
-            }
-            if ( $node->{type} eq 'end'  &&  $tmp ) {
-                $coast{$node->{line}}->[-1] = $latlon;
-                if ( $node->{line} eq $tmp->{line} ) {
-                    push @{$coast{$node->{line}}}, $coast{$node->{line}}->[0];
-                } else {
-                    push @{$coast{$node->{line}}}, @{$coast{$tmp->{line}}};
-                    delete $coast{$tmp->{line}};
-                    for ( grep { $_->{line} && $tmp->{line} && $_->{line} eq $tmp->{line} } @tbound ) {
-                        $_->{line} = $node->{line};
-                    }
-                }
-                $tmp = 0;
-            }
-        }
-    }
-
-
-    ##  detecting lakes and islands
-    my %lake;
-    my %island;
-
-    while ( my ($loop,$chain_ref) = each %coast ) {
-
-        if ( $chain_ref->[0] ne $chain_ref->[-1] ) {
-
-            report( sprintf( "Possible coastline break at (%s) or (%s)", @$nodes{ @$chain_ref[0,-1] } ),
-                    ( @bound ? 'ERROR' : 'WARNING' ) )
-                unless  $#$chain_ref < 3;
-
-            next;
-        }
-
-        # filter huge polygons to avoid cgpsmapper's crash
-        if ( $hugesea && scalar @$chain_ref > $hugesea ) {
-            report( sprintf( "Skipped too big coastline $loop (%d nodes)", scalar @$chain_ref ), 'WARNING' );
-            next;
-        }
-
-        if ( Math::Polygon->new( map { [ split q{,}, $nodes->{$_} ] } @$chain_ref )->isClockwise() ) {
-            $island{$loop} = 1;
-        }
-        else {
-            $lake{$loop} = Math::Polygon::Tree->new( [ map { [ reverse split q{,}, $nodes->{$_} ] } @$chain_ref ] );
-        }
-    }
-
-    my @lakesort = sort { scalar @{$coast{$b}} <=> scalar @{$coast{$a}} } keys %lake;
-
-    ##  adding sea background
-    if ( $waterback && @bound && !$boundcross ) {
-        $lake{'background'} = $boundtree;
-        splice @lakesort, 0, 0, 'background';
-    }
-
-    ##  writing
-    my $countislands = 0;
-
-    for my $sea ( @lakesort ) {
+    for my $sea_poly ( @sea_areas ) {
         my %objinfo = (
-                type    => $config{types}->{sea}->{type},
-                level_h => $config{types}->{sea}->{endlevel},
-                comment => "sea $sea",
-                areas   => $sea eq 'background'
-                    ?  [ \@bound ]
-                    :  [[ map { [ reverse split q{,} ] } @$nodes{@{$coast{$sea}}} ]],
-            );
-
-        for my $island  ( keys %island ) {
-            if ( $lake{$sea}->contains( [ reverse split q{,}, $nodes->{$island} ] ) ) {
-                $countislands ++;
-                push @{$objinfo{holes}}, [ map { [ reverse split q{,} ] } @$nodes{@{$coast{$island}}} ];
-                delete $island{$island};
-            }
-        }
-
+            type    => $config{types}->{sea}->{type},
+            level_h => $config{types}->{sea}->{endlevel},
+            comment => 'sea area',
+            areas   => [ shift @$sea_poly ],
+            holes   => $sea_poly,
+        );
         WritePolygon( \%objinfo );
     }
-
-    printf STDERR "%d lakes, %d islands\n", scalar keys %lake, $countislands;
-
-    undef %lake;
-    undef %island;
+    printf STDERR "  %d areas\n", scalar @sea_areas;
 }
+
 
 
 
@@ -1703,33 +1521,6 @@ END_USAGE
     exit;
 }
 
-
-
-###     geometry functions
-
-sub segment_length {
-  my ($p1,$p2) = @_;
-  return sqrt( ($p2->[0] - $p1->[0])**2 + ($p2->[1] - $p1->[1])**2 );
-}
-
-
-sub segment_intersection {
-    my ($p11, $p12, $p21, $p22) = @_;
-
-    my $Z  = ($p12->[1]-$p11->[1]) * ($p21->[0]-$p22->[0]) - ($p21->[1]-$p22->[1]) * ($p12->[0]-$p11->[0]);
-    my $Ca = ($p12->[1]-$p11->[1]) * ($p21->[0]-$p11->[0]) - ($p21->[1]-$p11->[1]) * ($p12->[0]-$p11->[0]);
-    my $Cb = ($p21->[1]-$p11->[1]) * ($p21->[0]-$p22->[0]) - ($p21->[1]-$p22->[1]) * ($p21->[0]-$p11->[0]);
-
-    return  if  $Z == 0;
-
-    my $Ua = $Ca / $Z;
-    my $Ub = $Cb / $Z;
-
-    return  if  $Ua < 0  ||  $Ua > 1  ||  $Ub < 0  ||  $Ub > 1;
-
-    return [ $p11->[0] + ( $p12->[0] - $p11->[0] ) * $Ub,
-             $p11->[1] + ( $p12->[1] - $p11->[1] ) * $Ub ];
-}
 
 
 sub _find_area {
