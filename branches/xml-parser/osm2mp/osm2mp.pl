@@ -173,7 +173,7 @@ my $ft_config = FeatureConfig->new(
         load_coastline          => \&action_load_coastline,
         force_external_node     => \&action_force_external_node,
         load_main_entrance      => \&action_load_main_entrance,
-        process_interpolation   => \&execute_action,
+        process_interpolation   => \&action_process_interpolation,
     },
     conditions => {
         named       => \&cond_is_named,
@@ -2431,6 +2431,58 @@ sub action_write_line {
 }
 
 
+sub action_process_interpolation {
+    my ($obj, $action) = @_;
+    return if !$addrinterpolation;
+
+    my $id = $obj->{id};
+
+    my @parts = map { _get_line_parts_inside_bounds($_) }
+        ( $mpoly->{$id} ? ( map {@$_} @{$mpoly->{$id}} ) : ( $chains->{$id} ) );
+    return if !@parts;
+
+    for my $part ( @parts ) {
+        my @chain = grep { exists $nodetag->{$_}->{'addr:housenumber'} } @$part;
+        next if @chain < 2;
+
+        my $new_action = { %$action, action => 'write_poi' };
+        for my $i ( 0 .. $#chain-1 ) {
+            my ( $node1, $node2 ) = @chain[ $i, $i+1 ];
+            my ( $house1, $house2 ) =
+                map { my $x = $nodetag->{$_}->{'addr:housenumber'}; $x =~ s/^(\d+).*/$1/x; $x }
+                ( $node1, $node2 );
+            next if $house1 == $house2;
+
+            my %tag = ( %{$nodetag->{$node2}}, %{$nodetag->{$node1}}, %{$obj->{tag}} );
+            my $step = ( $tag{'addr:interpolation'} eq 'all' ? 1 : 2 );
+            $step *= -1  if $house1 > $house2;
+
+            my ($lat1, $lon1) = split q{,}, $nodes->{$node1};
+            my ($lat2, $lon2) = split q{,}, $nodes->{$node2};
+            my $steplat = ($lat2-$lat1) / ($house2-$house1);
+            my $steplon = ($lon2-$lon1) / ($house2-$house1);
+
+            for my $j ( 0 .. ($house2-$house1)/$step ) {
+                next if $i > 0 && $j == 0;
+                my $chouse = $house1 + $step * $j;
+                my $clat = $lat1 + $steplat * $j * $step;
+                my $clon = $lon1 + $steplon * $j * $step;
+
+                my $new_obj = {
+                    id      => $obj->{id},
+                    type    => 'Way',
+                    latlon  => join( q{,}, $clat, $clon ),
+                    tag     => { %tag, 'addr:housenumber' => $chouse, },
+                };
+
+                action_write_poi($new_obj, $new_action);
+            }
+        }
+    }
+    return;
+}
+
+
 sub action_write_polygon {
     my ($obj, $action) = @_;
 
@@ -2491,7 +2543,6 @@ sub action_address_poi {
             $poiobj->{street} ||= $street;
             $poiobj->{housenumber} ||= $housenumber;
             $poiobj->{comment} .= "\nAddressed by $obj->{type}ID = $obj->{id}";
-            say STDERR Dump $poiobj;
             WritePOI( $poiobj );
         }
         delete $poi{$id};
@@ -2619,67 +2670,13 @@ sub execute_action {
 
 
     my @chains;
-    if ( 
-        $addrinterpolation && $param{action} eq 'process_interpolation'
-        || $param{action} ~~ [ qw{ load_road modify_road } ]
-    ) {
+    if ( $param{action} ~~ [ qw{ load_road modify_road } ] ) {
         @chains =
             map { @bound ? ( _get_line_parts_inside_bounds($_) ) : ( $_ ) }
             $mpoly->{$obj->{id}}
                 ? ( map {@$_} @{$mpoly->{$obj->{id}}} )
                 : ( $chains->{$obj->{id}} );
 
-    }
-
-    ##  Create interpolated objects
-    if ( $addrinterpolation && $param{action} eq 'process_interpolation' ) {
-
-        my @chain = grep { exists $nodetag->{$_}->{'addr:housenumber'} } @{ $chains[0] || [] };
-
-        if ( @chain >= 2 ) {
-            my $new_action = { %$action, action => 'write_poi' };
-
-            for my $i ( 0 .. $#chain-1 ) {
-                my ( $node1, $node2 ) = @chain[ $i, $i+1 ];
-                my ( $house1, $house2 ) =
-                    map { my $x = $nodetag->{$_}->{'addr:housenumber'}; $x =~ s/^(\d+).*/$1/x; $x }
-                    ( $node1, $node2 );
-
-                next if $house1 == $house2;
-
-                my %tag = ( %{$nodetag->{$node2}}, %{$nodetag->{$node1}}, %{$obj->{tag}} );
-
-                my $step = ( $tag{'addr:interpolation'} eq 'all' ? 1 : 2 );
-                if ( $house1 > $house2 )    { $step *= -1 }
-
-                my ($lat1, $lon1) = split q{,}, $nodes->{$node1};
-                my ($lat2, $lon2) = split q{,}, $nodes->{$node2};
-
-                my $steplat = ($lat2-$lat1) / ($house2-$house1);
-                my $steplon = ($lon2-$lon1) / ($house2-$house1);
-
-                for my $j ( 0 .. ($house2-$house1)/$step ) {
-
-                    next if $i > 0 && $j == 0;
-
-                    my $chouse = $house1 + $step * $j;
-                    my $clat = $lat1 + $steplat * $j * $step;
-                    my $clon = $lon1 + $steplon * $j * $step;
-
-                    my $new_obj = {
-                        id      => $obj->{id},
-                        type    => 'Way',
-                        latlon  => join( q{,}, $clat, $clon ),
-                        tag     => { %tag, 'addr:housenumber' => $chouse, },
-                    };
-
-                    action_write_poi($new_obj, $new_action);
-                }
-            }
-        }
-        else {
-            report( "Wrong interpolation on WayID=$obj->{id}" );
-        }
     }
 
     ##  Write line or load road
