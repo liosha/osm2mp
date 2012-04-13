@@ -169,7 +169,7 @@ my $ft_config = FeatureConfig->new(
         write_line              => \&action_write_line,
         address_poi             => \&action_address_poi,
         load_road               => \&action_load_road,
-        modify_road             => \&execute_action,
+        modify_road             => \&action_modify_road,
         load_coastline          => \&action_load_coastline,
         force_external_node     => \&action_force_external_node,
         load_main_entrance      => \&action_load_main_entrance,
@@ -2452,6 +2452,45 @@ sub action_load_road {
 }
 
 
+# !!! TODO: remove, it was bad idea
+sub action_modify_road {
+    my ($obj, $action) = @_;
+    return  if !$routing;
+
+    my $id = $obj->{id};
+    my $part_no = 0;
+    while (1) {
+        my $road_id = "$id:$part_no";
+        my $road = $road{$road_id};
+        last if !$road;
+        $part_no ++;
+
+        while ( my ($key, $val) = each %$action ) {
+            if ( $key eq 'reverse' ) {
+                $road->{chain} = [ reverse @{ $road->{chain} } ];
+            }
+            elsif ( $key eq 'routeparams' ) {
+                my @rp  = split q{,}, $road->{rp};
+                my @mrp = split q{,}, $val;
+                for my $p ( @rp ) {
+                    my $mp = shift @mrp;
+                    $p = $mp    if $mp =~ /^\d$/;
+                    $p = 1-$p   if $mp eq q{~};
+                    $p = $p+$1  if $p < 4 && $mp =~ /^\+(\d)$/;
+                    $p = $p-$1  if $p > 0 && $mp =~ /^\-(\d)$/;
+                }
+                $road->{rp} = join q{,}, @rp;
+            }
+            else {
+                $road->{$key} = _get_field_content($val, $obj);
+            }
+        }
+
+    }
+    return;
+}
+
+
 sub action_process_interpolation {
     my ($obj, $action) = @_;
     return if !$addrinterpolation;
@@ -2672,82 +2711,6 @@ sub action_load_barrier {
     return;
 }
 
-
-sub execute_action {
-    my ($obj, $action, $condition) = @_;
-
-    my %param = %{ $action };
-
-    $param{name} //= '%label';
-    for my $key ( keys %param ) {
-        next unless defined $param{$key};
-        $param{$key} =~ s[%(\w+)][ name_from_list( $1, $obj->{tag} ) // q{} ]ge;
-    }
-
-    $param{region} .= q{ }. $obj->{tag}->{'addr:district'}
-        if exists $param{region} && exists $obj->{tag}->{'addr:district'};
-
-    my %objinfo = map { $_ => $param{$_} } grep { /^_*[A-Z]/ } keys %param;
-
-
-    my @chains;
-    if ( $param{action} ~~ [ qw{ load_road modify_road } ] ) {
-        @chains =
-            map { @bound ? ( _get_line_parts_inside_bounds($_) ) : ( $_ ) }
-            $mpoly->{$obj->{id}}
-                ? ( map {@$_} @{$mpoly->{$obj->{id}}} )
-                : ( $chains->{$obj->{id}} );
-
-    }
-
-    ##  Write line or load road
-    if ( $param{action} ~~ [ qw{ load_road modify_road } ] ) {
-
-        %objinfo = ( %objinfo, (
-                type        => $action->{type},
-                name        => $param{name},
-                tags        => $obj->{tag},
-                comment     => "$obj->{type}ID = $obj->{id}",
-            ));
-
-        for my $option ( qw{ level_l level_h routeparams } ) {
-            next unless exists $action->{$option};
-            $objinfo{$option} = $action->{$option};
-        }
-
-        for my $part_no ( 0 .. $#chains ) {
-            $objinfo{chain} = $chains[$part_no];
-            $objinfo{id}    = "$obj->{id}:$part_no";
-
-            if ( $routing && $param{action} eq 'modify_road' && exists $road{ $objinfo{id} } ) {
-                # reverse
-                if ( exists $action->{reverse} ) {
-                    $road{ $objinfo{id} }->{chain} = [ reverse @{ $road{ $objinfo{id} }->{chain} } ];
-                }
-                # routeparams
-                if ( exists $action->{routeparams} ) {
-                    my @rp  = split q{,}, $road{ $objinfo{id} }->{rp};
-                    my @mrp = split q{,}, $action->{routeparams};
-                    for my $p ( @rp ) {
-                        my $mp = shift @mrp;
-                        $p = $mp    if $mp =~ /^\d$/;
-                        $p = 1-$p   if $mp eq q{~};
-                        $p = $p+$1  if $p < 4 && $mp =~ /^\+(\d)$/;
-                        $p = $p-$1  if $p > 0 && $mp =~ /^\-(\d)$/;
-                    }
-                    $road{ $objinfo{id} }->{rp} = join q{,}, @rp;
-                }
-                # the rest - just copy
-                for my $key ( keys %objinfo ) {
-                    next unless $key =~ /^_*[A-Z]/ or any { $key eq $_ } qw{ type level_l level_h };
-                    next unless defined $objinfo{$key};
-                    $road{ $objinfo{id} }->{$key} = $objinfo{$key};
-                }
-            }
-        }
-    }
-    return;
-}
 
 
 sub report {
