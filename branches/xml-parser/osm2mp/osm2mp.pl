@@ -57,6 +57,7 @@ use OSM;
 use WriterTT;
 use FeatureConfig;
 use AreaTree;
+use Boundary;
 use Coastlines;
 
 
@@ -379,43 +380,21 @@ printf STDERR "  Multipolygons: %s\n", scalar keys %$mpoly;
 
 ####    Initializing bounds
 
-my @bound;
-my $boundtree;
-my $boundgpc;
+my $bound;
 
 if ($bbox || $bpolyfile) {
-    my $bounds_msg = $bbox ? 'bbox' : $bpolyfile;
+    my $bounds_msg = $bbox ? 'bbox' : "file $bpolyfile";
     say STDERR "\nInitialising bounds from $bounds_msg...";
 
     if ($bbox) {
         my ($minlon, $minlat, $maxlon, $maxlat) = split q{,}, $bbox;
-        @bound = ( [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] );
+        $bound = Boundary->new([ [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] ]);
     }
     elsif ($bpolyfile) {
-        open my $pf, '<', $bpolyfile;
-
-        while ( my $line = readline $pf ) {
-            if ( $line =~ /^\d/ ) {
-                @bound = ();
-            }
-            elsif ( $line =~ /^\s+([0-9.E+-]+)\s+([0-9.E+-]+)/ ) {
-                push @bound, [ $1+0, $2+0 ];
-            }
-            elsif ( $line =~ /^END/ ) {
-                # !!! first ring only!
-                @bound = reverse @bound  if  Math::Polygon->new( @bound )->isClockwise();
-                last;
-            }
-        }
-
-        close $pf;
+        $bound = Boundary->new( $bpolyfile );
     }
 
-    $boundtree = Math::Polygon::Tree->new( \@bound );
-    $boundgpc = new_gpc();
-    $boundgpc->add_polygon( \@bound, 0 );
-
-    printf STDERR "  %d segments\n", scalar @bound - 1;
+    printf STDERR "  %d segments\n", scalar @{ $bound->get_points() } - 1;
 }
 
 
@@ -451,7 +430,7 @@ if ( $addressing ) {
 
 
 
-my $coast = Coastlines->new( \@bound );
+my $coast = Coastlines->new( $bound->get_points() );
 my %road;
 my %trest;
 my %barrier;
@@ -1141,14 +1120,14 @@ if ( $routing ) {
 ####    Background object (?)
 
 
-if ( @bound && $background  &&  exists $config{types}->{background} ) {
+if ( $bound && $background  &&  exists $config{types}->{background} ) {
 
     print_section( 'Background' );
 
     WritePolygon({
             type    => $config{types}->{background}->{type},
             level_h => $config{types}->{background}->{endlevel},
-            areas   => [ \@bound ],
+            areas   => [ $bound->get_points() ],
         });
 }
 
@@ -1407,7 +1386,8 @@ sub speed_code {
 
 sub is_inside_bounds {                  # $latlon
     my ($node) = @_;
-    return $boundtree->contains( [ reverse split q{,}, $node ] );
+    return 1 if !$bound;
+    return $bound->contains( [ reverse split q{,}, $node ] );
 }
 
 
@@ -1905,7 +1885,7 @@ sub AddRoad {
         my @ref =
             map { my $s = $_; $s =~ s/[\s\-]//gx; split /[,;]/, $s }
             grep {$_} ( @{ $road_ref{$orig_id} || [] }, @tag{'ref', 'int_ref'} );
-        $param{name} = '~[0x06]' . join( q{ }, grep {$_} ( join(q{-}, sort uniq @ref), $param{name} ) )  if @ref;
+        $param{name} = '~[0x06]' . join( q{ }, grep {$_} ( join(q{-}, uniq sort @ref), $param{name} ) )  if @ref;
     }
 
     if ( $full_karlsruhe && !$city && $tag{'addr:city'} ) {
@@ -1941,7 +1921,7 @@ sub AddRoad {
     }
 
     # external nodes
-    if ( @bound ) {
+    if ( $bound ) {
         if ( !is_inside_bounds( $nodes->{ $param{chain}->[0] } ) ) {
             $xnode{ $param{chain}->[0] } = 1;
             $xnode{ $param{chain}->[1] } = 1;
@@ -2011,11 +1991,11 @@ sub WritePolygon {
     }
 
     #   test if inside bounds
-    my @inside = map { @bound ? $boundtree->contains_polygon_rough( $_ ) : 1 } @{$param{areas}};
+    my @inside = map { $bound ? $bound->{tree}->contains_polygon_rough( $_ ) : 1 } @{$param{areas}};
     return      if all { defined && $_==0 } @inside;
 
-    if ( @bound  &&  $lessgpc  &&  any { !defined } @inside ) {
-        @inside = map { $boundtree->contains_points( @$_ ) } @{$param{areas}};
+    if ( $bound  &&  $lessgpc  &&  any { !defined } @inside ) {
+        @inside = map { $bound->{tree}->contains_points( @$_ ) } @{$param{areas}};
         return  if all { defined && $_ == 0 } @inside;
     }
 
@@ -2026,7 +2006,7 @@ sub WritePolygon {
     # TODO: filter bad holes
 
     #   clip
-    if ( @bound  &&  any { !defined } @inside ) {
+    if ( $bound && any { !defined } @inside ) {
         my $gpc = new_gpc();
 
         for my $area ( @{$param{areas}} ) {
@@ -2036,7 +2016,7 @@ sub WritePolygon {
             $gpc->add_polygon( $hole, 1 );
         }
 
-        $gpc    =  $gpc->clip_to( $boundgpc, 'INTERSECT' );
+        $gpc    =  $gpc->clip_to( $bound->{gpc}, 'INTERSECT' );
         @plist  =  sort  { $#{$b} <=> $#{$a} }  $gpc->get_polygons();
     }
 
@@ -2097,7 +2077,7 @@ sub WritePolygon {
 
         # entrances
         for my $entr ( @{ $param{entrance} } ) {
-            next unless !@bound || is_inside_bounds( $entr->[0] );
+            next  if !is_inside_bounds( $entr->[0] );
             push @{$opts{EntryPoint}}, { coords => [ split /\s*,\s*/xms, $entr->[0] ], name => convert_string( $entr->[1] ) };
         }
     }
@@ -2151,7 +2131,7 @@ sub cond_is_multipolygon {
 
 sub _get_line_parts_inside_bounds {
     my ($chain) = @_;
-    return $chain  if !@bound;
+    return $chain  if !$bound;
 
     my @is_inside = map { is_inside_bounds($nodes->{$_}) } @$chain;
     my @begin = grep { $is_inside[$_] && ( $_ == 0        || !$is_inside[$_-1] ) } ( 0 .. $#$chain );
@@ -2429,7 +2409,7 @@ sub action_write_poi {
             : join( q{,}, polygon_centroid( map {[ split /,/, $nodes->{$_} ]} @$outer ) );
     }
 
-    return  unless $latlon && ( !@bound || is_inside_bounds( $latlon ) );
+    return  unless $latlon && is_inside_bounds( $latlon );
 
     $info->{latlon} = $latlon;
     $info->{nodeid} = $obj->{id}  if $obj->{type} eq 'Node';
