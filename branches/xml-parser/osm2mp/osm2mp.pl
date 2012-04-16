@@ -75,6 +75,8 @@ print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2012 liosha, x
 
 ####    Settings
 
+say STDERR "\nLoading configuration...";
+
 my $config_file     = "$Bin/cfg/garmin.cfg";
 my %files;
 
@@ -94,22 +96,15 @@ my $values = $settings{Values} // {};
 
 my $output_fn;
 my $multiout;
-my $codepage        = '1251';
 my $mp_opts         = {};
 
 my $ttable          = q{};
 my $text_filter     = q{};
 my @filters         = ();
 
-my $mergecos        = 0.2;
-my $fixclosedist    = 3.0;       # set 5.5 for cgpsmapper 0097 and earlier
-my $maxroadnodes    = 60;
-
 my $bbox;
 my $bpolyfile;
 my $osmbbox;
-
-my $hugesea         = 0;
 
 my $default_city;
 my $default_region;
@@ -130,17 +125,6 @@ my %main_entrance;
 
 my %poi;
 my $poi_rtree = Tree::R->new();
-
-
-
-
-
-
-
-####    Reading configs
-
-
-say STDERR "\nLoading configuration...";
 
 my $ft_config = FeatureConfig->new(
     actions => {
@@ -208,8 +192,6 @@ GetOptions (
     'multiout=s'        => \$multiout,
 
     'mp-header=s%'      => sub { $mp_opts->{$_[1]} = $_[2] },
-    'codepage=s'        => \$codepage,
-    'nocodepage'        => sub { undef $codepage },
     
     'ttable=s'          => \$ttable,
     'textfilter=s'      => sub { eval "require $_[1]" or eval "require PerlIO::via::$_[1]" or die $@; $text_filter .= ":via($_[1])"; },
@@ -217,11 +199,7 @@ GetOptions (
 
     _get_settings_getopt(),
     
-    'mergecos=f'        => \$mergecos,
-    'maxroadnodes=f'    => \$maxroadnodes,
-    'fixclosedist=f'    => \$fixclosedist,
     'transport=s'       => \$transport_mode,
-    'notransport'       => sub { undef $transport_mode },
 
     'defaultcity=s'     => \$default_city,
     'defaultregion=s'   => \$default_region,
@@ -230,7 +208,6 @@ GetOptions (
     'bbox=s'            => \$bbox,
     'bpoly=s'           => \$bpolyfile,
     'osmbbox!'          => \$osmbbox,
-    'hugesea=i'         => \$hugesea,
 
     'namelist=s%'       => sub { $taglist{$_[1]} = [ split /[ ,]+/, $_[2] ] },
 
@@ -246,13 +223,13 @@ GetOptions (
 usage() unless (@ARGV);
 
 
-$codepage ||= 'utf8';
-if ( $codepage =~ / ^ (?: cp | win (?: dows )? )? -? ( \d{3,} ) $ /ixms ) {
+$values->{codepage} ||= 'utf8';
+if ( $values->{codepage} =~ / ^ (?: cp | win (?: dows )? )? -? ( \d{3,} ) $ /ixms ) {
     $mp_opts->{CodePage} = $1;
-    $codepage = "cp$1";
+    $values->{codepage} = "cp$1";
 }
 
-my $binmode = "encoding($codepage)$text_filter:utf8";
+my $binmode = "encoding($values->{codepage})$text_filter:utf8";
 
 
 my $cmap;
@@ -659,7 +636,7 @@ if ( $flags->{routing} ) {
                         ( !exists $road{$r1}->{$_} && !exists $road{$r2}->{$_} ) ||
                         ( defined $road{$r1}->{$_} && defined $road{$r2}->{$_} && $road{$r1}->{$_} eq $road{$r2}->{$_} )
                     } @plist )
-                  && lcos( $p1->[-2], $p1->[-1], $road{$r2}->{chain}->[1] ) > $mergecos ) {
+                  && lcos( $p1->[-2], $p1->[-1], $road{$r2}->{chain}->[1] ) > $values->{merge_cos} ) {
                     push @list, $r2;
                 }
             }
@@ -829,7 +806,7 @@ if ( $flags->{routing} ) {
                     $rnod = 2;
                 }
 
-                elsif ( $rnod == $maxroadnodes ) {
+                elsif ( $rnod == $values->{max_road_nodes} ) {
                     $countlong ++;
                     $break = $prev;
                     push @breaks, $break;
@@ -1276,7 +1253,7 @@ sub fix_close_nodes {                # NodeID1, NodeID2
     my ($dlat, $dlon) = ( ($lat2-$lat1),   ($lon2-$lon1)   );
     my $klon = cos( $clat * 3.14159 / 180 );
 
-    my $ldist = $fixclosedist * 180 / 20_000_000;
+    my $ldist = $values->{fix_close_dist} * 180 / 20_000_000;
 
     my $res = ($dlat**2 + ($dlon*$klon)**2) < $ldist**2;
 
@@ -1413,6 +1390,15 @@ my @available_flags = (
     [ less_gpc          => undef ],
 );
 
+my @available_values = (
+    [ codepage          => 'character encoding' ],
+    [ merge_cos         => 'max angle between roads to merge (cosine)' ],
+    [ max_road_nodes    => 'maximum number of nodes in road' ],
+    [ fix_close_dist    => 'minimum allowed routing segment length (m)' ],
+
+    [ huge_sea          => undef ],
+);    
+
 my @onoff = ( "off", "on");
 
 
@@ -1428,16 +1414,32 @@ sub _get_getopt_key {
 
 
 sub _get_settings_getopt {
-    return map {( _get_getopt_key($_) . q{!} => \$flags->{$_} )} map {$_->[0]} @available_flags;
+    return (
+        ( map {( _get_getopt_key($_) . q{!}  => \$flags->{$_}  )} map {$_->[0]} @available_flags ),
+        ( map {( _get_getopt_key($_) . q{=s} => \$values->{$_} )} map {$_->[0]} @available_values ),
+    );
 }
 
+
+sub _get_usage {
+    my ($key, $descr, $val) = @_;
+    $key =~ s/_/-/gx;
+    return sprintf " --%-23s %-42s [%s]\n", $key, $descr, $val;
+}
 
 sub _get_flag_usage {
     my ($flag, $descr) = @_;
     return if !$descr;
-    my $status = $onoff[!!$flags->{$flag}];
-    $flag =~ s/_/-/gx;
-    return sprintf " --%-23s %-41s [%s]\n", $flag, $descr, $status;
+    my $val = $onoff[!!$flags->{$flag}];
+    return _get_usage($flag, $descr, $val);
+}
+
+
+sub _get_value_usage {
+    my ($key, $descr) = @_;
+    return if !$descr;
+    my $val = $values->{$key};
+    return _get_usage($key, $descr, $val);
 }
 
 
@@ -1458,10 +1460,7 @@ Available options [defaults]:
  --multiout <key>          write output to multiple files    [${\( $multiout  || 'off' )}]
  --mp-header <key>=<value> MP header values
 
- --codepage <num>          codepage number                   [$codepage]
  --filter <name>           use TT filter (standard, plugin or predefined)
- --upcase                  (obsolete) same as --filter=upcase
- --translit                (obsolete) same as --filter=translit
  --textfilter <layer>      (obsolete) use extra output filter PerlIO::via::<layer>
  --ttable <file>           character conversion table
  --namelist <key>=<list>   comma-separated list of tags to select names
@@ -1470,9 +1469,6 @@ Available options [defaults]:
  --defaultregion <name>    default region                    [${ \($default_region  // '') }]
  --defaultcountry <name>   default country                   [${ \($default_country // '') }]
 
- --mergecos <cosine>       max allowed angle between roads to merge  [$mergecos]
- --maxroadnodes <dist>     maximum number of nodes in road segment   [$maxroadnodes]
- --fixclosedist <dist>     minimum allowed distance                  [$fixclosedist m]
  --transport <mode>        single transport mode
 
  --bpoly <poly-file>       use bounding polygon from .poly-file
@@ -1481,6 +1477,8 @@ Available options [defaults]:
 
 Flags (use --no-<option> to disable):
 ${\( join q{}, map { _get_flag_usage(@$_) } @available_flags )}
+Values:
+${\( join q{}, map { _get_value_usage(@$_) } @available_values )}
 
 END_USAGE
 
