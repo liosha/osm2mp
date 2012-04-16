@@ -8,7 +8,7 @@
 
 ##
 ##  Required packages:
-##    * Template
+##    * Config::Std
 ##    * Getopt::Long
 ##    * YAML
 ##    * Encode::Locale
@@ -18,6 +18,7 @@
 ##    * Math::Geometry::Planar::GPC::Polygon
 ##    * Tree::R
 ##    * Geo::Openstreetmap::Parser
+##    * Template
 ##
 ##  See http://search.cpan.org/ or use PPM (Perl package manager) or CPAN module
 ##
@@ -30,28 +31,32 @@
 use 5.010;
 use strict;
 use warnings;
+use utf8;
 use autodie;
 
+our $VERSION = '1.00-1';
+
+
+
+use Carp;
 use FindBin qw{ $Bin };
 use lib "$Bin/lib";
 
-use Carp;
-use POSIX;
-use YAML 0.72;
+use Config::Std;
 use Getopt::Long qw{ :config pass_through };
-use File::Spec;
+use YAML 0.72;
 
+use File::Spec;
+use POSIX;
 use Encode;
 use Encode::Locale;
+use List::Util qw{ first reduce sum min max };
+use List::MoreUtils qw{ all notall none any first_index last_index uniq };
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 use Math::Polygon::Tree  0.041  qw{ polygon_centroid };
 use Tree::R;
-
-use List::Util qw{ first reduce sum min max };
-use List::MoreUtils qw{ all notall none any first_index last_index uniq };
-
 
 use OSM;
 use WriterTT;
@@ -62,13 +67,30 @@ use Coastlines;
 
 
 
-our $VERSION = '1.00-1';
+
+
+print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2012 liosha, xliosha\@gmail.com\n";
 
 
 
 ####    Settings
 
-my $config          = [ 'garmin.yml' ];
+my $config_file     = "$Bin/cfg/garmin.cfg";
+my %files;
+
+for ( @ARGV )  {  $_ = decode 'locale', $_;  }
+GetOptions(
+    'config=s'          => \$config_file,
+    'load-settings=s@'  => sub { push @{ $files{settings} }, $_[1] },
+    'load-features=s@'  => sub { push @{ $files{features} }, $_[1] }
+);
+
+read_config $config_file => my %settings;
+my $flags  = $settings{Flags}  // {};
+my $values = $settings{Values} // {};
+
+
+
 
 my $output_fn;
 my $multiout;
@@ -79,57 +101,24 @@ my $ttable          = q{};
 my $text_filter     = q{};
 my @filters         = ();
 
-my $oneway          = 1;
-my $routing         = 1;
-my $mergeroads      = 1;
 my $mergecos        = 0.2;
-my $splitroads      = 1;
-my $fixclosenodes   = 1;
 my $fixclosedist    = 3.0;       # set 5.5 for cgpsmapper 0097 and earlier
 my $maxroadnodes    = 60;
-my $restrictions    = 1;
-my $barriers        = 1;
-my $disableuturns   = 0;
-my $destsigns       = 1;
-my $detectdupes     = 0;
-
-my $roadshields     = 1;
-my $transportstops  = 1;
-my $streetrelations = 1;
-my $interchange3d   = 1;
 
 my $bbox;
 my $bpolyfile;
-my $osmbbox         = 0;
-my $background      = 1;
-my $lessgpc         = 1;
+my $osmbbox;
 
-my $shorelines      = 0;
 my $hugesea         = 0;
-my $waterback       = 0;
-my $marine          = 1;
-
-my $addressing      = 1;
-my $full_karlsruhe  = 0;
-my $navitel         = 0;
-my $addrfrompoly    = 1;
-my $addrinterpolation = 1;
-my $makepoi         = 1;
 
 my $default_city;
 my $default_region;
 my $default_country;
 
-my $poiregion       = 1;
-my $poicontacts     = 1;
-
 my $transport_mode;
 
 
 ####    Global vars
-
-my %yesno;
-my %taglist;
 
 my %search_area = (
     city => AreaTree->new(),
@@ -145,21 +134,14 @@ my $poi_rtree = Tree::R->new();
 
 
 
-print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2012 liosha, xliosha\@gmail.com\n";
 
 
 
 ####    Reading configs
 
-for ( @ARGV ) {   $_ = decode 'locale', $_   }
-
-GetOptions (
-    'config=s@'         => \$config,
-);
 
 say STDERR "\nLoading configuration...";
 
-my %config;
 my $ft_config = FeatureConfig->new(
     actions => {
         load_city               => sub { _load_area( city   => @_ ) },
@@ -185,54 +167,42 @@ my $ft_config = FeatureConfig->new(
 );
 
 
-{
-    no warnings 'once';
-    $YAML::LoadCode = 1;
-}
+####    Load YAML configuration files
 
-while ( my $cfgfile = shift @$config ) {
-    my ( $cfgvol, $cfgdir, undef ) = File::Spec->splitpath( $cfgfile );
-    my %cfgpart = YAML::LoadFile $cfgfile;
-    while ( my ( $key, $item ) = each %cfgpart ) {
-        if ( $key eq 'load' && ref $item ) {
-            for my $addcfg ( @$item ) {
-                $addcfg = File::Spec->catpath( $cfgvol, $cfgdir, $addcfg )
-                    unless File::Spec->file_name_is_absolute( $addcfg );
-                push @$config, $addcfg;
-            }
-        }
-        elsif ( $key eq 'command-line' ) {
-            my @args = grep {defined} ( $item =~ m{ (?: '([^']*)' | "([^"]*)" | (\S+) ) }gxms );
-            for my $i ( 0 .. $#args ) {
-                next if $args[$i] !~ / --? (?: ttable|bpoly ) /xms;
-                next if !length($args[$i+1]);
-                next if File::Spec->file_name_is_absolute( $args[$i+1] );
-                $args[$i+1] = File::Spec->catpath( $cfgvol, $cfgdir, $args[$i+1] );
-            }
-            unshift @ARGV, @args;
-        }
-        elsif ( $key eq 'yesno' ) {
-            %yesno = %{ $item };
-        }
-        elsif ( $key eq 'taglist' ) {
-            while ( my ( $key, $val ) = each %$item ) {
-                next if exists $taglist{$key};
-                $taglist{$key} = $val;
-            }
-        }
-        elsif ( $key ~~ [ qw/ nodes ways address / ] ) {
-            $ft_config->add_rules( $key => $item );
-        }
-        else {
-            $config{$key} = $item;
-        }
+my ($cfgvol, $cfgdir) = File::Spec->splitpath( $config_file );
+my @load_items =
+    map {
+        my $sect = $_;
+        my $cfg_sect = $settings{Load}{$sect};
+        my $list = ref $cfg_sect ? $cfg_sect : $cfg_sect ? [ $cfg_sect ] : [];
+        map {[ $sect => $_ ]}
+        (
+             ( map { File::Spec->catpath($cfgvol, $cfgdir, $_) } @$list ),
+             @{ $files{$sect} || [] },
+        )
+    } qw/ settings features /;
+
+
+for my $item ( @load_items ) {
+    my ($type, $file) = @$item;
+    my %cfgpart = do {
+        no warnings 'once';
+        local $YAML::LoadCode = 1;
+        YAML::LoadFile $file;
+    };
+    while ( my ( $key, $data ) = each %cfgpart ) {
+        $ft_config->add_rules( $key => $data )      if $type ~~ 'features';
+        $settings{$key} = $data                     if $type ~~ 'settings';
     }
 }
 
 
+# !!! aliases
+my %yesno   = %{ $settings{yesno} || {} };
+my %taglist = %{ $settings{taglist} || {} }; 
 
 
-# cl-options second pass: tuning
+# second pass: tuning
 GetOptions (
     'output|o=s'        => \$output_fn,
     'multiout=s'        => \$multiout,
@@ -245,23 +215,11 @@ GetOptions (
     'textfilter=s'      => sub { eval "require $_[1]" or eval "require PerlIO::via::$_[1]" or die $@; $text_filter .= ":via($_[1])"; },
     'filter|filters=s@' => \@filters,
 
-    'oneway!'           => \$oneway,
-    'routing!'          => \$routing,
-    'mergeroads!'       => \$mergeroads,
+    _get_settings_getopt(),
+    
     'mergecos=f'        => \$mergecos,
-    'detectdupes!'      => \$detectdupes,
-    'splitroads!'       => \$splitroads,
     'maxroadnodes=f'    => \$maxroadnodes,
-    'fixclosenodes!'    => \$fixclosenodes,
     'fixclosedist=f'    => \$fixclosedist,
-    'restrictions!'     => \$restrictions,
-    'barriers!'         => \$barriers,
-    'disableuturns!'    => \$disableuturns,
-    'destsigns!'        => \$destsigns,
-    'roadshields!'      => \$roadshields,
-    'transportstops!'   => \$transportstops,
-    'streetrelations!'  => \$streetrelations,
-    'interchange3d!'    => \$interchange3d,
     'transport=s'       => \$transport_mode,
     'notransport'       => sub { undef $transport_mode },
 
@@ -272,21 +230,7 @@ GetOptions (
     'bbox=s'            => \$bbox,
     'bpoly=s'           => \$bpolyfile,
     'osmbbox!'          => \$osmbbox,
-    'background!'       => \$background,
-    'lessgpc!'          => \$lessgpc,
-    'shorelines!'       => \$shorelines,
     'hugesea=i'         => \$hugesea,
-    'waterback!'        => \$waterback,
-    'marine!'           => \$marine,
-
-    'addressing!'       => \$addressing,
-    'full-karlsruhe!'   => \$full_karlsruhe,
-    'navitel!'          => \$navitel,
-    'addrfrompoly!'     => \$addrfrompoly,
-    'addrinterpolation!'=> \$addrinterpolation,
-    'makepoi!'          => \$makepoi,
-    'poiregion!'        => \$poiregion,
-    'poicontacts!'      => \$poicontacts,
 
     'namelist=s%'       => sub { $taglist{$_[1]} = [ split /[ ,]+/, $_[2] ] },
 
@@ -337,7 +281,7 @@ $transport_mode = $transport_code{ $transport_mode }
 
 ####    Preparing templates
 
-my $ttc = WriterTT->new( filters => \@filters, templates => $config{output} );
+my $ttc = WriterTT->new( filters => \@filters, templates => $settings{output} );
 
 
 
@@ -360,7 +304,7 @@ if ($osmbbox) {
 
 my $osm = OSM->new(
     fh => $in,
-    skip_tags => [ keys %{$config{skip_tags}} ],
+    skip_tags => [ keys %{$settings{skip_tags}} ],
     handlers => \%extra_handlers,
 );
 $osm->merge_multipolygons();
@@ -414,7 +358,7 @@ if ( !$output_fn ) {
 
 
 ##  Load address polygons
-if ( $addressing ) {
+if ( $flags->{addressing} ) {
     say STDERR "\nLoading address areas...";
     while ( my ($id, $tags) = each %$waytag ) {
         $ft_config->process( address => {
@@ -430,7 +374,6 @@ if ( $addressing ) {
 
 
 
-my $coast = Coastlines->new( $bound->get_points() );
 my %road;
 my %trest;
 my %barrier;
@@ -446,7 +389,7 @@ my %street;
 
 say STDERR "\nProcessing relations...";
 
-if ( $routing  &&  $restrictions ) {
+if ( $flags->{routing}  &&  $flags->{restrictions} ) {
     while ( my ($relation_id, $members) = each %{ $relations->{restriction} || {} } ) {
         my $tags = $reltag->{$relation_id};
 
@@ -487,7 +430,7 @@ if ( $routing  &&  $restrictions ) {
 }
 
 
-if ( $routing && $destsigns ) {
+if ( $flags->{routing} && $flags->{dest_signs} ) {
     my $crossroads_cnt = scalar keys %trest;
     while ( my ($relation_id, $members) = each %{ $relations->{destination_sign} || {} } ) {
         my $tags = $reltag->{$relation_id};
@@ -522,7 +465,7 @@ if ( $routing && $destsigns ) {
 }
 
 
-if ( $streetrelations ) {
+if ( $flags->{street_relations} ) {
     for my $type ( qw{ street associatedStreet } ) {
         my $list = $relations->{$type};
         next if !$list;
@@ -541,7 +484,7 @@ if ( $streetrelations ) {
 }
 
 
-if ( $roadshields ) {
+if ( $flags->{road_shields} ) {
     while ( my ($relation_id, $members) = each %{ $relations->{route} || {} } ) {
         my $tags = $reltag->{$relation_id};
         next if !( $tags->{route} ~~ 'road' );
@@ -558,7 +501,7 @@ if ( $roadshields ) {
 }
 
 
-if ( $transportstops ) {
+if ( $flags->{transport_stops} ) {
     while ( my ($relation_id, $members) = each %{ $relations->{route} || {} } ) {
         my $tags = $reltag->{$relation_id};
         next if !( $tags->{route} ~~ [ qw/ bus / ] );
@@ -577,6 +520,10 @@ if ( $transportstops ) {
 
 
 
+my $coast = Coastlines->new( $bound ? $bound->get_points() : [] );
+
+
+
 ##  Process POI nodes
 
 say STDERR "\nProcessing nodes...";
@@ -591,8 +538,8 @@ while ( my ($id, $tags) = each %$nodetag ) {
 }
 my $countpoi = $ttc->{_count}->{point} // 0;
 printf STDERR "  %d POI written\n", $countpoi;
-printf STDERR "  %d POI loaded for addressing\n", scalar keys %poi      if $addrfrompoly;
-printf STDERR "  %d building entrances loaded\n", scalar keys %entrance if $navitel;
+printf STDERR "  %d POI loaded for addressing\n", scalar keys %poi      if $flags->{addr_from_poly};
+printf STDERR "  %d building entrances loaded\n", scalar keys %entrance if $flags->{navitel};
 printf STDERR "  %d main entrances loaded\n", scalar keys %main_entrance;
 
 
@@ -608,13 +555,13 @@ while ( my ($id, $tags) = each %$waytag ) {
     };
     
     $ft_config->process( ways  => $objinfo );
-    $ft_config->process( nodes => $objinfo )  if $makepoi;
+    $ft_config->process( nodes => $objinfo )  if $flags->{make_poi};
 }
 printf STDERR "  %d POI written\n", ($ttc->{_count}->{point} // 0) - $countpoi;
 printf STDERR "  %d lines written\n", $ttc->{_count}->{polyline} // 0;
 printf STDERR "  %d polygons written\n", $ttc->{_count}->{polygon} // 0;
-printf STDERR "  %d roads loaded\n", scalar keys %road                      if $routing;
-printf STDERR "  %d coastlines loaded\n", scalar keys %{$coast->{lines}}    if $shorelines;
+printf STDERR "  %d roads loaded\n", scalar keys %road                      if $flags->{routing};
+printf STDERR "  %d coastlines loaded\n", scalar keys %{$coast->{lines}}    if $flags->{shorelines};
 
 
 ####    Writing non-addressed POIs
@@ -636,16 +583,16 @@ if ( %poi ) {
 
 ####    Processing coastlines
 
-if ( $shorelines ) {
+if ( $flags->{shorelines} ) {
     say STDERR "\nProcessing coastlines...";
 
-    my @sea_areas = $coast->generate_polygons( water_background => !!$waterback );
+    my @sea_areas = $coast->generate_polygons( water_background => !!$flags->{waterback} );
 
     print_section( 'Sea areas generated from coastlines' );
     for my $sea_poly ( @sea_areas ) {
         my %objinfo = (
-            type    => $config{types}->{sea}->{type},
-            level_h => $config{types}->{sea}->{endlevel},
+            type    => $settings{types}->{sea}->{type},
+            level_h => $settings{types}->{sea}->{endlevel},
             comment => 'sea area',
             areas   => [ shift @$sea_poly ],
             holes   => $sea_poly,
@@ -665,7 +612,7 @@ my %nodid;
 my %roadid;
 my %nodeways;
 
-if ( $routing ) {
+if ( $flags->{routing} ) {
 
     print_section( 'Roads' );
 
@@ -684,7 +631,7 @@ if ( $routing ) {
 
     ###     merging roads
 
-    if ( $mergeroads ) {
+    if ( $flags->{merge_roads} ) {
         print STDERR "Merging roads...          ";
 
         my $countmerg = 0;
@@ -728,7 +675,7 @@ if ( $routing ) {
                 my $r2 = $list[0];
 
                 # process associated restrictions
-                if ( $restrictions  ||  $destsigns ) {
+                if ( $flags->{restrictions}  ||  $flags->{dest_signs} ) {
                     while ( my ($relid, $tr) = each %trest )  {
                         if ( $tr->{fr_way} eq $r2 )  {
                             my $msg = "RelID=$relid FROM moved from WayID=$r2($tr->{fr_pos})";
@@ -805,7 +752,7 @@ if ( $routing ) {
     ###    detecting duplicate road segments
 
 
-    if ( $detectdupes ) {
+    if ( $flags->{detect_dupes} ) {
 
         my %segway;
 
@@ -846,7 +793,7 @@ if ( $routing ) {
 
     ####    fixing self-intersections and long roads
 
-    if ( $splitroads ) {
+    if ( $flags->{split_roads} ) {
 
         print STDERR "Splitting roads...        ";
 
@@ -920,7 +867,7 @@ if ( $routing ) {
                     }
 
                     #   move restrictions
-                    if ( $restrictions  ||  $destsigns ) {
+                    if ( $flags->{restrictions}  ||  $flags->{dest_signs} ) {
                         while ( my ($relid, $tr) = each %trest )  {
                             if (  $tr->{to_way} eq $roadid
                               &&  $tr->{to_pos} >  $breaks[$i]   - (1 + $tr->{to_dir}) / 2
@@ -960,7 +907,7 @@ if ( $routing ) {
 
 
     ####    disable U-turns
-    if ( $disableuturns ) {
+    if ( $flags->{disable_u_turns} ) {
 
         print STDERR "Removing U-turns...       ";
 
@@ -1013,7 +960,7 @@ if ( $routing ) {
 
     ###    fixing too close nodes
 
-    if ( $fixclosenodes ) {
+    if ( $flags->{fix_close_nodes} ) {
 
         print STDERR "Fixing close nodes...     ";
 
@@ -1049,7 +996,7 @@ if ( $routing ) {
 
         $roadid{$roadid} = $roadcount++;
 
-        $rp =~ s/^(.,.),./$1,0/     unless $oneway;
+        $rp =~ s/^(.,.),./$1,0/     unless $flags->{oneway};
 
         my %objinfo = (
                 comment     => "WayID = $roadid" . ( $road->{comment} // q{} ),
@@ -1063,7 +1010,7 @@ if ( $routing ) {
         $objinfo{level_l}       = $llev       if $llev > 0;
         $objinfo{level_h}       = $hlev       if $hlev > $llev;
 
-        $objinfo{StreetDesc}    = $name       if $name && $navitel;
+        $objinfo{StreetDesc}    = $name       if $name && $flags->{navitel};
         $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
 
         if ( $road->{city} ) {
@@ -1086,7 +1033,7 @@ if ( $routing ) {
         for my $i ( 0 .. $#{$road->{chain}} ) {
             my $node = $road->{chain}->[$i];
 
-            if ( $interchange3d ) {
+            if ( $flags->{interchange_3d} ) {
                 if ( exists $hlevel{ $node } ) {
                     push @levelchain, [ $i-1, 0 ]   if  $i > 0  &&  $prevlevel == 0;
                     push @levelchain, [ $i,   $hlevel{$node} ];
@@ -1115,18 +1062,18 @@ if ( $routing ) {
 
     printf STDERR "%d written\n", $roadcount-1;
 
-} # if $routing
+}
 
 ####    Background object (?)
 
 
-if ( $bound && $background  &&  exists $config{types}->{background} ) {
+if ( $bound && $flags->{background}  &&  exists $settings{types}->{background} ) {
 
     print_section( 'Background' );
 
     WritePolygon({
-            type    => $config{types}->{background}->{type},
-            level_h => $config{types}->{background}->{endlevel},
+            type    => $settings{types}->{background}->{type},
+            level_h => $settings{types}->{background}->{endlevel},
             areas   => [ $bound->get_points() ],
         });
 }
@@ -1137,7 +1084,7 @@ if ( $bound && $background  &&  exists $config{types}->{background} ) {
 ####    Writing turn restrictions
 
 
-if ( $routing && ( $restrictions || $destsigns || $barriers ) ) {
+if ( $flags->{routing} && ( $flags->{restrictions} || $flags->{dest_signs} || $flags->{barriers} ) ) {
 
     print STDERR "Writing crossroads...     ";
     print_section( 'Turn restrictions and signs' );
@@ -1252,7 +1199,8 @@ for my $file ( keys %$out ) {
     $ttc->print( $out->{$file}, footer => {} );
 }
 
-print STDERR "All done!!\n\n";
+print STDERR "\nAll done!!\n\n";
+exit 0;
 
 
 #### The end
@@ -1307,7 +1255,7 @@ sub rename_country {
     my ($name) = @_;
     return $name  if !$name;
     
-    my $table = $config{country_name};
+    my $table = $settings{country_name};
     return $name  if !$table;
 
     my $full_name = $table->{uc $name};
@@ -1433,17 +1381,78 @@ sub write_turn_restriction {            # \%trest
 
 
 
+BEGIN {
+
+my @available_flags = (
+    [ routing           => 'produce routable map' ],
+    [ oneway            => 'enable oneway attribute for roads' ],
+    [ merge_roads       => 'merge same ways' ],
+    [ split_roads       => 'split long and self-intersecting roads' ],
+    [ fix_close_nodes   => 'enlarge distance between too close nodes' ],
+    [ restrictions      => 'process turn restrictions' ],
+    [ barriers          => 'create restrictions on barrier nodes' ],
+    [ disable_u_turns   => 'disable u-turns on nodes with 2 links' ],
+    [ dest_signs        => 'process destination signs' ],
+    [ detect_dupes      => 'report road duplicates' ],
+    [ road_shields      => 'write shields with road numbers' ],
+    [ transport_stops   => 'write route refs on bus stops' ],
+    [ street_relations  => 'use street relations for addressing' ],
+    [ interchange_3d    => 'navitel-style 3D interchanges' ],
+    [ background        => 'create background object' ],
+    [ shorelines        => 'create sea areas from coastlines' ],
+    [ water_back        => 'water background (for island maps)' ],
+    [ marine            => 'process marine-specific data' ],
+    [ addressing        => 'use city polygons for addressing' ],
+    [ full_karlsruhe    => 'use addr:* tags if no city found' ],
+    [ navitel           => 'write addresses for house polygons' ],
+    [ poi_contacts      => 'write contact info for POIs' ],
+    [ addr_from_poly    => 'use building outlines for POI addressing' ],
+    [ make_poi          => 'create POIs for polygons' ],
+    [ addr_interpolation => 'create address points by interpolation' ],
+
+    [ less_gpc          => undef ],
+);
+
+my @onoff = ( "off", "on");
+
+
+sub _get_getopt_key {
+    my ($opt) = $_;
+    my @results = ($opt);
+    $opt =~ s/_/-/gx;
+    push @results, $opt;
+    $opt =~ s/-//gx;
+    push @results, $opt;
+    return join q{|}, uniq @results;
+}
+
+
+sub _get_settings_getopt {
+    return map {( _get_getopt_key($_) . q{!} => \$flags->{$_} )} map {$_->[0]} @available_flags;
+}
+
+
+sub _get_flag_usage {
+    my ($flag, $descr) = @_;
+    return if !$descr;
+    my $status = $onoff[!!$flags->{$flag}];
+    $flag =~ s/_/-/gx;
+    return sprintf " --%-23s %-41s [%s]\n", $flag, $descr, $status;
+}
+
+
 
 sub usage  {
 
-    my @onoff = ( "off", "on");
-
     my $usage = <<"END_USAGE";
+
 Usage:  osm2mp.pl [options] file.osm
 
 Available options [defaults]:
 
- --config <file>           configuration file                [garmin.yml]
+ --config <file>           main configuration file
+ --load-settings <file>    extra settings
+ --load-features <file>    extra features
 
  --output <file>           output to file                    [${\( $output_fn || 'stdout' )}]
  --multiout <key>          write output to multiple files    [${\( $multiout  || 'off' )}]
@@ -1455,52 +1464,30 @@ Available options [defaults]:
  --translit                (obsolete) same as --filter=translit
  --textfilter <layer>      (obsolete) use extra output filter PerlIO::via::<layer>
  --ttable <file>           character conversion table
- --roadshields             shields with road numbers         [$onoff[$roadshields]]
  --namelist <key>=<list>   comma-separated list of tags to select names
 
- --addressing              use city polygons for addressing  [$onoff[$addressing]]
- --full-karlsruhe          use addr:* tags if no city found  [$onoff[$full_karlsruhe]]
- --navitel                 write addresses for polygons      [$onoff[$navitel]]
- --addrfrompoly            get POI address from buildings    [$onoff[$addrfrompoly]]
- --makepoi                 create POIs for polygons          [$onoff[$makepoi]]
- --poiregion               write region info for settlements [$onoff[$poiregion]]
- --poicontacts             write contact info for POIs       [$onoff[$poicontacts]]
  --defaultcity <name>      default city for addresses        [${ \($default_city    // '') }]
  --defaultregion <name>    default region                    [${ \($default_region  // '') }]
  --defaultcountry <name>   default country                   [${ \($default_country // '') }]
 
- --routing                 produce routable map                      [$onoff[$routing]]
- --oneway                  enable oneway attribute for roads         [$onoff[$oneway]]
- --mergeroads              merge same ways                           [$onoff[$mergeroads]]
  --mergecos <cosine>       max allowed angle between roads to merge  [$mergecos]
- --splitroads              split long and self-intersecting roads    [$onoff[$splitroads]]
  --maxroadnodes <dist>     maximum number of nodes in road segment   [$maxroadnodes]
- --fixclosenodes           enlarge distance between too close nodes  [$onoff[$fixclosenodes]]
  --fixclosedist <dist>     minimum allowed distance                  [$fixclosedist m]
- --restrictions            process turn restrictions                 [$onoff[$restrictions]]
- --barriers                process barriers                          [$onoff[$barriers]]
- --disableuturns           disable u-turns on nodes with 2 links     [$onoff[$disableuturns]]
- --destsigns               process destination signs                 [$onoff[$destsigns]]
- --detectdupes             detect road duplicates                    [$onoff[$detectdupes]]
- --interchange3d           navitel-style 3D interchanges             [$onoff[$interchange3d]]
  --transport <mode>        single transport mode
 
- --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
- --osmbbox                 use bounds from .osm                      [$onoff[$osmbbox]]
  --bpoly <poly-file>       use bounding polygon from .poly-file
- --background              create background object                  [$onoff[$background]]
+ --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
+ --osmbbox                 use bounds from .osm
 
- --shorelines              process shorelines                        [$onoff[$shorelines]]
- --waterback               water background (for island maps)        [$onoff[$waterback]]
- --marine                  process marine data (buoys etc)           [$onoff[$marine]]
+Flags (use --no-<option> to disable):
+${\( join q{}, map { _get_flag_usage(@$_) } @available_flags )}
 
-You can use no<option> to disable features (i.e --norouting)
 END_USAGE
 
-    printf $usage;
-    exit;
+    print $usage;
+    exit 1;
 }
-
+}
 
 
 sub _find_area {
@@ -1526,7 +1513,7 @@ sub FindSuburb {
 
 sub AddPOI {
     my ($obj) = @_;
-    if ( $addrfrompoly && $obj->{nodeid} && $obj->{contacts} && (!defined $obj->{inherit_address} || $yesno{$obj->{inherit_address}}) ) {
+    if ( $flags->{addr_from_poly} && $obj->{nodeid} && $obj->{contacts} && (!defined $obj->{inherit_address} || $yesno{$obj->{inherit_address}}) ) {
         my $id = $obj->{nodeid};
         my @bbox = ( reverse split q{,}, $nodes->{$id} ) x 2;
         push @{$poi{$id}}, $obj;
@@ -1549,7 +1536,7 @@ sub WritePOI {
     my $comment = $param{comment} || q{};
 
     while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
+        next unless exists $settings{comment}->{$key} && $yesno{$settings{comment}->{$key}};
         $comment .= "\n$key = $val";
     }
 
@@ -1568,7 +1555,7 @@ sub WritePOI {
     if ( exists $param{ele} && exists $tag{'ele'} ) {
         $label .= '~[0x1f]' . $tag{'ele'};
     }
-    if ( $transportstops && exists $param{transport} ) {
+    if ( $flags->{transport_stops} && exists $param{transport} ) {
         my @stops;
         @stops = ( @{ $trstop{$param{nodeid}} } )
             if exists $param{nodeid}  &&  exists $trstop{$param{nodeid}};
@@ -1584,7 +1571,7 @@ sub WritePOI {
     $opts{Label}    = convert_string( $label )  if $label;
 
     # region and country - for cities
-    if ( $poiregion  &&  $label  &&  $param{city} && !$param{contacts} ) {
+    if ( $label && $param{city} && !$param{contacts} ) {
         my $country = name_from_list( 'country', $param{tags} );
         my $region  = name_from_list( 'region', $param{tags} );
         $region .= " $tag{'addr:district'}"         if $tag{'addr:district'};
@@ -1599,10 +1586,10 @@ sub WritePOI {
     }
 
     # contact information: address, phone
-    if ( $poicontacts  &&  $param{contacts} ) {
+    if ( $flags->{poi_contacts}  &&  $param{contacts} ) {
         my $city = FindCity( $param{nodeid} || $param{latlon} );
 
-        if ( !$city && $full_karlsruhe && $tag{'addr:city'} ) {
+        if ( !$city && $flags->{full_karlsruhe} && $tag{'addr:city'} ) {
             $city = {
                 name    => $tag{'addr:city'},
                 region  => name_from_list( 'region', \%tag )  || $default_region,
@@ -1681,7 +1668,7 @@ sub WritePOI {
     );
 
     ## Buoys
-    if ( $marine  &&  $param{marine_buoy} ) {
+    if ( $flags->{marine}  &&  $param{marine_buoy} ) {
         if ( my $buoy_type = ( $tag{'buoy'} or $tag{'beacon'} ) ) {
             $opts{FoundationColor} = $buoy_color{$buoy_type};
         }
@@ -1695,7 +1682,7 @@ sub WritePOI {
     }
 
     ## Lights
-    if ( $marine  &&  $param{marine_light} ) {
+    if ( $flags->{marine}  &&  $param{marine_light} ) {
         my @sectors =
             sort { $a->[1] <=> $b->[1] }
                 grep { $_->[3] }
@@ -1743,9 +1730,9 @@ sub AddBarrier {
 
     my $acc = [ 1,1,1,1,1,1,1,1 ];
 
-    $acc = [ split q{,}, $config{barrier}->{$param{tags}->{'barrier'}} ]
-        if exists $config{barrier}
-        && exists $config{barrier}->{$param{tags}->{'barrier'}};
+    $acc = [ split q{,}, $settings{barrier}->{$param{tags}->{'barrier'}} ]
+        if exists $settings{barrier}
+        && exists $settings{barrier}->{$param{tags}->{'barrier'}};
 
     my @acc = map { 1-$_ } CalcAccessRules( $param{tags}, $acc );
     return  if  all { $_ } @acc;
@@ -1762,9 +1749,9 @@ sub CalcAccessRules {
     my %tag = %{ $_[0] };
     my @acc = @{ $_[1] };
 
-    return @acc     unless exists $config{transport};
+    return @acc     unless exists $settings{transport};
 
-    for my $rule ( @{$config{transport}} ) {
+    for my $rule ( @{$settings{transport}} ) {
         next unless exists $tag{$rule->{key}};
         next unless exists $yesno{$tag{$rule->{key}}};
 
@@ -1798,7 +1785,7 @@ sub WriteLine {
     my $comment = $param{comment} || q{};
 
     while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
+        next unless exists $settings{comment}->{$key} && $yesno{$settings{comment}->{$key}};
         $comment .= "\n$key = $val";
     }
 
@@ -1861,7 +1848,7 @@ sub AddRoad {
     }
 
     # navitel-style 3d interchanges
-    if ( my $layer = $interchange3d && extract_number($waytag->{'layer'}) ) {
+    if ( my $layer = $flags->{interchange_3d} && extract_number($waytag->{'layer'}) ) {
         $layer *= 2     if $layer > 0;
         for my $node ( @{$param{chain}} ) {
             $hlevel{ $node } = $layer;
@@ -1881,14 +1868,14 @@ sub AddRoad {
     }
 
     # road shield
-    if ( $roadshields  &&  !$city ) {
+    if ( $flags->{road_shields}  &&  !$city ) {
         my @ref =
             map { my $s = $_; $s =~ s/[\s\-]//gx; split /[,;]/, $s }
             grep {$_} ( @{ $road_ref{$orig_id} || [] }, @tag{'ref', 'int_ref'} );
         $param{name} = '~[0x06]' . join( q{ }, grep {$_} ( join(q{-}, uniq sort @ref), $param{name} ) )  if @ref;
     }
 
-    if ( $full_karlsruhe && !$city && $tag{'addr:city'} ) {
+    if ( $flags->{full_karlsruhe} && !$city && $tag{'addr:city'} ) {
         $city = {
             name    => $tag{'addr:city'},
             region  => name_from_list( 'region', \%tag )  || $default_region,
@@ -1910,7 +1897,7 @@ sub AddRoad {
 
     # FIXME: buggy object comment
     while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
+        next unless exists $settings{comment}->{$key} && $yesno{$settings{comment}->{$key}};
         $road{$param{id}}->{comment} .= "\n$key = $tag{$key}";
     }
 
@@ -1933,7 +1920,7 @@ sub AddRoad {
     }
 
     # process associated turn restrictions
-    if ( $restrictions  ||  $destsigns ) {
+    if ( $flags->{restrictions}  ||  $flags->{dest_signs} ) {
 
         for my $relid ( @{$nodetr{$param{chain}->[0]}} ) {
             next unless exists $trest{$relid};
@@ -1994,7 +1981,7 @@ sub WritePolygon {
     my @inside = map { $bound ? $bound->{tree}->contains_polygon_rough( $_ ) : 1 } @{$param{areas}};
     return      if all { defined && $_==0 } @inside;
 
-    if ( $bound  &&  $lessgpc  &&  any { !defined } @inside ) {
+    if ( $bound  &&  $flags->{less_gpc}  &&  any { !defined } @inside ) {
         @inside = map { $bound->{tree}->contains_points( @$_ ) } @{$param{areas}};
         return  if all { defined && $_ == 0 } @inside;
     }
@@ -2023,7 +2010,7 @@ sub WritePolygon {
     return    unless @plist;
 
     while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $config{comment}->{$key} && $yesno{$config{comment}->{$key}};
+        next unless exists $settings{comment}->{$key} && $yesno{$settings{comment}->{$key}};
         $comment .= "\n$key = $val";
     }
 
@@ -2036,13 +2023,13 @@ sub WritePolygon {
     $opts{Label} = convert_string( $param{name} )   if defined $param{name} && $param{name} ne q{};
 
     ## Navitel
-    if ( $navitel ) {
+    if ( $flags->{navitel} ) {
         my $housenumber = name_from_list( 'house', \%tag );
 
         if ( $housenumber ) {
             my $city = FindCity( $plist[0]->[0] );
 
-            if ( $full_karlsruhe && !$city && $tag{'addr:city'} ) {
+            if ( $flags->{full_karlsruhe} && !$city && $tag{'addr:city'} ) {
                 $city = {
                     name    => $tag{'addr:city'},
                     region  => name_from_list( 'region', \%tag )  || $default_region,
@@ -2142,7 +2129,7 @@ sub _get_line_parts_inside_bounds {
 
 sub action_load_coastline {
     my ($obj, $action) = @_;
-    return if !$shorelines;
+    return if !$flags->{shorelines};
 
     my $chain = $chains->{$obj->{id}};
     return if !$chain;
@@ -2218,8 +2205,9 @@ sub action_write_line {
 
 
 sub action_load_road {
+    return action_write_line(@_)  if !$flags->{routing};
+    
     my ($obj, $action) = @_;
-    return action_write_line(@_)  if !$routing;
 
     my $id = $obj->{id};
     my @parts = map { _get_line_parts_inside_bounds($_) }
@@ -2239,7 +2227,7 @@ sub action_load_road {
 # !!! TODO: remove, it was bad idea
 sub action_modify_road {
     my ($obj, $action) = @_;
-    return  if !$routing;
+    return  if !$flags->{routing};
 
     my $id = $obj->{id};
     my $part_no = 0;
@@ -2277,7 +2265,7 @@ sub action_modify_road {
 
 sub action_process_interpolation {
     my ($obj, $action) = @_;
-    return if !$addrinterpolation;
+    return if !$flags->{addr_interpolation};
 
     my $id = $obj->{id};
 
@@ -2441,7 +2429,7 @@ sub action_load_main_entrance {
 
 sub action_load_building_entrance {
     my ($obj, $action) = @_;
-    return if !$navitel;
+    return if !$flags->{navitel};
     $entrance{$obj->{id}} = name_from_list(entrance => $obj->{tag}) // q{};
     return;
 }
@@ -2449,7 +2437,7 @@ sub action_load_building_entrance {
 
 sub action_force_external_node {
     my ($obj, $action) = @_;
-    return if !$routing;
+    return if !$flags->{routing};
     $xnode{$obj->{id}} = 1;
     return;
 }
@@ -2457,7 +2445,7 @@ sub action_force_external_node {
 
 sub action_load_barrier {
     my ($obj, $action) = @_;
-    return if !$routing || !$barriers;
+    return if !$flags->{routing} || !$flags->{barriers};
     AddBarrier({ nodeid => $obj->{id}, tags => $obj->{tag} });
     return;
 }

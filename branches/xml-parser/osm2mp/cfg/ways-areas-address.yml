@@ -1,0 +1,25 @@
+################################
+##  Addressible places
+################################
+
+
+--- address
+---
+
+
+- condition:
+    - place = city|town|village|hamlet|allotments|isolated_dwelling
+  action:
+    - action:       load_city
+      name:         %place
+      region:       %region
+      country:      %country
+    
+    
+#- condition:
+#    - place = suburb
+#  action:
+#    - action:       load_suburb
+#      name:         %suburb
+
+
