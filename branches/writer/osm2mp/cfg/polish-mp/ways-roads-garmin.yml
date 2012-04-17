@@ -1,0 +1,11 @@
+--- ways
+---
+
+- condition:
+    - highway = construction
+  action:
+    - action: load_road
+      type: 0x12
+      level_h: 1
+      routeparams: '1,0,0,0,1,1,1,1,1,1,1,1'
+

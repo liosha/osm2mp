@@ -1,0 +1,125 @@
+--- ways
+---
+
+# Man-made
+
+- condition:
+    - amenity = prison
+  action:
+    - action: write_polygon
+      type: 0x04
+      level_h: 1
+
+- condition:
+    - landuse = military
+  action:
+    - action: write_polygon
+      type: 0x04
+      level_h: 1
+
+- condition:
+    - landuse = garages
+  action:
+    - action: write_polygon
+      type: 0x06
+      level_h: 1
+
+- condition:
+    - amenity = parking_garage
+  action:
+    - action: write_polygon
+      type: 0x06
+      level_h: 1
+
+- condition:
+    - aeroway = terminal
+  action:
+    - action: write_polygon
+      type: 0x07
+
+- id: park
+  condition:
+    - leisure = garden|park
+    - landuse != forest
+    - natural != wood
+  action:
+    - action: write_polygon
+      type: 0x17
+      level_h: 2
+
+- id: forest
+  condition:
+    - landuse = forest
+    - natural != wood
+  action:
+    - action: write_polygon
+      type: 0x17
+      level_h: 3
+
+- condition:
+    - or:
+        - landuse = farm|grass|meadow
+        - leisure = common
+        - natural = fell
+  action:
+    - action: write_polygon
+      type: 0x18
+      level_h: 2
+
+- condition:
+    - natural = heath
+  action:
+    - action: write_polygon
+      type: 0x18
+      level_h: 2
+
+# Natural
+
+- condition:
+    - leisure = ice_rink
+  action:
+    - action: write_polygon
+      type: 0x4d
+
+- condition:
+    - natural = glacier
+  action:
+    - action: write_polygon
+      type: 0x4d
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - landuse = allotments|orchard
+  action:
+    - action: write_polygon
+      type: 0x4e
+      level_h: 2
+
+- condition:
+    - natural = scrub
+  action:
+    - action: write_polygon
+      type: 0x4f
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - natural = wood
+  action:
+    - action: write_polygon
+      type: 0x50
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - natural = marsh|wetland
+  action:
+    - action: write_polygon
+      type: 0x51
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+
+- condition:
+    - natural = beach
+  action:
+    - action: write_polygon
+      type: 0x53
+      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+

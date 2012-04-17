@@ -1,0 +1,29 @@
+--- ways
+---
+
+
+
+# Custom lines
+
+- condition:
+    - aerialway = cable_car|chair_lift|drag_lift|gondola|mixed_lift
+  action:
+    - action: write_line
+      type: 0x010f15
+      level_h: 1
+
+- condition:
+    - or:
+        - barrier = fence|hedge|wall
+        - fenced = yes
+  action:
+    - action: write_line
+      type: 0x010f12
+      Label:
+
+- condition:
+    - aeroway = taxiway
+  action:
+    - action: write_line
+      type: 0x010f11
+      level_h: 1
