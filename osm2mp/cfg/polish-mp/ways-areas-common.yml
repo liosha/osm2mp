@@ -88,6 +88,14 @@
     - action: write_polygon
       type: 0x13
       Label: %house
+      Floors: !!perl/code |-
+        {
+          my $tags = shift()->{tag};
+          my $levels = extract_number($tags->{'building:levels'});
+          return $levels  if $levels;
+          $levels = int(extract_number($tags->{'building:height'} || $tags->{'height'} || 0) / 3);
+          return $levels || undef;
+        }
     - action: address_poi
 
 - condition:
