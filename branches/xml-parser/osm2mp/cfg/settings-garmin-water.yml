@@ -1,54 +1,4 @@
 ################################
-##  Load configs
-################################
-
---- load
----
-
-- country-names-ru.yml
-
-- polish-mp/output-polish.yml
-
-- polish-mp/nodes-common.yml
-- polish-mp/nodes-common-univ.yml
-- polish-mp/nodes-garmin-custom.yml
-- polish-mp/nodes-garmin-custom-univ.yml
-- polish-mp/nodes-garmin-marine.yml
-
-- polish-mp/ways-lines-common.yml
-- polish-mp/ways-lines-common-univ.yml
-- polish-mp/ways-lines-garmin-custom.yml
-- polish-mp/ways-lines-garmin-custom-univ.yml
-
-- polish-mp/ways-areas-common.yml
-- polish-mp/ways-areas-common-univ.yml
-- polish-mp/ways-areas-garmin-custom.yml
-- polish-mp/ways-areas-garmin-custom-univ.yml
-
-- polish-mp/ways-roads-common.yml
-- polish-mp/ways-roads-common-univ.yml
-- polish-mp/ways-roads-garmin.yml
-- polish-mp/ways-roads-garmin-univ.yml
-
-- polish-mp/nodes-common-ru.yml
-
-
-
-################################
-##  Predefined command-line options
-################################
-
-
---- command-line
---- > 
-  --disableuturns
-  --shorelines
-  --hugesea 100000
-  --marine
-
-
-
-################################
 ##  Name selection priority
 ################################
 
@@ -56,7 +6,7 @@
 --- taglist
 ---
 
-label:          [ name, loc_name, operator ]
+label:          [ name, loc_name, addr:housenumber, operator ]
 house:          [ addr:housenumber, addr:housename ]
 entrance:       [ name, ref ]
 place:          [ addr:city, place_name, name ]
@@ -111,19 +61,21 @@ natural:            1
 place:              1
 power:              1
 railway:            1
-religion:           1
 route:              1
 service:            1
 shop:               1
 sport:              1
-surface:            1
 tourism:            1
 tracktype:          1
 traffic_calming:    1
 tunnel:             1
 waterway:           1
 whitewater:         1
-  
+
+boat:               1
+motorboat:          1
+ship:               1
+
 
 
 ################################
@@ -176,37 +128,15 @@ destination:    0
 --- transport
 ---
 
-- key:     motorroad
-  val:     0,0,0,0,0,1,1,0
-  mode:    -1
-
 - key:     access
   val:     1,1,1,1,1,1,1,1
 
-- key:     vehicle
-  val:     1,1,1,1,1,0,1,1
-- key:     motor_vehicle
+- key:     boat
+  val:     1,1,1,1,1,1,1,1
+- key:     motorboat
   val:     1,1,1,1,1,0,0,1
-
-- key:     motorcar
-  val:     1,1,1,1,1,0,0,1
-
-- key:     foot
-  val:     0,0,0,0,0,1,0,0
-- key:     bicycle
-  val:     0,0,0,0,0,0,1,0
-- key:     psv
-  val:     0,0,0,1,1,0,0,0
-- key:     bus
-  val:     0,0,0,1,0,0,0,0
-- key:     taxi
-  val:     0,0,0,0,1,0,0,0
-- key:     hgv
-  val:     0,0,0,0,0,0,0,1
-- key:     goods
-  val:     0,1,0,0,0,0,0,0
-- key:     emergency
-  val:     1,0,0,0,0,0,0,0
+- key:     ship
+  val:     0,0,0,1,0,0,0,1
   
 
 
@@ -229,27 +159,4 @@ toll_booth:     0,0,0,0,0,0,0,0
 cattle_grid:    0,0,0,0,0,0,0,0
 
 
-
-################################
-##  Addressible places
-################################
-
-
---- address
----
-
-- condition:
-    - place = city|town|village|hamlet|allotments|isolated_dwelling
-  action:
-    - action:       load_city
-      name:         %place
-      region:       %region
-      country:      %country
-
-
-#- condition:
-#    - place = suburb
-#  action:
-#    - action:       load_suburb
-#      name:         %suburb
 
