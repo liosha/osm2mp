@@ -1,53 +1,4 @@
 ################################
-##  Load configs
-################################
-
---- load
----
-
-- polish-mp/output-polish.yml
-
-- polish-mp/nodes-common.yml
-- polish-mp/nodes-common-univ.yml
-- polish-mp/nodes-garmin-custom.yml
-- polish-mp/nodes-garmin-custom-univ.yml
-- polish-mp/nodes-garmin-marine.yml
-
-- polish-mp/ways-lines-common.yml
-- polish-mp/ways-lines-common-univ.yml
-- polish-mp/ways-lines-garmin-custom.yml
-- polish-mp/ways-lines-garmin-custom-univ.yml
-
-- polish-mp/ways-areas-common.yml
-- polish-mp/ways-areas-common-univ.yml
-- polish-mp/ways-areas-garmin-custom.yml
-- polish-mp/ways-areas-garmin-custom-univ.yml
-
-- polish-mp/ways-roads-common.yml
-- polish-mp/ways-roads-common-univ.yml
-- polish-mp/ways-roads-garmin.yml
-- polish-mp/ways-roads-garmin-univ.yml
-
-- polish-mp/nodes-common-ru.yml
-
-
-
-################################
-##  Predefined command-line options
-################################
-
-
---- command-line
---- > 
-  --countrylist "iso-3166-1-a2-ru.txt"
-  --disableuturns
-  --shorelines
-  --hugesea 100000
-  --marine
-
-
-
-################################
 ##  Name selection priority
 ################################
 
@@ -228,33 +179,4 @@ toll_booth:     0,0,0,0,0,0,0,0
 cattle_grid:    0,0,0,0,0,0,0,0
 
 
-
-################################
-##  Addressible places
-################################
-
-
---- address
----
-
-- condition:
-    - place = city|town|village|hamlet|allotments|isolated_dwelling
-  action:
-    - action:       load_city
-      name:         %place
-      region:       %region
-      country:      %country
-
-
-#- condition:
-#    - place = suburb
-#  action:
-#    - action:       load_suburb
-#      name:         %suburb
-
-- condition:
-    - addr:interpolation = all|even|odd
-    - only_way
-  action:
-    - action:       load_interpolation
 
