@@ -256,9 +256,15 @@ $transport_mode = $transport_code{ $transport_mode }
     if defined $transport_mode && exists $transport_code{ $transport_mode };
 
 
-####    Preparing templates
+####    Initializing writer
 
-my $ttc = WriterTT->new( filters => \@filters, templates => $settings{output} );
+my $writer = WriterTT->new(
+    output => $output_fn,
+    binmode => $binmode,
+    multiout => $multiout,
+    filters => \@filters,
+    templates => $settings{output},
+);
 
 
 
@@ -316,19 +322,6 @@ if ($bbox || $bpolyfile) {
     }
 
     printf STDERR "  %d segments\n", scalar @{ $bound->get_points() } - 1;
-}
-
-
-
-####    Creating simple multiwriter output
-
-$mp_opts->{DefaultCityCountry} = rename_country($mp_opts->{DefaultCityCountry}) if $mp_opts->{DefaultCityCountry};
-
-my $out = {};
-if ( !$output_fn ) {
-    $out->{q{}} = *STDOUT{IO};
-    binmode $out->{q{}}, $binmode;
-    $ttc->print( $out->{q{}}, header => { opts => $mp_opts, version => $VERSION } );
 }
 
 
@@ -513,7 +506,7 @@ while ( my ($id, $tags) = each %$nodetag ) {
             tag     => $tags,
         });
 }
-my $countpoi = $ttc->{_count}->{point} // 0;
+my $countpoi = $writer->{_count}->{point} // 0;
 printf STDERR "  %d POI written\n", $countpoi;
 printf STDERR "  %d POI loaded for addressing\n", scalar keys %poi      if $flags->{addr_from_poly};
 printf STDERR "  %d building entrances loaded\n", scalar keys %entrance if $flags->{navitel};
@@ -534,9 +527,9 @@ while ( my ($id, $tags) = each %$waytag ) {
     $ft_config->process( ways  => $objinfo );
     $ft_config->process( nodes => $objinfo )  if $flags->{make_poi};
 }
-printf STDERR "  %d POI written\n", ($ttc->{_count}->{point} // 0) - $countpoi;
-printf STDERR "  %d lines written\n", $ttc->{_count}->{polyline} // 0;
-printf STDERR "  %d polygons written\n", $ttc->{_count}->{polygon} // 0;
+printf STDERR "  %d POI written\n", ($writer->{_count}->{point} // 0) - $countpoi;
+printf STDERR "  %d lines written\n", $writer->{_count}->{polyline} // 0;
+printf STDERR "  %d polygons written\n", $writer->{_count}->{polygon} // 0;
 printf STDERR "  %d roads loaded\n", scalar keys %road                      if $flags->{routing};
 printf STDERR "  %d coastlines loaded\n", scalar keys %{$coast->{lines}}    if $flags->{shorelines};
 
@@ -1171,12 +1164,9 @@ if ( $flags->{routing} && ( $flags->{restrictions} || $flags->{dest_signs} || $f
 
 
 
-
-for my $file ( keys %$out ) {
-    $ttc->print( $out->{$file}, footer => {} );
-}
-
 print STDERR "\nAll done!!\n\n";
+
+$writer->finalize();
 exit 0;
 
 
@@ -1332,7 +1322,7 @@ sub write_turn_restriction {            # \%trest
     }
 
     unless ( ${nodid{$tr->{node}}} ) {
-        output( comment => { text => "$tr->{comment}\nOutside boundaries" } );
+        $writer->output( comment => { text => "$tr->{comment}\nOutside boundaries" } );
         return;
     }
 
@@ -1346,11 +1336,11 @@ sub write_turn_restriction {            # \%trest
 
     if ( $tr->{type} eq 'sign' ) {
         $opts{param} = "T,$tr->{name}";
-        output( destination_sign => { comment => $tr->{comment}, opts => \%opts } );
+        $writer->output( destination_sign => { comment => $tr->{comment}, opts => \%opts } );
     }
     else {
         $opts{param} = $tr->{param}    if $tr->{param};
-        output( turn_restriction => { comment => $tr->{comment}, opts => \%opts } );
+        $writer->output( turn_restriction => { comment => $tr->{comment}, opts => \%opts } );
     }
 
     return;
@@ -1714,7 +1704,7 @@ sub WritePOI {
         $opts{$key} = convert_string($param{$key});
     }
 
-    output( point => { comment => $comment, opts => \%opts } );
+    $writer->output( point => { comment => $comment, opts => \%opts } );
 
     return;
 }
@@ -1804,7 +1794,7 @@ sub WriteLine {
         $opts{$key} = convert_string( $param{$key} );
     }
 
-    output( polyline => { comment => $comment, opts => \%opts } );
+    $writer->output( polyline => { comment => $comment, opts => \%opts } );
     return;
 }
 
@@ -2078,7 +2068,7 @@ sub WritePolygon {
         $opts{$key} = convert_string( $param{$key} );
     }
 
-    output( polygon => { comment => $comment, opts => \%opts } );
+    $writer->output( polygon => { comment => $comment, opts => \%opts } );
 
     return;
 }
@@ -2453,29 +2443,15 @@ sub action_load_barrier {
 sub report {
     my ( $msg, $type ) = @_;
     $type ||= 'ERROR';
-    output( info => { text => "$type: $msg" } );
+    $writer->output( info => { text => "$type: $msg" } );
     return;
 }
 
 
 sub print_section {
     my ($title) = @_;
-    output( section => { text => "### $title" } );
+    $writer->output( section => { text => "### $title" } );
     return;
-}
-
-
-sub output {
-    my ( $template, $data ) = @_;
-    my $group = $multiout && $output_fn ? $data->{$multiout} || $data->{opts}->{$multiout} || q{} : q{};
-    unless( $out->{$group} ) {
-        my $fn = $output_fn;
-        $fn =~ s/ (?<= . ) ( \. .* $ | $ ) /.$group$1/xms   if $group;
-        open $out->{$group}, ">:$binmode", $fn;
-        $ttc->print( $out->{$group}, header => { opts => $mp_opts, ($multiout // q{}) => $group, version => $VERSION } );
-    }
-
-    $ttc->print( $out->{$group}, $template => $data );
 }
 
 
