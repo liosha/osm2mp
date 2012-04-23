@@ -20,7 +20,6 @@ use Template::Context;
 
 Create writer instance
 Options:
-    output => $base_file_name,
     multiout => $selector_field,
     filters => \@filter_name_list,
     templates => { tt_name => $tt_text, ... },
@@ -53,8 +52,8 @@ sub new {
         my $filter_package = "Template::Plugin::Filter::$filter";
         eval "require $filter"
             or eval "require $filter_package"
-            or die $@;
-        
+            or croak $@;
+
         my $filter_object = $filter_package->new( $ttc );
         $filter_object->init( $filter );
     }
@@ -76,10 +75,6 @@ sub new {
     while ( my ($tt_name, $tt_text) = each %{ $opt{templates} || {} } ) {
         $ttp->store( $tt_name, $ttc->template( \$tt_text ) );
     }
-
-    my $output_base = $opt{output} ~~ '-' ? q{} : $opt{output} // q{};
-    $output_base =~ s/ \.mp $ //xms;
-    $self->{output_base} = $output_base;
 
     return bless $self, $class;
 }
@@ -112,7 +107,10 @@ sub output {
 
     if ( !$fh ) {
         if ( $self->{output_base} ) {
-            my $filename = join q{.}, grep {length $_} ( $self->{output_base}, $group, 'mp' );
+            my $filename = $self->{output_base};
+            if ( $group ) {
+                $filename =~ s/( \. \w+ )? $/$group$1/xms;
+            }
             open $fh, '>', $filename;
         }
         else {
@@ -144,6 +142,32 @@ sub finalize {
 
     return;
 }
+
+
+
+
+=method get_getopt()
+
+=cut
+
+sub get_getopt {
+    my ($self) = @_;
+    return (
+        'o|output=s' => sub { $self->{output_base} = $_[1] ~~ '-' ? q{} : $_[1] // q{} },
+    );
+}
+
+
+=method get_usage()
+
+=cut
+
+sub get_usage {
+    return (
+        [ 'o|output' => 'output file', 'stdout' ],
+    );
+}
+
 
 1;
 

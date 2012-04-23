@@ -94,7 +94,6 @@ my $values = $settings{Values} // {};
 
 
 
-my $output_fn;
 my $multiout;
 my $mp_opts         = {};
 
@@ -186,9 +185,20 @@ my %yesno   = %{ $settings{yesno} || {} };
 my %taglist = %{ $settings{taglist} || {} }; 
 
 
+
+####    Initializing writer
+
+my $writer = WriterTT->new(
+    binmode => $binmode,
+    multiout => $multiout,
+    filters => \@filters,
+    templates => $settings{output},
+);
+
+
+
 # second pass: tuning
 GetOptions (
-    'output|o=s'        => \$output_fn,
     'multiout=s'        => \$multiout,
 
     'mp-header=s%'      => sub { $mp_opts->{$_[1]} = $_[2] },
@@ -198,6 +208,7 @@ GetOptions (
     'filter|filters=s@' => \@filters,
 
     _get_settings_getopt(),
+    $writer->get_getopt(),
     
     'transport=s'       => \$transport_mode,
 
@@ -254,17 +265,6 @@ my %transport_code = (
 );
 $transport_mode = $transport_code{ $transport_mode }
     if defined $transport_mode && exists $transport_code{ $transport_mode };
-
-
-####    Initializing writer
-
-my $writer = WriterTT->new(
-    output => $output_fn,
-    binmode => $binmode,
-    multiout => $multiout,
-    filters => \@filters,
-    templates => $settings{output},
-);
 
 
 
@@ -1414,7 +1414,9 @@ sub _get_settings_getopt {
 sub _get_usage {
     my ($key, $descr, $val) = @_;
     $key =~ s/_/-/gx;
-    return sprintf " --%-23s %-42s [%s]\n", $key, $descr, $val;
+    return sprintf(' --%-23s %-42s', $key, $descr)
+        . ( length $val ? sprintf(' [%s]', $val) : q{} )
+        . "\n";
 }
 
 sub _get_flag_usage {
@@ -1446,7 +1448,6 @@ Available options [defaults]:
  --load-settings <file>    extra settings
  --load-features <file>    extra features
 
- --output <file>           output to file                    [${\( $output_fn || 'stdout' )}]
  --multiout <key>          write output to multiple files    [${\( $multiout  || 'off' )}]
  --mp-header <key>=<value> MP header values
 
@@ -1469,6 +1470,8 @@ Flags (use --no-<option> to disable):
 ${\( join q{}, map { _get_flag_usage(@$_) } @available_flags )}
 Values:
 ${\( join q{}, map { _get_value_usage(@$_) } @available_values )}
+Writer options:
+${\( join q{}, map { _get_usage(@$_) } $writer->get_usage() )}
 
 END_USAGE
 
