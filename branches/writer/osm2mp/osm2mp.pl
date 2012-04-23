@@ -59,7 +59,6 @@ use Math::Polygon::Tree  0.041  qw{ polygon_centroid };
 use Tree::R;
 
 use OSM;
-use WriterTT;
 use FeatureConfig;
 use AreaTree;
 use Boundary;
@@ -94,11 +93,11 @@ my $values = $settings{Values} // {};
 
 
 
-my $mp_opts         = {};
 
+
+my @filters         = ();
 my $ttable          = q{};
 my $text_filter     = q{};
-my @filters         = ();
 
 my $bbox;
 my $bpolyfile;
@@ -187,18 +186,27 @@ my %taglist = %{ $settings{taglist} || {} };
 
 ####    Initializing writer
 
-my $writer = WriterTT->new(
-    binmode => $binmode,
-    filters => \@filters,
-    templates => $settings{output},
+my $writer_class = $settings{Writer}->{module}
+    or croak 'Writer is undefined';
+eval "require $writer_class"
+    or croak "Unable to initialize writer $writer_class";
+
+for my $key ( keys %{ $settings{Writer} } ) {
+    next if $key !~ /_file$/xms;
+    $settings{Writer}->{$key} = File::Spec->catpath($cfgvol, $cfgdir, $settings{Writer}->{$key});
+}
+
+my $writer = $writer_class->new( %{ $settings{Writer} },
+#    binmode => $binmode,
+#    filters => \@filters,
+#    templates => $settings{output},
 );
 
 
 
-# second pass: tuning
+
+# Command-line second pass: tuning
 GetOptions (
-    'mp-header=s%'      => sub { $mp_opts->{$_[1]} = $_[2] },
-    
     'ttable=s'          => \$ttable,
     'textfilter=s'      => sub { eval "require $_[1]" or eval "require PerlIO::via::$_[1]" or die $@; $text_filter .= ":via($_[1])"; },
     'filter|filters=s@' => \@filters,
@@ -222,8 +230,6 @@ GetOptions (
     'nametaglist=s'     => sub { push @ARGV, '--namelist', "label=$_[1]" },
     'translit'          => sub { push @ARGV, '--filter', 'translit', '--codepage', '1252' },
     'upcase'            => sub { push @ARGV, '--filter', 'upcase' },
-    'mapid=s'           => sub { push @ARGV, '--mp-header', "ID=$_[1]" },
-    'mapname=s'         => sub { push @ARGV, '--mp-header', "Name=$_[1]" },
 );
 
 
@@ -232,7 +238,7 @@ usage() unless (@ARGV);
 
 $values->{codepage} ||= 'utf8';
 if ( $values->{codepage} =~ / ^ (?: cp | win (?: dows )? )? -? ( \d{3,} ) $ /ixms ) {
-    $mp_opts->{CodePage} = $1;
+#    $mp_opts->{CodePage} = $1;
     $values->{codepage} = "cp$1";
 }
 
@@ -1443,8 +1449,6 @@ Available options [defaults]:
  --config <file>           main configuration file
  --load-settings <file>    extra settings
  --load-features <file>    extra features
-
- --mp-header <key>=<value> MP header values
 
  --filter <name>           use TT filter (standard, plugin or predefined)
  --textfilter <layer>      (obsolete) use extra output filter PerlIO::via::<layer>

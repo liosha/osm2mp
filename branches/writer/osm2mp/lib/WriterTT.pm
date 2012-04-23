@@ -14,12 +14,15 @@ use autodie;
 
 use Carp;
 use Template::Context;
+use YAML;
 
 
 =method new( param => $value )
 
 Create writer instance
 Options:
+    templates_file
+    codepage
     filters => \@filter_name_list,
     templates => { tt_name => $tt_text, ... },
 
@@ -27,13 +30,23 @@ Options:
 
 sub new {
     my ($class, %opt) = @_;
+    
+    my $self = { output => {} };
+    my $ttc = $self->{tt_context} = Template::Context->new();
 
-    my $self = {
-        output   => {},
-    };
+    ##  Read options, preload templates
+    my $cfg_file = $opt{templates_file} || $opt{config_file};
+    if ( $cfg_file ) {
+        my %cfg = YAML::LoadFile($cfg_file);
 
-    my $ttc = Template::Context->new();
-    $self->{tt_context} = $ttc;
+        my $templates = $cfg{output} || $cfg{templates} || {};
+        my $ttp = $ttc->{LOAD_TEMPLATES}->[0];
+        $ttp->{STAT_TTL} = 2**31;
+        while ( my ($tt_name, $tt_text) = each %$templates ) {
+            $ttp->store( $tt_name, $ttc->template( \$tt_text ) );
+        }
+    }
+
 
     ##  Initialize filters
     my $ttf = $ttc->{LOAD_FILTERS}->[0];
@@ -64,15 +77,6 @@ sub new {
             }
             return $text;
         });
-
-
-    ##  Initialize template blocks
-    my $ttp = $ttc->{LOAD_TEMPLATES}->[0];
-
-    $ttp->{STAT_TTL} = 2**31;
-    while ( my ($tt_name, $tt_text) = each %{ $opt{templates} || {} } ) {
-        $ttp->store( $tt_name, $ttc->template( \$tt_text ) );
-    }
 
     return bless $self, $class;
 }
@@ -116,7 +120,7 @@ sub output {
         }
         binmode $fh, $self->{binmode} || ':utf8';
         $self->{output}->{$group} = $fh;
-        print {$fh} $self->_process( header => { $multiout => $group } ); # opts => $mp_opts, version => $VERSION
+        print {$fh} $self->_process( header => { $multiout => $group, opts => $self->{header_opts} } ); # version => $VERSION
     }
 
     print {$fh} $self->_process( $template => $data );
@@ -151,8 +155,11 @@ sub finalize {
 sub get_getopt {
     my ($self) = @_;
     return (
-        'o|output=s' => sub { $self->{output_base} = $_[1] ~~ '-' ? q{} : $_[1] // q{} },
-        'multiout=s' => \$self->{multiout},
+        'o|output=s'            => sub { $self->{output_base} = $_[1] ~~ '-' ? q{} : $_[1] // q{} },
+        'multiout=s'            => \$self->{multiout},
+        'header|mp-header=s%'   => sub { $self->{header_opts}->{$_[1]} = $_[2] },
+        'mapid=s'               => sub { $self->{header_opts}->{ID} = $_[1] },
+        'mapname=s'             => sub { $self->{header_opts}->{Name} = $_[1] },
     );
 }
 
@@ -165,6 +172,7 @@ sub get_usage {
     return (
         [ 'o|output' => 'output file', 'stdout' ],
         [ multiout   => 'multiwriter base field (experimental)' ],
+        [ 'header <key>=<val>' => 'extra header options' ],
     );
 }
 
