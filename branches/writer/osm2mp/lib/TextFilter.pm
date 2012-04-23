@@ -8,9 +8,11 @@ package TextFilter;
 use 5.010;
 use strict;
 use warnings;
+use utf8;
 
 use autodie;
 use Carp;
+use Encode;
 
 
 our %PREDEFINED_FILTER = (
@@ -52,6 +54,31 @@ sub add_filter {
     return;
 }
 
+
+=method add_perlio_filter
+
+    $filter_chain->add_perlio_filter( $filter );
+
+wrapper for perlio filters - slow!
+
+=cut
+
+sub add_perlio_filter {
+    my ($self, $perlio) = @_;
+    my $package = "PerlIO::via::$perlio";
+
+    eval "require $package" or eval "require $perlio"
+        or croak "Invalid perlio filter: $package";
+
+    return $self->add_filter( sub {
+            my $dump = q{};
+            open my $fh, ">:utf8:via($perlio):utf8", \$dump;
+            print {$fh} shift();
+            close $fh;
+
+            return decode 'utf8', $dump;
+        });
+}
 
 =method apply
 

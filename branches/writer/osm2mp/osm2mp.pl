@@ -94,7 +94,6 @@ my $values = $settings{Values} // {};
 
 
 my $ttable          = q{};
-my $text_filter     = q{};
 
 my $bbox;
 my $bpolyfile;
@@ -201,7 +200,6 @@ my $writer = $writer_class->new( %{ $settings{Writer} }, version => $VERSION );
 # Command-line second pass: tuning
 GetOptions (
     'ttable=s'          => \$ttable,
-    'textfilter=s'      => sub { eval "require $_[1]" or eval "require PerlIO::via::$_[1]" or die $@; $text_filter .= ":via($_[1])"; },
 
     _get_settings_getopt(),
     $writer->get_getopt(),
@@ -225,8 +223,6 @@ GetOptions (
 
 usage() unless (@ARGV);
 
-
-#my $binmode = "encoding($values->{codepage})$text_filter:utf8";
 
 
 my $cmap;

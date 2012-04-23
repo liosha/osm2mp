@@ -66,36 +66,6 @@ sub new {
     my $ttf = $ttc->{LOAD_FILTERS}->[0];
     $ttf->store( mp_filter => sub { $filter_chain->apply(@_) } );
 
-
-=old
-    # predefined 
-    $ttf->store( 'upcase',   sub {  my $text = uc shift;  $text =~ s/ \b 0X (?=\w)/0x/xms;  return $text;  } );
-    $ttf->store( 'translit', sub {  require Text::Unidecode; return Text::Unidecode::unidecode( shift );  } );
-
-    # custom plugins
-    for my $filter ( @{ $opt{filters} || [] } ) {
-        my ($filter_sub) = $ttf->fetch( $filter );
-        next if $filter_sub;
-        
-        my $filter_package = "Template::Plugin::Filter::$filter";
-        eval "require $filter"
-            or eval "require $filter_package"
-            or croak $@;
-
-        my $filter_object = $filter_package->new( $ttc );
-        $filter_object->init( $filter );
-    }
-
-    # master filter chain
-    $ttf->store( 'mp_filter', sub {
-            my $text = shift;
-            for my $filter ( @{ $opt{filters} || [] } ) {
-                $text = $ttf->fetch($filter)->($text);
-            }
-            return $text;
-        });
-=cut
-
     return $self;
 }
 
@@ -213,6 +183,7 @@ sub get_getopt {
         'filter=s'              => sub { $self->{filter_chain}->add_filter( $_[1] ) },
         'upcase!'               => sub { $self->{filter_chain}->add_filter( 'upcase' ) },
         'translit!'             => sub { $self->{filter_chain}->add_filter( 'translit' ) },
+        'perlio-filter|textfilter=s' => sub { $self->{filter_chain}->add_perlio_filter( $_[1] ) },
     );
 }
 
@@ -231,6 +202,7 @@ sub get_usage {
         [ 'filter <name>' => 'add predefined filter' ],
         [ 'upcase' => 'same as --filter upcase' ],
         [ 'translit' => 'same as --filter translit' ],
+        [ 'perlio-filter' => 'use perlio via-layer as filter' ],
     );
 }
 
