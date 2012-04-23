@@ -1180,12 +1180,6 @@ sub convert_string {
         $cmap->( $str );
     }
 
-    $str =~ s/\&#(\d+)\;/chr($1)/ge;
-    $str =~ s/\&amp\;/\&/gi;
-    $str =~ s/\&apos\;/\'/gi;
-    $str =~ s/\&quot\;/\"/gi;
-    $str =~ s/\&[\d\w]+\;//gi;
-
     $str =~ s/[\?\"\<\>\*]/ /g;
     $str =~ s/[\x00-\x1F]//g;
 
@@ -1443,9 +1437,9 @@ Available options [defaults]:
  --ttable <file>           character conversion table
  --namelist <key>=<list>   comma-separated list of tags to select names
 
- --defaultcity <name>      default city for addresses        [${ \($default_city    // '') }]
- --defaultregion <name>    default region                    [${ \($default_region  // '') }]
- --defaultcountry <name>   default country                   [${ \($default_country // '') }]
+ --defaultcity <name>      default city for addresses
+ --defaultregion <name>    default region
+ --defaultcountry <name>   default country
 
  --transport <mode>        single transport mode
 

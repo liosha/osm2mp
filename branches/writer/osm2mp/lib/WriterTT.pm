@@ -28,7 +28,6 @@ Options:
     version
 
     filters => \@filter_name_list,
-    templates => { tt_name => $tt_text, ... },
 
 =cut
 
