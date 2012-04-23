@@ -34,7 +34,7 @@ use warnings;
 use utf8;
 use autodie;
 
-our $VERSION = '1.00-1';
+our $VERSION = '1.01_2';
 
 
 
@@ -1405,26 +1405,27 @@ Usage:  osm2mp.pl [options] file.osm
 
 Available options [defaults]:
 
+Configuration:
  --config <file>           main configuration file
  --load-settings <file>    extra settings
  --load-features <file>    extra features
-
- --namelist <key>=<list>   comma-separated list of tags to select names
-
- --defaultcity <name>      default city for addresses
- --defaultregion <name>    default region
- --defaultcountry <name>   default country
-
- --transport <mode>        single transport mode
-
- --bpoly <poly-file>       use bounding polygon from .poly-file
- --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
- --osmbbox                 use bounds from .osm
 
 Flags (use --no-<option> to disable):
 ${\( join q{}, map { _get_flag_usage(@$_) } @available_flags )}
 Values:
 ${\( join q{}, map { _get_value_usage(@$_) } @available_values )}
+Boundaries:
+ --bpoly <poly-file>       use bounding polygon from .poly-file
+ --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
+ --osmbbox                 use bounds from .osm
+
+Other options:
+ --namelist <key>=<list>   comma-separated list of tags to select names
+ --transport <mode>        single transport mode
+ --defaultcity <name>      default city for addresses
+ --defaultregion <name>    default region
+ --defaultcountry <name>   default country
+
 Writer options:
 ${\( join q{}, map { _get_usage(@$_) } $writer->get_usage() )}
 
