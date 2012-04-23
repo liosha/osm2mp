@@ -25,7 +25,7 @@ header: |
   Copyright=OpenStreetMap project contributors under CC-BY-SA
  
   LblCoding=9
-  CodePage=[% opts.exists('CodePage') ? opts.CodePage : 'utf8'; opts.delete('CodePage') %]
+  CodePage=[% opts.exists('CodePage') ? opts.CodePage : '65001'; opts.delete('CodePage') %]
   
   [% # default zoomlevels
     levels = [ 24, 22, 20, 18, 16, 15 ]; -%]

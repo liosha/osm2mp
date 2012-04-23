@@ -34,7 +34,7 @@ use warnings;
 use utf8;
 use autodie;
 
-our $VERSION = '1.00-1';
+our $VERSION = '1.01_2';
 
 
 
@@ -59,7 +59,6 @@ use Math::Polygon::Tree  0.041  qw{ polygon_centroid };
 use Tree::R;
 
 use OSM;
-use WriterTT;
 use FeatureConfig;
 use AreaTree;
 use Boundary;
@@ -93,14 +92,6 @@ my $values = $settings{Values} // {};
 
 
 
-
-my $output_fn;
-my $multiout;
-my $mp_opts         = {};
-
-my $ttable          = q{};
-my $text_filter     = q{};
-my @filters         = ();
 
 my $bbox;
 my $bpolyfile;
@@ -186,18 +177,28 @@ my %yesno   = %{ $settings{yesno} || {} };
 my %taglist = %{ $settings{taglist} || {} }; 
 
 
-# second pass: tuning
+
+####    Initializing writer
+
+my $writer_class = $settings{Writer}->{module}
+    or croak 'Writer is undefined';
+eval "require $writer_class"
+    or croak "Unable to initialize writer $writer_class";
+
+for my $key ( keys %{ $settings{Writer} } ) {
+    next if $key !~ /_file$/xms;
+    $settings{Writer}->{$key} = File::Spec->catpath($cfgvol, $cfgdir, $settings{Writer}->{$key});
+}
+
+my $writer = $writer_class->new( %{ $settings{Writer} }, version => $VERSION );
+
+
+
+
+# Command-line second pass: tuning
 GetOptions (
-    'output|o=s'        => \$output_fn,
-    'multiout=s'        => \$multiout,
-
-    'mp-header=s%'      => sub { $mp_opts->{$_[1]} = $_[2] },
-    
-    'ttable=s'          => \$ttable,
-    'textfilter=s'      => sub { eval "require $_[1]" or eval "require PerlIO::via::$_[1]" or die $@; $text_filter .= ":via($_[1])"; },
-    'filter|filters=s@' => \@filters,
-
     _get_settings_getopt(),
+    $writer->get_getopt(),
     
     'transport=s'       => \$transport_mode,
 
@@ -213,30 +214,12 @@ GetOptions (
 
     # obsolete, for backward compatibility
     'nametaglist=s'     => sub { push @ARGV, '--namelist', "label=$_[1]" },
-    'translit'          => sub { push @ARGV, '--filter', 'translit', '--codepage', '1252' },
-    'upcase'            => sub { push @ARGV, '--filter', 'upcase' },
-    'mapid=s'           => sub { push @ARGV, '--mp-header', "ID=$_[1]" },
-    'mapname=s'         => sub { push @ARGV, '--mp-header', "Name=$_[1]" },
 );
 
 
 usage() unless (@ARGV);
 
 
-$values->{codepage} ||= 'utf8';
-if ( $values->{codepage} =~ / ^ (?: cp | win (?: dows )? )? -? ( \d{3,} ) $ /ixms ) {
-    $mp_opts->{CodePage} = $1;
-    $values->{codepage} = "cp$1";
-}
-
-my $binmode = "encoding($values->{codepage})$text_filter:utf8";
-
-
-my $cmap;
-if ( $ttable ) {
-    $cmap = do $ttable;
-    die unless $cmap;
-}
 
 my %transport_code = (
     emergency   => 0,
@@ -254,11 +237,6 @@ my %transport_code = (
 );
 $transport_mode = $transport_code{ $transport_mode }
     if defined $transport_mode && exists $transport_code{ $transport_mode };
-
-
-####    Preparing templates
-
-my $ttc = WriterTT->new( filters => \@filters, templates => $settings{output} );
 
 
 
@@ -316,19 +294,6 @@ if ($bbox || $bpolyfile) {
     }
 
     printf STDERR "  %d segments\n", scalar @{ $bound->get_points() } - 1;
-}
-
-
-
-####    Creating simple multiwriter output
-
-$mp_opts->{DefaultCityCountry} = rename_country($mp_opts->{DefaultCityCountry}) if $mp_opts->{DefaultCityCountry};
-
-my $out = {};
-if ( !$output_fn ) {
-    $out->{q{}} = *STDOUT{IO};
-    binmode $out->{q{}}, $binmode;
-    $ttc->print( $out->{q{}}, header => { opts => $mp_opts, version => $VERSION } );
 }
 
 
@@ -513,7 +478,7 @@ while ( my ($id, $tags) = each %$nodetag ) {
             tag     => $tags,
         });
 }
-my $countpoi = $ttc->{_count}->{point} // 0;
+my $countpoi = $writer->{_count}->{point} // 0;
 printf STDERR "  %d POI written\n", $countpoi;
 printf STDERR "  %d POI loaded for addressing\n", scalar keys %poi      if $flags->{addr_from_poly};
 printf STDERR "  %d building entrances loaded\n", scalar keys %entrance if $flags->{navitel};
@@ -534,9 +499,9 @@ while ( my ($id, $tags) = each %$waytag ) {
     $ft_config->process( ways  => $objinfo );
     $ft_config->process( nodes => $objinfo )  if $flags->{make_poi};
 }
-printf STDERR "  %d POI written\n", ($ttc->{_count}->{point} // 0) - $countpoi;
-printf STDERR "  %d lines written\n", $ttc->{_count}->{polyline} // 0;
-printf STDERR "  %d polygons written\n", $ttc->{_count}->{polygon} // 0;
+printf STDERR "  %d POI written\n", ($writer->{_count}->{point} // 0) - $countpoi;
+printf STDERR "  %d lines written\n", $writer->{_count}->{polyline} // 0;
+printf STDERR "  %d polygons written\n", $writer->{_count}->{polygon} // 0;
 printf STDERR "  %d roads loaded\n", scalar keys %road                      if $flags->{routing};
 printf STDERR "  %d coastlines loaded\n", scalar keys %{$coast->{lines}}    if $flags->{shorelines};
 
@@ -1171,12 +1136,9 @@ if ( $flags->{routing} && ( $flags->{restrictions} || $flags->{dest_signs} || $f
 
 
 
-
-for my $file ( keys %$out ) {
-    $ttc->print( $out->{$file}, footer => {} );
-}
-
 print STDERR "\nAll done!!\n\n";
+
+$writer->finalize();
 exit 0;
 
 
@@ -1194,16 +1156,6 @@ sub convert_string {
 
     my ($str) = @_;
     return q{}     unless $str;
-
-    if ( $cmap ) {
-        $cmap->( $str );
-    }
-
-    $str =~ s/\&#(\d+)\;/chr($1)/ge;
-    $str =~ s/\&amp\;/\&/gi;
-    $str =~ s/\&apos\;/\'/gi;
-    $str =~ s/\&quot\;/\"/gi;
-    $str =~ s/\&[\d\w]+\;//gi;
 
     $str =~ s/[\?\"\<\>\*]/ /g;
     $str =~ s/[\x00-\x1F]//g;
@@ -1332,7 +1284,7 @@ sub write_turn_restriction {            # \%trest
     }
 
     unless ( ${nodid{$tr->{node}}} ) {
-        output( comment => { text => "$tr->{comment}\nOutside boundaries" } );
+        $writer->output( comment => { text => "$tr->{comment}\nOutside boundaries" } );
         return;
     }
 
@@ -1346,11 +1298,11 @@ sub write_turn_restriction {            # \%trest
 
     if ( $tr->{type} eq 'sign' ) {
         $opts{param} = "T,$tr->{name}";
-        output( destination_sign => { comment => $tr->{comment}, opts => \%opts } );
+        $writer->output( destination_sign => { comment => $tr->{comment}, opts => \%opts } );
     }
     else {
         $opts{param} = $tr->{param}    if $tr->{param};
-        output( turn_restriction => { comment => $tr->{comment}, opts => \%opts } );
+        $writer->output( turn_restriction => { comment => $tr->{comment}, opts => \%opts } );
     }
 
     return;
@@ -1391,7 +1343,6 @@ my @available_flags = (
 );
 
 my @available_values = (
-    [ codepage          => 'character encoding' ],
     [ merge_cos         => 'max angle between roads to merge (cosine)' ],
     [ max_road_nodes    => 'maximum number of nodes in road' ],
     [ fix_close_dist    => 'minimum allowed routing segment length (m)' ],
@@ -1424,7 +1375,9 @@ sub _get_settings_getopt {
 sub _get_usage {
     my ($key, $descr, $val) = @_;
     $key =~ s/_/-/gx;
-    return sprintf " --%-23s %-42s [%s]\n", $key, $descr, $val;
+    return sprintf(' --%-23s %-42s', $key, $descr)
+        . ( length $val ? sprintf(' [%s]', $val) : q{} )
+        . "\n";
 }
 
 sub _get_flag_usage {
@@ -1452,33 +1405,29 @@ Usage:  osm2mp.pl [options] file.osm
 
 Available options [defaults]:
 
+Configuration:
  --config <file>           main configuration file
  --load-settings <file>    extra settings
  --load-features <file>    extra features
-
- --output <file>           output to file                    [${\( $output_fn || 'stdout' )}]
- --multiout <key>          write output to multiple files    [${\( $multiout  || 'off' )}]
- --mp-header <key>=<value> MP header values
-
- --filter <name>           use TT filter (standard, plugin or predefined)
- --textfilter <layer>      (obsolete) use extra output filter PerlIO::via::<layer>
- --ttable <file>           character conversion table
- --namelist <key>=<list>   comma-separated list of tags to select names
-
- --defaultcity <name>      default city for addresses        [${ \($default_city    // '') }]
- --defaultregion <name>    default region                    [${ \($default_region  // '') }]
- --defaultcountry <name>   default country                   [${ \($default_country // '') }]
-
- --transport <mode>        single transport mode
-
- --bpoly <poly-file>       use bounding polygon from .poly-file
- --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
- --osmbbox                 use bounds from .osm
 
 Flags (use --no-<option> to disable):
 ${\( join q{}, map { _get_flag_usage(@$_) } @available_flags )}
 Values:
 ${\( join q{}, map { _get_value_usage(@$_) } @available_values )}
+Boundaries:
+ --bpoly <poly-file>       use bounding polygon from .poly-file
+ --bbox <bbox>             comma-separated minlon,minlat,maxlon,maxlat
+ --osmbbox                 use bounds from .osm
+
+Other options:
+ --namelist <key>=<list>   comma-separated list of tags to select names
+ --transport <mode>        single transport mode
+ --defaultcity <name>      default city for addresses
+ --defaultregion <name>    default region
+ --defaultcountry <name>   default country
+
+Writer options:
+${\( join q{}, map { _get_usage(@$_) } $writer->get_usage() )}
 
 END_USAGE
 
@@ -1714,7 +1663,7 @@ sub WritePOI {
         $opts{$key} = convert_string($param{$key});
     }
 
-    output( point => { comment => $comment, opts => \%opts } );
+    $writer->output( point => { comment => $comment, opts => \%opts } );
 
     return;
 }
@@ -1804,7 +1753,7 @@ sub WriteLine {
         $opts{$key} = convert_string( $param{$key} );
     }
 
-    output( polyline => { comment => $comment, opts => \%opts } );
+    $writer->output( polyline => { comment => $comment, opts => \%opts } );
     return;
 }
 
@@ -2078,7 +2027,7 @@ sub WritePolygon {
         $opts{$key} = convert_string( $param{$key} );
     }
 
-    output( polygon => { comment => $comment, opts => \%opts } );
+    $writer->output( polygon => { comment => $comment, opts => \%opts } );
 
     return;
 }
@@ -2453,29 +2402,15 @@ sub action_load_barrier {
 sub report {
     my ( $msg, $type ) = @_;
     $type ||= 'ERROR';
-    output( info => { text => "$type: $msg" } );
+    $writer->output( info => { text => "$type: $msg" } );
     return;
 }
 
 
 sub print_section {
     my ($title) = @_;
-    output( section => { text => "### $title" } );
+    $writer->output( section => { text => "### $title" } );
     return;
-}
-
-
-sub output {
-    my ( $template, $data ) = @_;
-    my $group = $multiout && $output_fn ? $data->{$multiout} || $data->{opts}->{$multiout} || q{} : q{};
-    unless( $out->{$group} ) {
-        my $fn = $output_fn;
-        $fn =~ s/ (?<= . ) ( \. .* $ | $ ) /.$group$1/xms   if $group;
-        open $out->{$group}, ">:$binmode", $fn;
-        $ttc->print( $out->{$group}, header => { opts => $mp_opts, ($multiout // q{}) => $group, version => $VERSION } );
-    }
-
-    $ttc->print( $out->{$group}, $template => $data );
 }
 
 
