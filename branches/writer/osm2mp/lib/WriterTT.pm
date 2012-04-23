@@ -13,6 +13,8 @@ use warnings;
 use autodie;
 
 use Carp;
+
+use Encode;
 use Template::Context;
 use YAML;
 
@@ -23,6 +25,8 @@ Create writer instance
 Options:
     templates_file
     codepage
+    version
+
     filters => \@filter_name_list,
     templates => { tt_name => $tt_text, ... },
 
@@ -31,7 +35,7 @@ Options:
 sub new {
     my ($class, %opt) = @_;
     
-    my $self = { output => {} };
+    my $self = bless { output => {}, version => $opt{version} }, $class;
     my $ttc = $self->{tt_context} = Template::Context->new();
 
     ##  Read options, preload templates
@@ -46,6 +50,9 @@ sub new {
             $ttp->store( $tt_name, $ttc->template( \$tt_text ) );
         }
     }
+
+    $self->_register_codepage( $opt{codepage} );
+
 
 
     ##  Initialize filters
@@ -78,7 +85,7 @@ sub new {
             return $text;
         });
 
-    return bless $self, $class;
+    return $self;
 }
 
 
@@ -120,7 +127,11 @@ sub output {
         }
         binmode $fh, $self->{binmode} || ':utf8';
         $self->{output}->{$group} = $fh;
-        print {$fh} $self->_process( header => { $multiout => $group, opts => $self->{header_opts} } ); # version => $VERSION
+        print {$fh} $self->_process( header => {
+                $multiout => $group,
+                opts => { %{$self->{header_opts}} },
+                version => $self->{version},
+            } );
     }
 
     print {$fh} $self->_process( $template => $data );
@@ -146,6 +157,33 @@ sub finalize {
 }
 
 
+{
+my %enc_to_cp = (
+    ( map {($_ => 65001)} qw/ utf8 utf-8 / ),
+    ( map {/(cp(\d+))/xms}  grep {/^cp\d{3,}$/xms} Encode->encodings(':all') ),
+);
+my %cp_to_enc = reverse %enc_to_cp;
+
+sub _register_codepage {
+    my $self = shift;
+    my $cp = lc( shift || 'utf8' );
+
+    if ( $enc_to_cp{$cp} ) {
+        $self->{binmode} = ":encoding($cp)";
+        $self->{header_opts}->{CodePage} = $enc_to_cp{$cp};
+    }
+    elsif ( $cp_to_enc{$cp} ) {
+        $self->{binmode} = ":encoding($cp_to_enc{$cp})";
+        $self->{header_opts}->{CodePage} = $cp;
+    }
+    else {
+        croak "Unknown code page: $cp";
+    }
+    return;
+}
+}
+
+
 
 
 =method get_getopt()
@@ -160,6 +198,7 @@ sub get_getopt {
         'header|mp-header=s%'   => sub { $self->{header_opts}->{$_[1]} = $_[2] },
         'mapid=s'               => sub { $self->{header_opts}->{ID} = $_[1] },
         'mapname=s'             => sub { $self->{header_opts}->{Name} = $_[1] },
+        'codepage=s'            => sub { $self->_register_codepage( $_[1] ) },
     );
 }
 
@@ -169,10 +208,12 @@ sub get_getopt {
 =cut
 
 sub get_usage {
+    my ($self) = @_;
     return (
         [ 'o|output' => 'output file', 'stdout' ],
         [ multiout   => 'multiwriter base field (experimental)' ],
         [ 'header <key>=<val>' => 'extra header options' ],
+        [ 'codepage <num>' => 'output character encoding', $self->{header_opts}->{CodePage} // 'utf8' ],
     );
 }
 

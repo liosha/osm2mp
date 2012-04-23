@@ -93,8 +93,6 @@ my $values = $settings{Values} // {};
 
 
 
-
-
 my @filters         = ();
 my $ttable          = q{};
 my $text_filter     = q{};
@@ -196,11 +194,8 @@ for my $key ( keys %{ $settings{Writer} } ) {
     $settings{Writer}->{$key} = File::Spec->catpath($cfgvol, $cfgdir, $settings{Writer}->{$key});
 }
 
-my $writer = $writer_class->new( %{ $settings{Writer} },
-#    binmode => $binmode,
+my $writer = $writer_class->new( %{ $settings{Writer} }, version => $VERSION );
 #    filters => \@filters,
-#    templates => $settings{output},
-);
 
 
 
@@ -236,13 +231,7 @@ GetOptions (
 usage() unless (@ARGV);
 
 
-$values->{codepage} ||= 'utf8';
-if ( $values->{codepage} =~ / ^ (?: cp | win (?: dows )? )? -? ( \d{3,} ) $ /ixms ) {
-#    $mp_opts->{CodePage} = $1;
-    $values->{codepage} = "cp$1";
-}
-
-my $binmode = "encoding($values->{codepage})$text_filter:utf8";
+#my $binmode = "encoding($values->{codepage})$text_filter:utf8";
 
 
 my $cmap;
@@ -1383,7 +1372,6 @@ my @available_flags = (
 );
 
 my @available_values = (
-    [ codepage          => 'character encoding' ],
     [ merge_cos         => 'max angle between roads to merge (cosine)' ],
     [ max_road_nodes    => 'maximum number of nodes in road' ],
     [ fix_close_dist    => 'minimum allowed routing segment length (m)' ],
