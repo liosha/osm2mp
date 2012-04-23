@@ -93,8 +93,6 @@ my $values = $settings{Values} // {};
 
 
 
-my $ttable          = q{};
-
 my $bbox;
 my $bpolyfile;
 my $osmbbox;
@@ -199,8 +197,6 @@ my $writer = $writer_class->new( %{ $settings{Writer} }, version => $VERSION );
 
 # Command-line second pass: tuning
 GetOptions (
-    'ttable=s'          => \$ttable,
-
     _get_settings_getopt(),
     $writer->get_getopt(),
     
@@ -224,12 +220,6 @@ GetOptions (
 usage() unless (@ARGV);
 
 
-
-my $cmap;
-if ( $ttable ) {
-    $cmap = do $ttable;
-    die unless $cmap;
-}
 
 my %transport_code = (
     emergency   => 0,
@@ -1167,10 +1157,6 @@ sub convert_string {
     my ($str) = @_;
     return q{}     unless $str;
 
-    if ( $cmap ) {
-        $cmap->( $str );
-    }
-
     $str =~ s/[\?\"\<\>\*]/ /g;
     $str =~ s/[\x00-\x1F]//g;
 
@@ -1423,8 +1409,6 @@ Available options [defaults]:
  --load-settings <file>    extra settings
  --load-features <file>    extra features
 
- --textfilter <layer>      (obsolete) use extra output filter PerlIO::via::<layer>
- --ttable <file>           character conversion table
  --namelist <key>=<list>   comma-separated list of tags to select names
 
  --defaultcity <name>      default city for addresses

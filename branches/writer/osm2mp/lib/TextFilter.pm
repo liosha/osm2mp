@@ -80,6 +80,28 @@ sub add_perlio_filter {
         });
 }
 
+
+=method add_table_filter
+
+    $filter_chain->add_table_filter( $filename );
+    $filter_chain->add_table_filter( { $bad_letter => $good_letter, ... } );
+
+=cut
+
+sub add_table_filter {
+    my ($self, $table) = @_;
+
+    if ( !ref $table ) {
+        require YAML;
+        $table = YAML::LoadFile( $table );
+    }
+
+    return $self->add_filter( sub {
+            return join q{}, map { $table->{$_} // $_ } unpack '(Z)*', shift;
+        });
+}
+
+
 =method apply
 
     my $filtered_text = $filter_chain->apply( $text );
