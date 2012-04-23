@@ -93,7 +93,6 @@ my $values = $settings{Values} // {};
 
 
 
-my @filters         = ();
 my $ttable          = q{};
 my $text_filter     = q{};
 
@@ -195,7 +194,6 @@ for my $key ( keys %{ $settings{Writer} } ) {
 }
 
 my $writer = $writer_class->new( %{ $settings{Writer} }, version => $VERSION );
-#    filters => \@filters,
 
 
 
@@ -204,7 +202,6 @@ my $writer = $writer_class->new( %{ $settings{Writer} }, version => $VERSION );
 GetOptions (
     'ttable=s'          => \$ttable,
     'textfilter=s'      => sub { eval "require $_[1]" or eval "require PerlIO::via::$_[1]" or die $@; $text_filter .= ":via($_[1])"; },
-    'filter|filters=s@' => \@filters,
 
     _get_settings_getopt(),
     $writer->get_getopt(),
@@ -223,8 +220,6 @@ GetOptions (
 
     # obsolete, for backward compatibility
     'nametaglist=s'     => sub { push @ARGV, '--namelist', "label=$_[1]" },
-    'translit'          => sub { push @ARGV, '--filter', 'translit', '--codepage', '1252' },
-    'upcase'            => sub { push @ARGV, '--filter', 'upcase' },
 );
 
 
@@ -1432,7 +1427,6 @@ Available options [defaults]:
  --load-settings <file>    extra settings
  --load-features <file>    extra features
 
- --filter <name>           use TT filter (standard, plugin or predefined)
  --textfilter <layer>      (obsolete) use extra output filter PerlIO::via::<layer>
  --ttable <file>           character conversion table
  --namelist <key>=<list>   comma-separated list of tags to select names

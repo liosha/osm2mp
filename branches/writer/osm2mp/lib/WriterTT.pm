@@ -18,6 +18,8 @@ use Encode;
 use Template::Context;
 use YAML;
 
+use TextFilter;
+
 
 =method new( param => $value )
 
@@ -50,13 +52,22 @@ sub new {
         }
     }
 
+    ##  Encoding
     $self->_register_codepage( $opt{codepage} );
 
-
-
     ##  Initialize filters
-    my $ttf = $ttc->{LOAD_FILTERS}->[0];
+    $TextFilter::PREDEFINED_FILTER{upcase} = sub {
+        my $text = uc shift;
+        $text =~ s/ \b 0X (?=\w)/0x/xms;
+        return $text;
+    };
 
+    my $filter_chain = $self->{filter_chain} = TextFilter->new();
+    my $ttf = $ttc->{LOAD_FILTERS}->[0];
+    $ttf->store( mp_filter => sub { $filter_chain->apply(@_) } );
+
+
+=old
     # predefined 
     $ttf->store( 'upcase',   sub {  my $text = uc shift;  $text =~ s/ \b 0X (?=\w)/0x/xms;  return $text;  } );
     $ttf->store( 'translit', sub {  require Text::Unidecode; return Text::Unidecode::unidecode( shift );  } );
@@ -83,6 +94,7 @@ sub new {
             }
             return $text;
         });
+=cut
 
     return $self;
 }
@@ -198,6 +210,9 @@ sub get_getopt {
         'mapid=s'               => sub { $self->{header_opts}->{ID} = $_[1] },
         'mapname=s'             => sub { $self->{header_opts}->{Name} = $_[1] },
         'codepage=s'            => sub { $self->_register_codepage( $_[1] ) },
+        'filter=s'              => sub { $self->{filter_chain}->add_filter( $_[1] ) },
+        'upcase!'               => sub { $self->{filter_chain}->add_filter( 'upcase' ) },
+        'translit!'             => sub { $self->{filter_chain}->add_filter( 'translit' ) },
     );
 }
 
@@ -213,6 +228,9 @@ sub get_usage {
         [ multiout   => 'multiwriter base field (experimental)' ],
         [ 'header <key>=<val>' => 'extra header options' ],
         [ 'codepage <num>' => 'output character encoding', $self->{header_opts}->{CodePage} // 'utf8' ],
+        [ 'filter <name>' => 'add predefined filter' ],
+        [ 'upcase' => 'same as --filter upcase' ],
+        [ 'translit' => 'same as --filter translit' ],
     );
 }
 
