@@ -94,7 +94,6 @@ my $values = $settings{Values} // {};
 
 
 
-my $multiout;
 my $mp_opts         = {};
 
 my $ttable          = q{};
@@ -190,7 +189,6 @@ my %taglist = %{ $settings{taglist} || {} };
 
 my $writer = WriterTT->new(
     binmode => $binmode,
-    multiout => $multiout,
     filters => \@filters,
     templates => $settings{output},
 );
@@ -199,8 +197,6 @@ my $writer = WriterTT->new(
 
 # second pass: tuning
 GetOptions (
-    'multiout=s'        => \$multiout,
-
     'mp-header=s%'      => sub { $mp_opts->{$_[1]} = $_[2] },
     
     'ttable=s'          => \$ttable,
@@ -1448,7 +1444,6 @@ Available options [defaults]:
  --load-settings <file>    extra settings
  --load-features <file>    extra features
 
- --multiout <key>          write output to multiple files    [${\( $multiout  || 'off' )}]
  --mp-header <key>=<value> MP header values
 
  --filter <name>           use TT filter (standard, plugin or predefined)

@@ -20,7 +20,6 @@ use Template::Context;
 
 Create writer instance
 Options:
-    multiout => $selector_field,
     filters => \@filter_name_list,
     templates => { tt_name => $tt_text, ... },
 
@@ -31,7 +30,6 @@ sub new {
 
     my $self = {
         output   => {},
-        multiout => $opt{multiout},
     };
 
     my $ttc = Template::Context->new();
@@ -108,8 +106,8 @@ sub output {
     if ( !$fh ) {
         if ( $self->{output_base} ) {
             my $filename = $self->{output_base};
-            if ( $group ) {
-                $filename =~ s/( \. \w+ )? $/$group$1/xms;
+            if ( length $group ) {
+                $filename =~ s/( \. \w+ )? $/.$group$1/xms;
             }
             open $fh, '>', $filename;
         }
@@ -154,6 +152,7 @@ sub get_getopt {
     my ($self) = @_;
     return (
         'o|output=s' => sub { $self->{output_base} = $_[1] ~~ '-' ? q{} : $_[1] // q{} },
+        'multiout=s' => \$self->{multiout},
     );
 }
 
@@ -165,6 +164,7 @@ sub get_getopt {
 sub get_usage {
     return (
         [ 'o|output' => 'output file', 'stdout' ],
+        [ multiout   => 'multiwriter base field (experimental)' ],
     );
 }
 
