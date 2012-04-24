@@ -72,7 +72,7 @@ if ( $filename ) {
     $osm_->load( read_file $filename );
 }
 else {
-    $osm_->load( $_ )  for map { download_relation($_) } @rel_ids;
+    download_relation($_)  for @rel_ids;
 }
 
 
@@ -329,9 +329,14 @@ sub download_relation {
     my $url = "$api/relation/$rel_id/full";
     my $data = http_get( $url, retry => 3 );
 
-    exit 1  if !$data;
+    if ( $data ) {
+        $osm_->load( $data );
+    }
+    else {
+        exit 1;
+    }
 
-    return $data;
+    return;
 }
 
 
