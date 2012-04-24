@@ -1,6 +1,11 @@
 #!/usr/bin/perl -w
 
+use 5.010;
 use strict;
+use warnings;
+use utf8;
+
+use Carp;
 
 use LWP::UserAgent;
 use Getopt::Long;
@@ -52,7 +57,7 @@ unless ( @ARGV ) {
 
 my ($rename) = eval{ LoadFile $alias_config };
 unless ( $rename ) {
-    warn "Unable to load aliases from $alias_config: $@" if $alias_config;
+    carp "Unable to load aliases from $alias_config: $@" if $alias_config;
     $rename = {};
 }
 
@@ -68,32 +73,7 @@ if ( $filename ) {
     push @osmdata, read_file $filename;
 }
 else {
-    for my $rel_id ( @rel_ids ) {
-        print STDERR "Downloading RelID=$rel_id..";
-
-        my $ua = LWP::UserAgent->new();
-        $ua->proxy( 'http', $proxy ) if $proxy;
-        $ua->default_header('Accept-Encoding' => 'gzip');
-        $ua->timeout( 300 );
-
-        my $req = HTTP::Request->new( GET => "$api/relation/$rel_id/full" );
-        my $res;
-
-        for my $attempt ( 1 .. 10 ) {
-            print STDERR q{.};
-            $res = $ua->request($req);
-            last if $res->is_success;
-        }
-
-        unless ( $res->is_success ) {
-            print STDERR "Failed\n";
-            exit;
-        }
-
-        print STDERR "  Ok\n";
-        gunzip \($res->content) => \my $reldata;
-        push @osmdata, $reldata;
-    }
+    push @osmdata, map { download_relation($_) } @rel_ids;
 }
 
 
@@ -132,7 +112,7 @@ for my $rel_id ( @rel_ids ) {
         my $role = $role{ $member->{role} }  or next;
     
         unless ( exists $osm{way}->{$member->{ref}} ) {
-            print STDERR "Incomplete data: way $member->{ref} is missing\n";
+            logg( "Incomplete data: way $member->{ref} is missing" );
             next;
         }
 
@@ -172,15 +152,15 @@ for my $rel_id ( @rel_ids ) {
                 $list_ref->[$pos] = [ @{$list_ref->[$pos]}, reverse @chain ];
                 next;
             }
-            print STDERR "Invalid data: ring is not closed\n";
-            print STDERR "Non-connecting chain:\n" . Dumper( \@chain );
+            logg( "Invalid data: ring is not closed" );
+            logg( "Non-connecting chain:\n" . Dumper( \@chain ) );
             exit;
         }
     }
 }
 
 unless ( exists $result{outer} ) {
-    print STDERR "Invalid data: no outer rings\n";
+    logg( "Invalid data: no outer rings" );
     exit;
 }
 
@@ -245,30 +225,30 @@ if ( $onering ) {
 
 ##  Output
 
-if ( $outfile ) {
-    open OUT, '>', $outfile;
-} 
-else {
-    *OUT = *STDOUT;
-}
+my $out = $outfile && $outfile ne q{-}
+    ? do { open my $fh, '>', $outfile; $fh }
+    : *STDOUT;
 
 my $rel = join q{+}, @rel_ids;
-print OUT "Relation $rel\n\n";
+print {$out} "Relation $rel\n\n";
 
 my $num = 1;
 for my $type ( 'outer', 'inner' ) {
     next unless exists $result{$type};
 
     for my $ring ( sort { scalar @$b <=> scalar @$a } @{$result{$type}} ) {
-        print OUT ( $type eq 'inner' ? q{-} : q{}) . $num++ . "\n";
+        print {$out} ( $type eq 'inner' ? q{-} : q{}) . $num++ . "\n";
         for my $point ( @$ring ) {
-            printf OUT "   %-11s  %-11s\n", @{$osm{node}->{$point}}{'lon','lat'};
+            printf {$out} "   %-11s  %-11s\n", @{$osm{node}->{$point}}{'lon','lat'};
         }
-        print OUT "END\n\n";
+        print {$out} "END\n\n";
     }
 }
 
-print OUT "END\n";
+print {$out} "END\n";
+close $out;
+
+exit;
 
 
 
@@ -308,4 +288,61 @@ sub centroid {
             ((min map { $_->[1] } @_) + (max map { $_->[1] } @_)) / 2 );
     }
     return ( $slon/$ssq , $slat/$ssq );
+}
+
+
+sub logg {
+    say STDERR @_;
+}
+
+
+##  HTTP functions
+
+sub _init_ua {
+    my $ua = LWP::UserAgent->new();
+    $ua->proxy( 'http', $proxy )    if $proxy;
+    $ua->default_header('Accept-Encoding' => 'gzip');
+    $ua->timeout( 300 );
+
+    return $ua;
+}
+
+
+sub http_get {
+    my ($url, %opt) = @_;
+    state $ua = _init_ua();
+    
+    logg $url;
+    my $req = HTTP::Request->new( GET => $url );
+
+    my $res;
+    for my $attempt ( 1 .. $opt{retry} || 1 ) {
+        logg "Attempt $attempt";
+        $res = $ua->request($req);
+        last if $res->is_success;
+    }
+
+    if ( !$res->is_success ) {
+        logg 'Failed';
+        return undef;
+    }
+
+    logg 'Ok';
+
+    gunzip \($res->content) => \my $data;
+    return $data;
+}
+
+
+sub download_relation {
+    my ($rel_id) = @_;
+
+    logg "Downloading RelID=$rel_id";
+
+    my $url = "$api/relation/$rel_id/full";
+    my $data = http_get( $url, retry => 3 );
+
+    exit 1  if !$data;
+
+    return $data;
 }
