@@ -9,7 +9,6 @@ use Carp;
 
 use LWP::UserAgent;
 use Getopt::Long;
-use XML::Simple;
 use List::Util qw{ min max sum };
 use List::MoreUtils qw{ first_index };
 use IO::Uncompress::Gunzip qw{ gunzip $GunzipError };
@@ -66,27 +65,14 @@ unless ( $rename ) {
 ####    Process
 
 my @rel_ids = map { $rename->{$_} // $_ } @ARGV;
-my @osmdata;
 
-# getting
+# getting and parsing
+my $osm_ = OSM->new();
 if ( $filename ) {
-    push @osmdata, read_file $filename;
+    $osm_->load( read_file $filename );
 }
 else {
-    push @osmdata, map { download_relation($_) } @rel_ids;
-}
-
-
-# parsing and preloading
-my %osm;
-for my $osmdata ( @osmdata ) {
-    my $osm = XMLin( $osmdata,
-            ForceArray  => 1,
-            KeyAttr     => [ 'id', 'k' ],
-        );
-    $osm{node}      = { %{$osm{node}     // {}},  %{$osm->{node}} };
-    $osm{way}       = { %{$osm{way}      // {}},  %{$osm->{way}} };
-    $osm{relation}  = { %{$osm{relation} // {}},  %{$osm->{relation}} };
+    $osm_->load( $_ )  for map { download_relation($_) } @rel_ids;
 }
 
 
@@ -104,19 +90,20 @@ my %result;
 
 
 for my $rel_id ( @rel_ids ) {
-    my $relation = $osm{relation}->{$rel_id};
+    my $relation = $osm_->{relations}->{$rel_id};
     my %ring;
 
     for my $member ( @{ $relation->{member} } ) {
         next unless $member->{type} eq 'way';
         my $role = $role{ $member->{role} }  or next;
     
-        unless ( exists $osm{way}->{$member->{ref}} ) {
-            logg( "Incomplete data: way $member->{ref} is missing" );
+        my $way_id = $member->{ref};
+        if ( !exists $osm_->{chains}->{$way_id} ) {
+            logg( "Incomplete data: way $way_id is missing" );
             next;
         }
 
-        push @{ $ring{$role} },  [ map { $_->{ref} } @{$osm{way}->{$member->{ref}}->{nd}} ];
+        push @{ $ring{$role} },  [ @{ $osm_->{chains}->{$way_id} } ];
     }
 
     while ( my ( $type, $list_ref ) = each %ring ) {
@@ -178,7 +165,7 @@ if ( $onering ) {
         while ( scalar @{$result{$type}} ) {
 
             # find close[st] points
-            my @ring_center = centroid( map { [@{$osm{node}->{$_}}{'lon','lat'}] } @ring );
+            my @ring_center = centroid( map { $osm_->{nodes}->{$_} } @ring );
             
             if ( $type eq 'inner' ) {
                 my ( $index_i, $dist ) = ( 0, metric( \@ring_center, $ring[0] ) );
@@ -187,16 +174,16 @@ if ( $onering ) {
                     next unless $tdist < $dist;
                     ( $index_i, $dist ) = ( $i, $tdist );
                 }
-                @ring_center = @{ $osm{node}->{ $ring[$index_i] } }{'lon','lat'};
+                @ring_center = @{ $osm_->{nodes}->{ $ring[$index_i] } };
             }
 
             $result{$type} = [ sort { 
-                    metric( \@ring_center, [centroid( map { [@{$osm{node}->{$_}}{'lon','lat'}] } @$a )] ) <=>
-                    metric( \@ring_center, [centroid( map { [@{$osm{node}->{$_}}{'lon','lat'}] } @$b )] )
+                    metric( \@ring_center, [centroid( map { $osm_->{nodes}->{$_} } @$a )] ) <=>
+                    metric( \@ring_center, [centroid( map { $osm_->{nodes}->{$_} } @$b )] )
                 } @{$result{$type}} ];
 
             my @add = @{ shift @{$result{$type}} };
-            my @add_center = centroid( map { [@{$osm{node}->{$_}}{'lon','lat'}] } @add );
+            my @add_center = centroid( map { $osm_->{nodes}->{$_} } @add );
 
             my ( $index_r, $dist ) = ( 0, metric( \@add_center, $ring[0] ) );
             for my $i ( 1 .. $#ring ) {
@@ -239,7 +226,7 @@ for my $type ( 'outer', 'inner' ) {
     for my $ring ( sort { scalar @$b <=> scalar @$a } @{$result{$type}} ) {
         print {$out} ( $type eq 'inner' ? q{-} : q{}) . $num++ . "\n";
         for my $point ( @$ring ) {
-            printf {$out} "   %-11s  %-11s\n", @{$osm{node}->{$point}}{'lon','lat'};
+            printf {$out} "   %-11s  %-11s\n", @{ $osm_->{nodes}->{$point} };
         }
         print {$out} "END\n\n";
     }
@@ -256,10 +243,10 @@ exit;
 sub metric {
     my ( $x1, $y1 ) = ref $_[0]
         ? @{ shift @_ }
-        : @{ $osm{node}->{ shift @_ } }{'lon','lat'};
+        : @{ $osm_->{nodes}->{ shift @_ } };
     my ( $x2, $y2 ) = ref $_[0]
         ? @{ shift @_ }
-        : @{ $osm{node}->{ shift @_ } }{'lon','lat'};
+        : @{ $osm_->{nodes}->{ shift @_ } };
 
     return (($x2-$x1)*cos( ($y2+$y1)/2/180*3.14159 ))**2 + ($y2-$y1)**2;
 }
@@ -346,3 +333,46 @@ sub download_relation {
 
     return $data;
 }
+
+
+##  OSM parser
+
+package OSM;
+
+use Geo::Openstreetmap::Parser;
+
+sub new {
+    my ($class, %opt) = @_;
+    my $self = bless {}, $class;
+
+    $self->{parser} = Geo::Openstreetmap::Parser->new(
+        node => sub {
+            my $attr = shift()->{attr};
+            $self->{nodes}->{ $attr->{id} } = [ $attr->{lon}, $attr->{lat} ];
+            return;
+        },
+        way => sub {
+            my $obj = shift();
+            my $id = $obj->{attr}->{id};
+            $self->{chains}->{$id} = $obj->{nd};
+            return;
+        },
+        relation => sub {
+            my $obj = shift();
+            my $id = $obj->{attr}->{id};
+            $self->{relations}->{$id} = $obj;
+            return;
+        },
+    );
+
+    return $self;
+}
+
+sub load {
+    my ($self, $xml) = @_;
+    open my $fh, '<', \$xml;
+    $self->{parser}->parse($fh);
+    close $fh;
+    return;
+}
+
