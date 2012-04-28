@@ -1462,7 +1462,7 @@ sub AddPOI {
     my ($obj) = @_;
     if ( $flags->{addr_from_poly} && $obj->{nodeid} && $obj->{contacts} && (!defined $obj->{inherit_address} || $yesno{$obj->{inherit_address}}) ) {
         my $id = $obj->{nodeid};
-        my @bbox = ( reverse split q{,}, $nodes->{$id} ) x 2;
+        my @bbox = ( reverse split q{,}, $obj->{latlon} ) x 2;
         push @{$poi{$id}}, $obj;
         $poi_rtree->insert( $id, @bbox );
     }
@@ -1474,39 +1474,31 @@ sub AddPOI {
 
 
 sub WritePOI {
-    my %param = %{$_[0]};
+    my ($info) = @_;
+    my $tags = $info->{tags} || {};
 
-    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
-
-    return  unless  exists $param{nodeid}  ||  exists $param{latlon};
-
-    my $comment = $param{comment} || q{};
-
-    while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $settings{comment}->{$key} && $yesno{$settings{comment}->{$key}};
-        $comment .= "\n$key = $val";
-    }
-
-    my $data = $param{latlon} || $nodes->{$param{nodeid}};
-    return unless $data;
-
-    my %opts = (
-        coords  => [ split /\s*,\s*/xms, $data ],
-        lzoom   => $param{level_l} || '0',
-        hzoom   => $param{level_h} || '0',
-        Type    => $param{type},
+    my $comment = join qq{\n}, grep {length $_} (
+        $info->{comment},
+        map { "$_ = $tags->{$_}" }  grep { $settings{comment}->{$_} }  keys %$tags,
     );
 
-    my $label = defined $param{name} ? $param{name} : q{};
+    my %opts = (
+        coords  => [ split /\s*,\s*/xms, $info->{latlon} ],
+        lzoom   => $info->{level_l} || '0',
+        hzoom   => $info->{level_h} || '0',
+        Type    => $info->{type},
+    );
 
-    if ( exists $param{ele} && exists $tag{'ele'} ) {
-        $label .= '~[0x1f]' . $tag{'ele'};
+    my $label = $info->{name} // q{};
+
+    if ( exists $info->{ele} && exists $tags->{'ele'} ) {
+        $label .= '~[0x1f]' . $tags->{'ele'};
     }
-    if ( $flags->{transport_stops} && exists $param{transport} ) {
+    if ( $flags->{transport_stops} && exists $info->{transport} ) {
         my @stops;
-        @stops = ( @{ $trstop{$param{nodeid}} } )
-            if exists $param{nodeid}  &&  exists $trstop{$param{nodeid}};
-        push @stops, split( /\s*[,;]\s*/, $tag{'route_ref'} )   if exists $tag{'route_ref'};
+        @stops = ( @{ $trstop{$info->{nodeid}} } )
+            if exists $info->{nodeid}  &&  exists $trstop{$info->{nodeid}};
+        push @stops, split( /\s*[,;]\s*/, $tags->{'route_ref'} )   if exists $tags->{'route_ref'};
         @stops = uniq @stops;
         $label .= q{ (} . join( q{,}, sort {
                 my $aa = extract_number($a);
@@ -1518,11 +1510,11 @@ sub WritePOI {
     $opts{Label}    = convert_string( $label )  if $label;
 
     # region and country - for cities
-    if ( $label && $param{city} && !$param{contacts} ) {
-        my $country = name_from_list( 'country', $param{tags} );
-        my $region  = name_from_list( 'region', $param{tags} );
-        $region .= " $tag{'addr:district'}"         if $tag{'addr:district'};
-        $region .= " $tag{'addr:subdistrict'}"      if $tag{'addr:subdistrict'};
+    if ( $label && $info->{city} && !$info->{contacts} ) {
+        my $country = name_from_list( 'country', $info->{tags} );
+        my $region  = name_from_list( 'region', $info->{tags} );
+        $region .= " $tags->{'addr:district'}"         if $tags->{'addr:district'};
+        $region .= " $tags->{'addr:subdistrict'}"      if $tags->{'addr:subdistrict'};
 
         $region  ||= $default_region;
         $country ||= $default_country;
@@ -1533,14 +1525,14 @@ sub WritePOI {
     }
 
     # contact information: address, phone
-    if ( $flags->{poi_contacts}  &&  $param{contacts} ) {
-        my $city = FindCity( $param{nodeid} || $param{latlon} );
+    if ( $flags->{poi_contacts}  &&  $info->{contacts} ) {
+        my $city = FindCity( $info->{latlon} );
 
-        if ( !$city && $flags->{full_karlsruhe} && $tag{'addr:city'} ) {
+        if ( !$city && $flags->{full_karlsruhe} && $tags->{'addr:city'} ) {
             $city = {
-                name    => $tag{'addr:city'},
-                region  => name_from_list( 'region', \%tag )  || $default_region,
-                country => name_from_list( 'country', \%tag ) || $default_country,
+                name    => $tags->{'addr:city'},
+                region  => name_from_list( 'region', $tags )  || $default_region,
+                country => name_from_list( 'country', $tags ) || $default_country,
              };
         }
 
@@ -1558,19 +1550,19 @@ sub WritePOI {
             $opts{CountryName} = convert_string( $default_country ) if $default_country;
         }
 
-        my $housenumber = $param{housenumber} || name_from_list( 'house', \%tag );
+        my $housenumber = $info->{housenumber} || name_from_list( 'house', $tags );
         $opts{HouseNumber} = convert_string( $housenumber )     if $housenumber;
 
-        my $street = $param{street} || $tag{'addr:street'} || ( $city ? $city->{name} : $default_city );
+        my $street = $info->{street} || $tags->{'addr:street'} || ( $city ? $city->{name} : $default_city );
         if ( $street ) {
-            my $suburb = FindSuburb( \%tag, $param{nodeid} || $param{latlon} );
+            my $suburb = FindSuburb( $tags, $info->{latlon} );
             $street .= " ($suburb)"      if $suburb;
             $opts{StreetDesc} = convert_string( $street );
         }
 
-        $opts{Zip}      = convert_string($tag{'addr:postcode'})   if $tag{'addr:postcode'};
-        $opts{Phone}    = convert_string($tag{'phone'})           if $tag{'phone'};
-        $opts{WebPage}  = convert_string($tag{'website'})         if $tag{'website'};
+        $opts{Zip}      = convert_string($tags->{'addr:postcode'})   if $tags->{'addr:postcode'};
+        $opts{Phone}    = convert_string($tags->{'phone'})           if $tags->{'phone'};
+        $opts{WebPage}  = convert_string($tags->{'website'})         if $tags->{'website'};
     }
 
     # marine data
@@ -1615,26 +1607,26 @@ sub WritePOI {
     );
 
     ## Buoys
-    if ( $flags->{marine}  &&  $param{marine_buoy} ) {
-        if ( my $buoy_type = ( $tag{'buoy'} or $tag{'beacon'} ) ) {
+    if ( $flags->{marine}  &&  $info->{marine_buoy} ) {
+        if ( my $buoy_type = ( $tags->{'buoy'} or $tags->{'beacon'} ) ) {
             $opts{FoundationColor} = $buoy_color{$buoy_type};
         }
-        if ( my $buoy_light = ( $tag{'light:colour'} or $tag{'seamark:light:colour'} ) ) {
+        if ( my $buoy_light = ( $tags->{'light:colour'} or $tags->{'seamark:light:colour'} ) ) {
             $opts{Light} = $light_color{$buoy_light};
         }
-        if ( my $light_type = ( $tag{'light:character'} or $tag{'seamark:light:character'} ) ) {
+        if ( my $light_type = ( $tags->{'light:character'} or $tags->{'seamark:light:character'} ) ) {
             ( $light_type ) = split /[\(\. ]/, $light_type;
             $opts{LightType} = $light_type{$light_type};
         }
     }
 
     ## Lights
-    if ( $flags->{marine}  &&  $param{marine_light} ) {
+    if ( $flags->{marine}  &&  $info->{marine_light} ) {
         my @sectors =
             sort { $a->[1] <=> $b->[1] }
                 grep { $_->[3] }
-                    map { [ split q{:}, $tag{$_} ] }
-                        grep { /seamark:light:\d/ } keys %tag;
+                    map { [ split q{:}, $tags->{$_} ] }
+                        grep { /seamark:light:\d/ } keys %$tags;
         my $scount = scalar @sectors;
         for my $i ( 0 .. $scount-1 ) {
             if ( $sectors[$i]->[2] != $sectors[($i+1) % $scount]->[1] ) {
@@ -1647,24 +1639,23 @@ sub WritePOI {
                 sort { $a->[1] <=> $b->[1] } @sectors
             );
 
-        my $light_type = ( $tag{'light:character'} or $tag{'seamark:light:character'} or 'isophase' );
+        my $light_type = ( $tags->{'light:character'} or $tags->{'seamark:light:character'} or 'isophase' );
         ( $light_type ) = split /[\(\. ]/, $light_type;
         $opts{LightType} = $light_type{$light_type}     if $light_type{$light_type};
 
-        for my $sector ( grep { /seamark:light:\d/ } keys %tag ) {
-            $comment .= "\n$sector -> $tag{$sector}";
+        for my $sector ( grep { /seamark:light:\d/ } keys %$tags ) {
+            $comment .= "\n$sector -> $tags->{$sector}";
         }
     }
 
     # other parameters - capital first letter!
-    for my $key ( keys %param ) {
+    for my $key ( keys %$info ) {
         next unless $key =~ / ^ _* [A-Z] /xms;
-        delete $opts{$key} and next     if  !defined $param{$key} || $param{$key} eq q{};
-        $opts{$key} = convert_string($param{$key});
+        delete $opts{$key} and next     if  !defined $info->{$key} || $info->{$key} eq q{};
+        $opts{$key} = convert_string($info->{$key});
     }
 
     $writer->output( point => { comment => $comment, opts => \%opts } );
-
     return;
 }
 
@@ -2335,9 +2326,10 @@ sub action_write_poi {
 
     my $info = _get_result_object_params($obj, $action);
 
-    my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $nodes->{$obj->{id}} );
+    my $id = $obj->{id};
+    my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $nodes->{$id} );
     if ( !$latlon && $obj->{type} eq 'Way' ) {
-        my $outer = $mpoly->{$obj->{id}} ? $mpoly->{$obj->{id}}->[0]->[0] : $chains->{$obj->{id}};
+        my $outer = $mpoly->{$id} ? $mpoly->{$id}->[0]->[0] : $chains->{$id};
         my $entrance_node = first { exists $main_entrance{$_} } @$outer;
         $latlon = $entrance_node
             ? $nodes->{$entrance_node}
@@ -2347,7 +2339,7 @@ sub action_write_poi {
     return  unless $latlon && is_inside_bounds( $latlon );
 
     $info->{latlon} = $latlon;
-    $info->{nodeid} = $obj->{id}  if $obj->{type} eq 'Node';
+    $info->{nodeid} = $id  if $obj->{type} eq 'Node';
 
     AddPOI ($info);
     return;
