@@ -52,6 +52,15 @@ sub new {
         }
     }
 
+    # Extra header values
+    if ( my $header = $opt{header} ) {
+        $header = [ $header ]  if !ref $header;
+        for my $header_opt ( @$header ) {
+            my ($key, $val) = split /\s* = \s*/xms, $header_opt, 2;
+            $self->{header_opts}->{$key} = $val;
+        }
+    }
+
     ##  Encoding
     $self->_register_codepage( $opt{codepage} );
 

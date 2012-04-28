@@ -40,7 +40,7 @@ header: |
         POINumberFirst='N'
         MG='Y'
         POIIndex='Y'
-        Routing='Y'
+        Routing='N'
         Elevation='M'
         Preprocess='F'
         TreSize='3000'
