@@ -183,7 +183,7 @@ my %taglist = %{ $settings{taglist} || {} };
 my $writer_class = $settings{Writer}->{module}
     or croak 'Writer is undefined';
 eval "require $writer_class"
-    or croak "Unable to initialize writer $writer_class";
+    or croak "Unable to initialize writer $writer_class: $@";
 
 for my $key ( keys %{ $settings{Writer} } ) {
     next if $key !~ /_file$/xms;
