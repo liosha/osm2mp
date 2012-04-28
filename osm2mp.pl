@@ -76,7 +76,7 @@ print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2012 liosha, x
 
 say STDERR "\nLoading configuration...";
 
-my $config_file     = "$Bin/cfg/garmin.cfg";
+my $config_file     = "$Bin/cfg/default.cfg";
 my %files;
 
 for ( @ARGV )  {  $_ = decode 'locale', $_;  }
