@@ -29,8 +29,6 @@ Options:
     codepage
     version
 
-    filters => \@filter_name_list,
-
 =cut
 
 sub new {

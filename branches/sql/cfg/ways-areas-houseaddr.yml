@@ -1,0 +1,20 @@
+--- ways
+---
+
+# POI addresses from houses
+
+- condition:
+    - building = *
+    - building != no
+    # kill fakes
+    - or:
+        - addr:housenumber = *
+        - and:
+            - height != *
+            - min_height != *
+            - building:height != *
+            - building:levels != *
+            - building:min_level != *
+  action:
+    - action: address_poi
+
