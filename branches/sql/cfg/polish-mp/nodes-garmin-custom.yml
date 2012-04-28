@@ -1,0 +1,49 @@
+
+
+--- nodes
+---
+
+##  Replaced rules
+
+- id:   railway_station
+  condition:
+    - railway = halt|station
+    - station != subway
+  action:
+    - action: write_poi
+      type: 0x2F17
+      contacts: yes
+    - action: write_poi
+      type: 0x11601
+      level_h: 1
+
+- id:   subway_station
+  condition:
+    - railway = subway_entrance
+  action:
+#    - action: write_poi
+#      type: 0x2F17
+#      contacts: yes
+    - action: write_poi
+      type: 0x11600
+
+#- condition:
+#    - railway = station
+#    - station = subway
+#  action:
+#    - action: write_poi
+#      type: 0x11600
+#      level_l: 1
+
+
+
+
+##  Various custom points
+
+- condition:
+    - highway = traffic_signals
+  action:
+    - action: write_poi
+      type: 0x011510
+      #Label: traffic light
+

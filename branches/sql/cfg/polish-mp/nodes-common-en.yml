@@ -1,0 +1,54 @@
+
+####    Russian label extensions
+
+--- nodes
+---
+
+- id: shoes_shop
+  condition:
+    - shop = shoes
+  action:
+    - action: write_poi
+      type: 0x2E07
+      contacts: yes
+      Label: %label (shoes)
+
+- id: books_shop
+  condition:
+    - shop = books
+  action:
+    - action: write_poi
+      type: 0x2E0A
+      contacts: yes
+      Label: %label (books)
+
+- id: bank
+  condition:
+    - amenity = bank
+    - atm != yes|1|true
+    - amenity != atm
+  action:
+    - action: write_poi
+      type: 0x2F06
+      contacts: yes
+
+- condition:
+    - amenity = bank
+    - or:
+        - atm = yes|1|true
+        - amenity = atm
+  action:
+    - action: write_poi
+      type: 0x2F06
+      contacts: yes
+      Label: %label (+atm)
+
+- condition:
+    - amenity = atm
+    - amenity != bank
+  action:
+    - action: write_poi
+      type: 0x2F06
+      contacts: yes
+      Label: %label (atm)
+

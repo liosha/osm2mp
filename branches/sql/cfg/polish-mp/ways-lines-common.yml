@@ -1,0 +1,133 @@
+--- ways
+---
+
+
+# Interpolated houses
+- condition:
+    - addr:interpolation = all|even|odd
+    - only_way
+  action:
+    - action: process_interpolation
+      type: 0x2800
+      contacts: yes        
+      Label: %house
+
+
+
+# Railways
+- id: railway
+  condition:
+    - railway = rail
+    - service != siding|spur|yard
+  action:
+    - action: write_line
+      type: 0x14
+      level_h: 2
+
+- id: service_railway
+  condition:
+    - or:
+        - and:
+            - railway = rail
+            - service = siding|yard
+        - railway = siding|yard
+  action:
+    - action: write_line
+      type: 0x14
+      level_h: 1
+
+- id: spur_railway
+  condition:
+    - or:
+        - and:
+            - railway = rail
+            - service = spur
+        - railway = spur
+  action:
+    - action: write_line
+      type: 0x14
+      level_h: 1
+
+- id: light_railway
+  condition:
+    - railway = narrow_gauge|light_rail
+  action:
+    - action: write_line
+      type: 0x14
+      level_h: 1
+
+
+
+# Water
+
+- condition:
+    - natural = coastline
+  action:
+    - action: load_coastline
+    - action: write_line
+      type: 0x15
+      level_h: 4
+
+- condition:
+    - waterway = stream|drain
+  action:
+    - action: write_line
+      type: 0x18
+      level_h: 1
+
+- condition:
+    - waterway = canal
+  action:
+    - action: write_line
+      type: 0x1f
+      level_h: 2
+
+- condition:
+    - waterway = river
+  action:
+    - action: write_line
+      type: 0x1f
+      level_h: 3
+
+- condition:
+    - waterway = ditch
+  action:
+    - action: write_line
+      type: 0x26
+      level_h: 1
+
+
+
+# Boundaries
+
+- condition:
+    - boundary = administrative
+    - admin_level = 2
+    - only_way
+  action:
+    - action: write_line
+      type: 0x1e
+      level_h: 4
+
+- condition:
+    - boundary = administrative
+    - admin_level = 3|4
+    - only_way
+  action:
+    - action: write_line
+      type: 0x1c
+      level_l: 2
+      level_h: 4
+
+- condition:
+    - boundary = administrative
+    - admin_level = 5|6
+    - only_way
+  action:
+    - action: write_line
+      type: 0x1d
+      level_l: 2
+      level_h: 3
+
+
+
