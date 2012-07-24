@@ -425,7 +425,6 @@ if ( $flags->{street_relations} ) {
     printf STDERR "  %d houses with associated street\n", scalar keys %street;
 }
 
-
 if ( $flags->{road_shields} ) {
     while ( my ($relation_id, $members) = each %{ $relations->{route} || {} } ) {
         my $tags = $reltag->{$relation_id};
@@ -1903,39 +1902,39 @@ sub AddRoad {
 
 sub WritePolygon {
 
-    my %param = %{$_[0]};
+    my ($param, $obj) = @_;
 
-    my %tag   = $param{tags} ? %{$param{tags}} : ();
+    my %tag   = $param->{tags} ? %{$param->{tags}} : ();
 
-    return  unless  $param{areas};
-    return  unless  @{$param{areas}};
+    return  unless  $param->{areas};
+    return  unless  @{$param->{areas}};
 
-    my $comment = $param{comment} || q{};
-    my $lzoom   = $param{level_l} || '0';
-    my $hzoom   = $param{level_h} || '0';
+    my $comment = $param->{comment} || q{};
+    my $lzoom   = $param->{level_l} || '0';
+    my $hzoom   = $param->{level_h} || '0';
 
     #   area-dependent zoomlevel
     if ( ref $hzoom ) {
         my $square = sum map { Math::Polygon::Calc::polygon_area( @$_ )
-                                * cos( [polygon_centroid( @{$param{areas}->[0]} )]->[1] / 180 * 3.14159 )
-                                * (40000/360)**2 } @{$param{areas}};
+                                * cos( [polygon_centroid( @{$param->{areas}->[0]} )]->[1] / 180 * 3.14159 )
+                                * (40000/360)**2 } @{$param->{areas}};
         $hzoom = $lzoom + last_index { $square >= $_ } @$hzoom;
         return if $hzoom < $lzoom;
-        $param{comment} .= "\narea: $square km2 -> $hzoom";
+        $param->{comment} .= "\narea: $square km2 -> $hzoom";
     }
 
     #   test if inside bounds
-    my @inside = map { $bound ? $bound->{tree}->contains_polygon_rough( $_ ) : 1 } @{$param{areas}};
+    my @inside = map { $bound ? $bound->{tree}->contains_polygon_rough( $_ ) : 1 } @{$param->{areas}};
     return      if all { defined && $_==0 } @inside;
 
     if ( $bound  &&  $flags->{less_gpc}  &&  any { !defined } @inside ) {
-        @inside = map { $bound->{tree}->contains_points( @$_ ) } @{$param{areas}};
+        @inside = map { $bound->{tree}->contains_points( @$_ ) } @{$param->{areas}};
         return  if all { defined && $_ == 0 } @inside;
     }
 
 
-    $param{holes} = []      unless $param{holes};
-    my @plist = grep { scalar @$_ > 3 } ( @{$param{areas}}, @{$param{holes}} );
+    $param->{holes} = []      unless $param->{holes};
+    my @plist = grep { scalar @$_ > 3 } ( @{$param->{areas}}, @{$param->{holes}} );
 
     # TODO: filter bad holes
 
@@ -1943,10 +1942,10 @@ sub WritePolygon {
     if ( $bound && any { !defined } @inside ) {
         my $gpc = new_gpc();
 
-        for my $area ( @{$param{areas}} ) {
+        for my $area ( @{$param->{areas}} ) {
             $gpc->add_polygon( $area, 0 );
         }
-        for my $hole ( @{$param{holes}} ) {
+        for my $hole ( @{$param->{holes}} ) {
             $gpc->add_polygon( $hole, 1 );
         }
 
@@ -1964,10 +1963,10 @@ sub WritePolygon {
     my %opts = (
         lzoom   => $lzoom || '0',
         hzoom   => $hzoom || '0',
-        Type    => $param{type},
+        Type    => $param->{type},
     );
     
-    $opts{Label} = convert_string( $param{name} )   if defined $param{name} && $param{name} ne q{};
+    $opts{Label} = convert_string( $param->{name} )   if defined $param->{name} && $param->{name} ne q{};
 
     ## Navitel
     if ( $flags->{navitel} ) {
@@ -1984,16 +1983,17 @@ sub WritePolygon {
                 };
             }
 
+            my $wayid = lc($obj->{type}) . q{:} . $obj->{id};
             my $street = $tag{'addr:street'};
-            #$street = $street{"way:$wayid"}     if exists $street{"way:$wayid"};
+            $street //= $street{$wayid};
             $street //= ( $city ? $city->{name} : $default_city );
-
+            
             my $suburb = FindSuburb( \%tag, $plist[0]->[0] );
             $street .= qq{ ($suburb)}      if $suburb;
 
             $opts{HouseNumber} = convert_string( $housenumber );
             $opts{StreetDesc}  = convert_string( $street )     if defined $street && $street ne q{};
-
+            
             if ( $city ) {
                 my $region  = $city->{region}  || $default_region;
                 my $country = $city->{country} || $default_country;
@@ -2010,7 +2010,7 @@ sub WritePolygon {
         }
 
         # entrances
-        for my $entr ( @{ $param{entrance} } ) {
+        for my $entr ( @{ $param->{entrance} } ) {
             next  if !is_inside_bounds( $entr->[0] );
             push @{$opts{EntryPoint}}, { coords => [ split /\s*,\s*/xms, $entr->[0] ], name => convert_string( $entr->[1] ) };
         }
@@ -2021,10 +2021,10 @@ sub WritePolygon {
         push @{ $opts{contours} }, [ map { [ reverse @{$_} ] } @$polygon ];
     }
 
-    for my $key ( keys %param ) {
+    for my $key ( keys %$param ) {
         next unless $key =~ /^_*[A-Z]/;
-        delete $opts{$key} and next if !defined $param{$key} || $param{$key} eq q{};
-        $opts{$key} = convert_string( $param{$key} );
+        delete $opts{$key} and next if !defined $param->{$key} || $param->{$key} eq q{};
+        $opts{$key} = convert_string( $param->{$key} );
     }
 
     $writer->output( polygon => { comment => $comment, opts => \%opts } );
@@ -2288,8 +2288,8 @@ sub action_write_polygon {
             @{$chains->{$id}}
         ];
     }
-    
-    WritePolygon( $info );
+
+    WritePolygon( $info, $obj );
     return;
 }
 
@@ -2315,8 +2315,8 @@ sub action_address_poi {
         my $housenumber = name_from_list( 'house', $obj->{tag} );
         my $street = $obj->{tag}->{'addr:street'};
 
-        my $street_id = "way:$obj->{id}";
-        $street = $street{$street_id}     if exists $street{$street_id};
+        my $street_id = lc($obj->{type}) . ":$obj->{id}";
+        $street //= $street{$street_id}     if exists $street{$street_id};
 
         for my $poiobj ( @{ $poi{$id} } ) {
             $poiobj->{street} ||= $street;
