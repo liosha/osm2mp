@@ -193,6 +193,7 @@ sub get_getopt {
         'upcase!'               => sub { $self->{filter_chain}->add_filter( 'upcase' ) },
         'translit!'             => sub { $self->{filter_chain}->add_filter( 'translit' ) },
         'perlio-filter|textfilter=s' => sub { $self->{filter_chain}->add_perlio_filter( $_[1] ) },
+        'gme-filter=s'          => sub { $self->{filter_chain}->add_gme_filter( $_[1] ) },
         'ttable=s'              => sub { $self->{filter_chain}->add_table_filter( $_[1] ) },
     );
 }
@@ -213,6 +214,7 @@ sub get_usage {
         [ 'upcase' => 'same as --filter upcase' ],
         [ 'translit' => 'same as --filter translit' ],
         [ 'perlio-filter' => 'use perlio via-layer as filter' ],
+        [ 'gme-filter' => 'use gpsmapedit transliteration table as filter' ],
         [ 'ttable' => 'character conversion table' ],
     );
 }
