@@ -527,7 +527,7 @@ if ( %poi ) {
 if ( $flags->{shorelines} ) {
     say STDERR "\nProcessing coastlines...";
 
-    my @sea_areas = $coast->generate_polygons( water_background => !!$flags->{waterback} );
+    my @sea_areas = $coast->generate_polygons( water_background => !!$flags->{water_back} );
 
     print_section( 'Sea areas generated from coastlines' );
     for my $sea_poly ( @sea_areas ) {
@@ -538,7 +538,7 @@ if ( $flags->{shorelines} ) {
             areas   => [ shift @$sea_poly ],
             holes   => $sea_poly,
         );
-        WritePolygon( \%objinfo );
+        WritePolygon( \%objinfo, undef, no_clip => 1 );
     }
     printf STDERR "  %d areas\n", scalar @sea_areas;
 }
@@ -1902,7 +1902,7 @@ sub AddRoad {
 
 sub WritePolygon {
 
-    my ($param, $obj) = @_;
+    my ($param, $obj, %opt) = @_;
 
     my %tag   = $param->{tags} ? %{$param->{tags}} : ();
 
@@ -1939,7 +1939,7 @@ sub WritePolygon {
     # TODO: filter bad holes
 
     #   clip
-    if ( $bound && any { !defined } @inside ) {
+    if ( $bound && !$opt{no_clip} && any { !defined } @inside ) {
         my $gpc = new_gpc();
 
         for my $area ( @{$param->{areas}} ) {

@@ -218,9 +218,11 @@ sub generate_polygons {
 
     my @lakesort = sort { scalar @{$coast->{$b}} <=> scalar @{$coast->{$a}} } keys %lake;
 
+
     ##  adding sea background
     if ( $opt{water_background} && @$bound && !$boundcross ) {
-        $lake{background} = Math::Polygon::Tree->new( @$bound );
+        $coast->{background} = $bound;
+        $lake{background} = Math::Polygon::Tree->new( $bound );
         unshift @lakesort, 'background';
     }
 
