@@ -130,9 +130,13 @@ sub add_gme_filter {
     }
     close $in;
 
-    my $re_text = join q{|}, map { quotemeta $_ } sort { length $b <=> length $a } keys %table;
-    
+    my $re_text;
     eval {
+        require Regexp::Assemble;
+        $re_text = Regexp::Assemble->new()->add( map { quotemeta $_ } keys %table )->re();
+    }
+    or eval {
+        $re_text = join q{|}, map { quotemeta $_ } sort { length $b <=> length $a } keys %table;
         require Regexp::Optimizer;
         $re_text = Regexp::Optimizer->new()->optimize($re_text);
     }; 
