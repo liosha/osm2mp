@@ -111,8 +111,6 @@ sub add_table_filter {
 sub add_gme_filter {
     my ($self, $file) = @_;
 
-    require Encode;
-    
     my $encoding = 'utf8';
     my %table;
 
@@ -132,10 +130,18 @@ sub add_gme_filter {
     }
     close $in;
 
-    my $re = join q{|}, map { quotemeta $_ } sort { length $b <=> length $a } keys %table;
+    my $re_text = join q{|}, map { quotemeta $_ } sort { length $b <=> length $a } keys %table;
+    
+    eval {
+        require Regexp::Optimizer;
+        $re_text = Regexp::Optimizer->new()->optimize($re_text);
+    }; 
+    
+    my $re = qr/($re_text)/;
+
     my $translator = sub {
         my ($str) = @_;
-        $str =~ s/($re)/$table{$1}/gxms;
+        $str =~ s/$re/$table{$1}/gxms;
         return $str;
     };
 
