@@ -102,6 +102,47 @@ sub add_table_filter {
 }
 
 
+=method add_gme_filter
+
+    $filter_chain->add_gme_filter( $filename );
+
+=cut
+
+sub add_gme_filter {
+    my ($self, $file) = @_;
+
+    require Encode;
+    
+    my $encoding = 'utf8';
+    my %table;
+
+    open my $in, '<', $file;
+    while ( defined( my $line = readline $in ) ) {
+        $line =~ s/ ^ \xEF \xBB \xBF //xms;
+        $line =~ s/ \s* $ //xms;
+
+        if ( my ($cp_code) = $line =~ / ^ \.CODEPAGE \s+ (\d+) /xms ) {
+            $encoding = "cp$cp_code";
+        }
+
+        next if $line =~ / ^ (?: \s | ; | \# | \. | $ ) /xms;
+
+        my ($from, $to) = split "\t", decode( $encoding, $line );
+        $table{$from} = $to;
+    }
+    close $in;
+
+    my $re = join q{|}, map { quotemeta $_ } sort { length $b <=> length $a } keys %table;
+    my $translator = sub {
+        my ($str) = @_;
+        $str =~ s/($re)/$table{$1}/gxms;
+        return $str;
+    };
+
+    return $self->add_filter( $translator );
+}
+
+
 =method apply
 
     my $filtered_text = $filter_chain->apply( $text );
