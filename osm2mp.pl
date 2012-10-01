@@ -417,7 +417,7 @@ if ( $flags->{street_relations} ) {
             next if !$street_name;
             
             for my $member ( @$members ) {
-                next if !( $member->{role} ~~ [ 'house', 'address' ] );
+                next if !( $member->{role} ~~ [ qw/ street house address / ] );
                 $street{"$member->{type}:$member->{ref}"} = $street_name;
             }
         }
@@ -494,6 +494,10 @@ while ( my ($id, $tags) = each %$waytag ) {
         id      => $id,
         tag     => $tags,
     };
+
+    if ( $flags->{street_relations} && $street{"way:$id"} ) {
+        $objinfo->{street} = $street{"way:$id"};
+    }
     
     $ft_config->process( ways  => $objinfo );
     $ft_config->process( nodes => $objinfo )  if $flags->{make_poi};
@@ -2165,6 +2169,7 @@ sub action_load_road {
     for my $part_no ( 0 .. $#parts ) {
         $info->{chain} = $parts[$part_no];
         $info->{id}    = "$id:$part_no";
+        $info->{name}  = $obj->{street}  if $obj->{street};
         AddRoad( $info );
     }
     return;
