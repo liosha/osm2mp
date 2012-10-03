@@ -1977,39 +1977,20 @@ sub WritePolygon {
         my $housenumber = name_from_list( 'house', \%tag );
 
         if ( $housenumber ) {
-            my $city = FindCity( $plist[0]->[0] );
-
-            if ( $flags->{full_karlsruhe} && !$city && $tag{'addr:city'} ) {
-                $city = {
-                    name    => $tag{'addr:city'},
-                    region  => name_from_list( 'region', \%tag )  || $default_region,
-                    country => name_from_list( 'country', \%tag ) || $default_country,
-                };
-            }
-
-            my $wayid = lc($obj->{type}) . q{:} . $obj->{id};
-            my $street = $tag{'addr:street'};
-            $street //= $street{$wayid};
-            $street //= ( $city ? $city->{name} : $default_city );
-            
-            my $suburb = FindSuburb( \%tag, $plist[0]->[0] );
-            $street .= qq{ ($suburb)}      if $suburb;
-
             $opts{HouseNumber} = convert_string( $housenumber );
-            $opts{StreetDesc}  = convert_string( $street )     if defined $street && $street ne q{};
-            
-            if ( $city ) {
-                my $region  = $city->{region}  || $default_region;
-                my $country = $city->{country} || $default_country;
 
-                $opts{CityName}    = convert_string( $city->{name} );
-                $opts{RegionName}  = convert_string( $region )  if $region;
-                $opts{CountryName} = convert_string( $country ) if $country;
-            }
-            elsif ( $default_city ) {
-                $opts{CityName}    = $default_city;
-                $opts{RegionName}  = convert_string( $default_region )  if $default_region;
-                $opts{CountryName} = convert_string( $default_country ) if $default_country;
+            my $address = _get_address( $obj, tag => \%tag, point => $plist[0]->[0] );
+
+            my %field = (
+                StreetDesc  => 'street',
+                CityName    => 'city',
+                RegionName  => 'region',
+                CountryName => 'country',
+            );
+
+            while ( my ($field, $a_field) = each %field ) {
+                next if !$address->{$a_field};
+                $opts{$field} = $address->{$a_field};
             }
         }
 
@@ -2425,5 +2406,65 @@ sub extract_number {
     my ($number) = $str =~ /^ ( [-+]? \d+ ) /x;
     return $number;
 }
-  
-  
+
+
+
+=head2 _get_address( $obj, %opt )
+
+Options:
+  * point
+  * tag (if no 'tag\ field in $obj)
+
+Address base fields:
+  * country
+  * region
+  * city
+  * street
+  * housenumber
+
+Extra fields should be joined with main fields
+
+=cut
+
+sub _get_address {
+
+    my ($obj, %opt) = @_;
+    my $tag = $opt{tag} || $obj->{tag};
+
+    # city
+    my $city_info;
+    if ( $opt{point} ) {
+        $city_info = FindCity( ref $opt{point} ? @{$opt{point}} : $opt{point} );
+    }
+
+    if ( !$city_info ) {
+        my $city = ( $flags->{full_karlsruhe} && $tag->{'addr:city'} ) || $default_city;
+        if ( $city ) {
+            $city_info = {
+                name    => $city,
+                region  => ( $flags->{full_karlsruhe} && name_from_list('region', $tag) ) || $default_region,
+                country => ( $flags->{full_karlsruhe} && name_from_list('country', $tag) ) || $default_country,
+            };
+        }
+    }
+
+    my %address = %{ $city_info || {} };
+    $address{city} = delete $address{name}  if $address{name};
+
+    # street    
+    my $obj_id = lc($obj->{type}) . q{:} . $obj->{id};
+
+    my @street = grep { $_ } (
+        $street{$obj_id} || $tag->{'addr:street'} || q{},  # main street name
+        $tag->{'addr:quarter'} || q{},                     # sub-street
+        FindSuburb( $tag, $opt{point} ) || q{},            # sub-city
+    );
+
+    push @street, $city_info->{name}  if !@street && $city_info;
+
+    if ( my $main_street = shift @street ) {
+        $address{street} = join q{ }, $main_street, map {"($_)"} @street;
+    }
+
+    return \%address;
+}
