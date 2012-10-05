@@ -413,12 +413,28 @@ if ( $flags->{street_relations} ) {
         next if !$list;
 
         while ( my ($relation_id, $members) = each %$list ) {
-            my $street_name = name_from_list( 'street', $reltag->{$relation_id} );
-            next if !$street_name;
-            
+            my %street_address;
+
+            # use street's name* as house's addr:street*
+            while ( my ($k, $v) = each %{$reltag->{$relation_id}} ) {
+                next if $k !~ m/ ^ name \b /xms;
+                $k =~ s/^name/addr:street/xms;
+                $street_address{$k} = $v;
+            }
+            while ( my ($k, $v) = each %{$reltag->{$relation_id}} ) {
+                next if $k !~ m/ ^ addr: /xms;
+                $street_address{$k} = $v;
+            }
+
+            # save all tags for street and just address for houses
             for my $member ( @$members ) {
-                next if !( $member->{role} ~~ [ qw/ street house address / ] );
-                $street{"$member->{type}:$member->{ref}"} = $street_name;
+                my $member_id = "$member->{type}:$member->{ref}";
+                if ( %street_address && $member->{role} ~~ [ qw/ house address / ] ) {
+                    $street{$member_id} = \%street_address;
+                }
+                elsif ( $member->{role} ~~ 'street' ) {
+                    $street{$member_id} = $reltag->{$relation_id};
+                }
             }
         }
     }
@@ -495,10 +511,6 @@ while ( my ($id, $tags) = each %$waytag ) {
         tag     => $tags,
     };
 
-    if ( $flags->{street_relations} && $street{"way:$id"} ) {
-        $objinfo->{street} = $street{"way:$id"};
-    }
-    
     $ft_config->process( ways  => $objinfo );
     $ft_config->process( nodes => $objinfo )  if $flags->{make_poi};
 }
@@ -958,21 +970,20 @@ if ( $flags->{routing} ) {
         $objinfo{StreetDesc}    = $name       if $name && $flags->{navitel};
         $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
 
-        if ( $road->{city} ) {
-            my $city = $road->{city};
-            my $region  = $city->{region}  || $default_region;
-            my $country = $city->{country} || $default_country;
+        if ( $road->{address} ) {
+            my %field = (
+                CityName    => 'city',
+                RegionName  => 'region',
+                CountryName => 'country',
+            );
+            
+            while ( my ($field, $a_field) = each %field ) {
+                my $value = $road->{address}->{$a_field};
+                next if !$value;
+                $objinfo{$field} = $value;
+            }
+        }
 
-            $objinfo{CityName}    = convert_string( $city->{name} );
-            $objinfo{RegionName}  = convert_string( $region )  if $region;
-            $objinfo{CountryName} = convert_string( $country ) if $country;
-        }
-        elsif ( $default_city ) {
-            $objinfo{CityName}    = $default_city;
-            $objinfo{RegionName}  = convert_string( $default_region )  if $default_region;
-            $objinfo{CountryName} = convert_string( $default_country ) if $default_country;
-        }
-        
         my @levelchain = ();
         my $prevlevel = 0;
         for my $i ( 0 .. $#{$road->{chain}} ) {
@@ -1452,7 +1463,7 @@ sub FindCity {
 
 sub FindSuburb {
     my $tags = shift;
-    my $suburb = $tags->{'addr:suburb'};
+    my $suburb = name_from_list(addr_suburb => $tags);
     return $suburb  if $suburb;
 
     my $suburb_object = _find_area( suburb => @_ );
@@ -1463,7 +1474,10 @@ sub FindSuburb {
 
 sub AddPOI {
     my ($obj) = @_;
-    if ( $flags->{addr_from_poly} && $obj->{nodeid} && $obj->{contacts} && (!defined $obj->{inherit_address} || $yesno{$obj->{inherit_address}}) ) {
+    if ( $flags->{addr_from_poly}
+        && $obj->{nodeid} && $obj->{contacts}
+        && (!defined $obj->{inherit_address} || $yesno{$obj->{inherit_address}})
+    ) {
         my $id = $obj->{nodeid};
         my @bbox = ( reverse split q{,}, $nodes->{$id} ) x 2;
         push @{$poi{$id}}, $obj;
@@ -1518,62 +1532,43 @@ sub WritePOI {
             } @stops ) . q{)}   if @stops;
     }
 
-    $opts{Label}    = convert_string( $label )  if $label;
+    $opts{Label} = convert_string( $label )  if $label;
+
+    my $address;
 
     # region and country - for cities
     if ( $label && $param{city} && !$param{contacts} ) {
-        my $country = name_from_list( 'country', $param{tags} );
-        my $region  = name_from_list( 'region', $param{tags} );
-        $region .= " $tag{'addr:district'}"         if $tag{'addr:district'};
-        $region .= " $tag{'addr:subdistrict'}"      if $tag{'addr:subdistrict'};
-
-        $region  ||= $default_region;
-        $country ||= $default_country;
-
+        $address = _get_city_address( \%tag, taglist => 'place' );
+        delete $address->{city}  if $address;
+        
         $opts{City} = 'Y';
-        $opts{RegionName}  = convert_string( $region )      if $region;
-        $opts{CountryName} = convert_string( $country )     if $country;
     }
 
     # contact information: address, phone
     if ( $flags->{poi_contacts}  &&  $param{contacts} ) {
-        my $city = FindCity( $param{nodeid} || $param{latlon} );
-
-        if ( !$city && $flags->{full_karlsruhe} && $tag{'addr:city'} ) {
-            $city = {
-                name    => $tag{'addr:city'},
-                region  => name_from_list( 'region', \%tag )  || $default_region,
-                country => name_from_list( 'country', \%tag ) || $default_country,
-             };
-        }
-
-        if ( $city ) {
-            my $region  = $city->{region}  || $default_region;
-            my $country = $city->{country} || $default_country;
-
-            $opts{CityName}    = convert_string( $city->{name} );
-            $opts{RegionName}  = convert_string( $region )  if $region;
-            $opts{CountryName} = convert_string( $country ) if $country;
-        }
-        elsif ( $default_city ) {
-            $opts{CityName}    = $default_city;
-            $opts{RegionName}  = convert_string( $default_region )  if $default_region;
-            $opts{CountryName} = convert_string( $default_country ) if $default_country;
-        }
+        $address = _get_address( \%param, tag => \%tag, point => ($param{nodeid} || $param{latlon}) );
 
         my $housenumber = $param{housenumber} || name_from_list( 'house', \%tag );
         $opts{HouseNumber} = convert_string( $housenumber )     if $housenumber;
 
-        my $street = $param{street} || $tag{'addr:street'} || ( $city ? $city->{name} : $default_city );
-        if ( $street ) {
-            my $suburb = FindSuburb( \%tag, $param{nodeid} || $param{latlon} );
-            $street .= " ($suburb)"      if $suburb;
-            $opts{StreetDesc} = convert_string( $street );
-        }
-
         $opts{Zip}      = convert_string($tag{'addr:postcode'})   if $tag{'addr:postcode'};
         $opts{Phone}    = convert_string($tag{'phone'})           if $tag{'phone'};
         $opts{WebPage}  = convert_string($tag{'website'})         if $tag{'website'};
+    }
+
+    if ( $address ) {
+        my %field = (
+            StreetDesc  => 'street',
+            CityName    => 'city',
+            RegionName  => 'region',
+            CountryName => 'country',
+        );
+
+        while ( my ($field, $a_field) = each %field ) {
+            my $value = $address->{$a_field} || $param{$a_field};
+            next if !$value;
+            $opts{$field} = $value;
+        }
     }
 
     # marine data
@@ -1778,10 +1773,15 @@ sub AddRoad {
     @rp[4..11] = CalcAccessRules( \%tag, [ @rp[4..11] ] );
 
     # determine city
-    my $city = FindCity(
-        $param{chain}->[ floor $#{$param{chain}}/3 ],
-        $param{chain}->[ ceil $#{$param{chain}}*2/3 ]
-    );
+    my @smart_points = map { $param{chain}->[$_] } ( floor($#{$param{chain}}/3), ceil($#{$param{chain}}*2/3) );
+    my $city = FindCity( @smart_points );
+
+    my $address = {};
+    if ( $param{name} ) {
+        $address = _get_address( { type => 'way', id => $orig_id },
+            points => \@smart_points, city => $city, tag => \%tag, street => $param{name},
+        );
+    }
 
     # calculate speed class
     my %speed_coef = (
@@ -1808,15 +1808,6 @@ sub AddRoad {
         $hlevel{ $param{chain}->[-1] } = $layer;
     }
 
-    # determine suburb
-    if ( $city && $param{name} ) {
-        my $suburb = FindSuburb( \%tag,
-            $param{chain}->[ floor $#{$param{chain}}/3 ],
-            $param{chain}->[ ceil $#{$param{chain}}*2/3 ]
-        );
-        $param{name} .= qq{ ($suburb)} if $suburb;
-    }
-
     # road shield
     if ( $flags->{road_shields}  &&  !$city ) {
         my @ref =
@@ -1825,19 +1816,12 @@ sub AddRoad {
         $param{name} = '~[0x06]' . join( q{ }, grep {$_} ( join(q{-}, uniq sort @ref), $param{name} ) )  if @ref;
     }
 
-    if ( $flags->{full_karlsruhe} && !$city && $tag{'addr:city'} ) {
-        $city = {
-            name    => $tag{'addr:city'},
-            region  => name_from_list( 'region', \%tag )  || $default_region,
-            country => name_from_list( 'country', \%tag ) || $default_country,
-        };
-    }
-
     # load road
     $road{$param{id}} = {
         #comment =>  $param{comment},
         type    =>  $param{type},
-        name    =>  $param{name},
+        name    =>  $address->{street},  # $param{name},
+        address =>  $address,
         chain   =>  $param{chain},
         level_l =>  $llev,
         level_h =>  $hlev,
@@ -2100,6 +2084,10 @@ sub _get_field_content {
 sub _get_result_object_params {
     my ($obj, $action) = @_;
 
+    if ( my $extra_tag = $street{ lc($obj->{type}) . q{:} . $obj->{id} } ) {
+        $obj->{tag} = { %{$obj->{tag}}, %$extra_tag };
+    }
+
     my %info = %$action;
     $info{name} //= '%label';
 
@@ -2112,8 +2100,6 @@ sub _get_result_object_params {
     
     $info{tags} = $obj->{tag};
     $info{comment} = "$obj->{type}ID = $obj->{id}";
-    $info{region} .= q{ } . $obj->{tag}->{'addr:district'}
-        if $info{region} && $obj->{tag}->{'addr:district'};
 
     return \%info;
 }
@@ -2138,7 +2124,7 @@ sub action_write_line {
 
 sub action_load_road {
     return action_write_line(@_)  if !$flags->{routing};
-    
+
     my ($obj, $action) = @_;
 
     my $id = $obj->{id};
@@ -2150,7 +2136,6 @@ sub action_load_road {
     for my $part_no ( 0 .. $#parts ) {
         $info->{chain} = $parts[$part_no];
         $info->{id}    = "$id:$part_no";
-        $info->{name}  = $obj->{street}  if $obj->{street};
         AddRoad( $info );
     }
     return;
@@ -2299,7 +2284,7 @@ sub action_address_poi {
         );
 
         my $housenumber = name_from_list( 'house', $obj->{tag} );
-        my $street = $obj->{tag}->{'addr:street'};
+        my $street = name_from_list(addr_street => $obj->{tag});
 
         my $street_id = lc($obj->{type}) . ":$obj->{id}";
         $street //= $street{$street_id}     if exists $street{$street_id};
@@ -2346,6 +2331,10 @@ sub _load_area {
     return if !$info->{name};
 
     return if $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1];
+
+    if ( $tree eq 'city' ) {
+        $info->{address} = _get_city_address($obj->{tag}, taglist => 'place');
+    }
 
     my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
     $search_area{$tree}->add_area( $info, @contours );
@@ -2412,8 +2401,10 @@ sub extract_number {
 =head2 _get_address( $obj, %opt )
 
 Options:
+  * city (don't search again)
   * point
-  * tag (if no 'tag\ field in $obj)
+  * tag (if no 'tag' field in $obj)
+  * street (main street name)
 
 Address base fields:
   * country
@@ -2429,42 +2420,74 @@ Extra fields should be joined with main fields
 sub _get_address {
 
     my ($obj, %opt) = @_;
-    my $tag = $opt{tag} || $obj->{tag};
+
+    my %tag = %{ $opt{tag} || $obj->{tag} || {} };
+
+    if ( $obj->{id} && $flags->{street_relations} ) {
+        my $obj_id = lc($obj->{type}) . q{:} . $obj->{id};
+        %tag = ( %tag, %{ $street{$obj_id} } )  if $street{$obj_id};
+    }
 
     # city
     my $city_info;
-    if ( $opt{point} ) {
-        $city_info = FindCity( ref $opt{point} ? @{$opt{point}} : $opt{point} );
+    my @point = grep { $_ } ( $opt{point}, @{ $opt{points} || [] } );
+    
+    $city_info = $opt{city}->{address}  if $opt{city};
+
+    if ( !$city_info && @point ) {
+        my $city = FindCity( @point );
+        $city_info = $city->{address}  if $city;
     }
 
-    if ( !$city_info ) {
-        my $city = ( $flags->{full_karlsruhe} && $tag->{'addr:city'} ) || $default_city;
-        if ( $city ) {
-            $city_info = {
-                name    => $city,
-                region  => ( $flags->{full_karlsruhe} && name_from_list('region', $tag) ) || $default_region,
-                country => ( $flags->{full_karlsruhe} && name_from_list('country', $tag) ) || $default_country,
-            };
-        }
+    if ( !$city_info && $flags->{full_karlsruhe} ) {
+        $city_info = _get_city_address( \%tag, taglist => 'addr_city' );
+    }
+
+    if ( !$city_info && $default_city ) {
+        $city_info = {
+            city    => $default_city,
+            region  => $default_region,
+            country => $default_country,
+        };
     }
 
     my %address = %{ $city_info || {} };
-    $address{city} = delete $address{name}  if $address{name};
 
     # street    
-    my $obj_id = lc($obj->{type}) . q{:} . $obj->{id};
-
     my @street = grep { $_ } (
-        $street{$obj_id} || $tag->{'addr:street'} || q{},  # main street name
-        $tag->{'addr:quarter'} || q{},                     # sub-street
-        FindSuburb( $tag, $opt{point} ) || q{},            # sub-city
+        $opt{street} || name_from_list(addr_street => \%tag) || q{},    # main street name
+        name_from_list(addr_quarter => \%tag) || q{},                   # sub-street
+        FindSuburb( \%tag, @point ) || q{},                             # sub-city
     );
 
-    push @street, $city_info->{name}  if !@street && $city_info;
+    push @street, $city_info->{city}  if !@street && !exists $opt{street} && $city_info;
 
     if ( my $main_street = shift @street ) {
         $address{street} = join q{ }, $main_street, map {"($_)"} @street;
     }
 
     return \%address;
+}
+
+
+sub _get_city_address {
+    my ($tag, %opt) = @_;
+
+    my $taglist = $opt{taglist}  or croak "No taglist";
+
+    my $city_name = name_from_list( $taglist => $tag )  || $default_city;
+    return if !$city_name;
+
+    my $region = join q{ }, grep { $_ }
+        map { name_from_list( $_ => $tag ) } 
+        qw/ region district subdistrict /;
+    $region ||= $default_region;
+
+    my $country = name_from_list( country => $tag) || $default_country;
+    
+    return {
+        city => $city_name,
+        ( $region  ? ( region  => $region )  : () ),
+        ( $country ? ( country => $country ) : () ),
+    };
 }
