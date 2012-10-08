@@ -34,7 +34,7 @@ use warnings;
 use utf8;
 use autodie;
 
-our $VERSION = '1.01_2';
+our $VERSION = '1.01_3';
 
 
 
@@ -208,7 +208,7 @@ GetOptions (
     'bpoly=s'           => \$bpolyfile,
     'osmbbox!'          => \$osmbbox,
 
-    'namelist=s%'       => sub { $taglist{$_[1]} = [ split /[ ,]+/, $_[2] ] },
+    'namelist|taglist=s%' => sub { $taglist{$_[1]} = [ split /[ ,]+/, $_[2] ] },
 
     # obsolete, for backward compatibility
     'nametaglist=s'     => sub { push @ARGV, '--namelist', "label=$_[1]" },
