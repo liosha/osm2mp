@@ -275,6 +275,7 @@ printf STDERR "  Multipolygons: %s\n", scalar keys %$mpoly;
 
 
 
+
 ####    Initializing bounds
 
 my $bound;
@@ -321,7 +322,6 @@ my %nodetr;
 my %hlevel;
 my %road_ref;
 my %trstop;
-my %street;
 
 
 ##  Process relations
@@ -405,37 +405,42 @@ if ( $flags->{routing} && $flags->{dest_signs} ) {
 
 
 if ( $flags->{street_relations} ) {
+    my $member_count;
     for my $type ( qw{ street associatedStreet } ) {
         my $list = $relations->{$type};
         next if !$list;
 
         while ( my ($relation_id, $members) = each %$list ) {
-            my %street_address;
 
-            # use street's name* as house's addr:street*
-            while ( my ($k, $v) = each %{$reltag->{$relation_id}} ) {
-                next if $k !~ m/ ^ name \b /xms;
-                $k =~ s/^name/addr:street/xms;
-                $street_address{$k} = $v;
-            }
-            while ( my ($k, $v) = each %{$reltag->{$relation_id}} ) {
-                next if $k !~ m/ ^ addr: /xms;
-                $street_address{$k} = $v;
+            # house tags: addr:* and street's name* as addr:street*
+            my %house_tag;
+            for my $k ( reverse sort keys %{$reltag->{$relation_id}} ) {    # 'name' before 'addr:*'!
+                (my $nk = $k) =~ s/^ name \b/addr:street/xms;
+                next if $nk !~ m/ ^ addr: /xms;
+                $house_tag{$nk} = $reltag->{$relation_id}->{$k};
             }
 
-            # save all tags for street and just address for houses
+            # street tags: all except 'type'
+            my %street_tag = %{$reltag->{$relation_id}};
+            delete $street_tag{type};
+
+            # add relation tags to members
             for my $member ( @$members ) {
-                my $member_id = "$member->{type}:$member->{ref}";
-                if ( %street_address && $member->{role} ~~ [ qw/ house address / ] ) {
-                    $street{$member_id} = \%street_address;
+                $member_count ++;
+                my ($type, $ref, $role) = @$member{ qw/ type ref role / };
+
+                my $tag_ref = $osm->{tags}->{$type}->{$ref} ||= {};
+
+                if ( %house_tag && $role ~~ [ qw/ house address / ] ) {
+                    %$tag_ref = ( %$tag_ref, %house_tag );
                 }
-                elsif ( $member->{role} ~~ 'street' ) {
-                    $street{$member_id} = $reltag->{$relation_id};
+                elsif ( %street_tag && $role ~~ 'street' ) {
+                    %$tag_ref = ( %$tag_ref, %street_tag );
                 }
             }
         }
     }
-    printf STDERR "  %d houses with associated street\n", scalar keys %street;
+    printf STDERR "  %d houses with associated street\n", $member_count;
 }
 
 if ( $flags->{road_shields} ) {
@@ -445,7 +450,7 @@ if ( $flags->{road_shields} ) {
 
         my @ref = grep {$_} @$tags{'ref', 'int_ref'};
         next if !@ref;
-        
+
         for my $member ( @$members ) {
             next if $member->{type} ne 'way';
             push @{$road_ref{$member->{ref}}}, @ref;
@@ -2071,10 +2076,6 @@ sub _get_field_content {
 sub _get_result_object_params {
     my ($obj, $action) = @_;
 
-    if ( my $extra_tag = $street{ lc($obj->{type}) . q{:} . $obj->{id} } ) {
-        $obj->{tag} = { %{$obj->{tag}}, %$extra_tag };
-    }
-
     my %info = %$action;
     $info{name} //= '%label';
 
@@ -2273,9 +2274,6 @@ sub action_address_poi {
         my $housenumber = name_from_list( 'house', $obj->{tag} );
         my $street = name_from_list(addr_street => $obj->{tag});
 
-        my $street_id = lc($obj->{type}) . ":$obj->{id}";
-        $street //= $street{$street_id}     if exists $street{$street_id};
-
         for my $poiobj ( @{ $poi{$id} } ) {
             $poiobj->{street} ||= $street;
             $poiobj->{housenumber} ||= $housenumber;
@@ -2409,11 +2407,6 @@ sub _get_address {
     my ($obj, %opt) = @_;
 
     my %tag = %{ $opt{tag} || $obj->{tag} || {} };
-
-    if ( $obj->{id} && $flags->{street_relations} ) {
-        my $obj_id = lc($obj->{type}) . q{:} . $obj->{id};
-        %tag = ( %tag, %{ $street{$obj_id} } )  if $street{$obj_id};
-    }
 
     # city
     my $city_info;
