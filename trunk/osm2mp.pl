@@ -108,7 +108,6 @@ my $transport_mode;
 
 my %search_area = (
     city => AreaTree->new(),
-    suburb => AreaTree->new(),
 );
 
 my %entrance;
@@ -120,7 +119,6 @@ my $poi_rtree = Tree::R->new();
 my $ft_config = FeatureConfig->new(
     actions => {
         load_city               => sub { _load_area( city   => @_ ) },
-        load_suburb             => sub { _load_area( suburb => @_ ) },
         load_barrier            => \&action_load_barrier,
         load_building_entrance  => \&action_load_building_entrance,
         write_poi               => \&action_write_poi,
@@ -311,7 +309,6 @@ if ( $flags->{addressing} ) {
             } );
     }
     printf STDERR "  %d cities\n", $search_area{city}->{_count} // 0;
-    printf STDERR "  %d suburbs\n", $search_area{suburb}->{_count} // 0;
 }
 
 
@@ -1461,16 +1458,6 @@ sub FindCity {
     return _find_area( city => @_ );
 }
 
-sub FindSuburb {
-    my $tags = shift;
-    my $suburb = name_from_list(addr_suburb => $tags);
-    return $suburb  if $suburb;
-
-    my $suburb_object = _find_area( suburb => @_ );
-    return if !$suburb_object;
-    return $suburb_object->{name};
-}
-
 
 sub AddPOI {
     my ($obj) = @_;
@@ -2457,7 +2444,7 @@ sub _get_address {
     my @street = grep { $_ } (
         $opt{street} || name_from_list(addr_street => \%tag) || q{},    # main street name
         name_from_list(addr_quarter => \%tag) || q{},                   # sub-street
-        FindSuburb( \%tag, @point ) || q{},                             # sub-city
+        name_from_list(addr_suburb  => \%tag) || q{},                   # sub-city
     );
 
     push @street, $city_info->{city}  if !@street && !exists $opt{street} && $city_info;

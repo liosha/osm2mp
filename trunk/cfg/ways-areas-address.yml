@@ -16,10 +16,4 @@
       country:      %country
     
     
-#- condition:
-#    - place = suburb
-#  action:
-#    - action:       load_suburb
-#      name:         %suburb
-
 
