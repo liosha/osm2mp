@@ -405,7 +405,7 @@ if ( $flags->{routing} && $flags->{dest_signs} ) {
 
 
 if ( $flags->{street_relations} ) {
-    my $member_count;
+    my $member_count = 0;
     for my $type ( qw{ street associatedStreet } ) {
         my $list = $relations->{$type};
         next if !$list;
@@ -1540,7 +1540,7 @@ sub WritePOI {
     if ( $flags->{poi_contacts}  &&  $param{contacts} ) {
         $address = _get_address( \%param, tag => \%tag, point => ($param{nodeid} || $param{latlon}) );
 
-        my $housenumber = $param{housenumber} || name_from_list( 'house', \%tag );
+        my $housenumber = name_from_list( 'house', \%tag );
         $opts{HouseNumber} = convert_string( $housenumber )     if $housenumber;
 
         $opts{Zip}      = convert_string($tag{'addr:postcode'})   if $tag{'addr:postcode'};
@@ -2271,12 +2271,10 @@ sub action_address_poi {
             map {[ reverse split q{,}, $nodes->{$_} ]} @$outer
         );
 
-        my $housenumber = name_from_list( 'house', $obj->{tag} );
-        my $street = name_from_list(addr_street => $obj->{tag});
+        my %add_addr = map {( $_ => $obj->{tag}->{$_} )} grep {/^addr:/} keys %{$obj->{tag}};
 
         for my $poiobj ( @{ $poi{$id} } ) {
-            $poiobj->{street} ||= $street;
-            $poiobj->{housenumber} ||= $housenumber;
+            $poiobj->{tags} = { %add_addr, %{$poiobj->{tags}} };
             $poiobj->{comment} .= "\nAddressed by $obj->{type}ID = $obj->{id}";
             WritePOI( $poiobj );
         }
