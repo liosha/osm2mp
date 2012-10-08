@@ -1773,6 +1773,7 @@ sub AddRoad {
         $address = _get_address( { type => 'way', id => $orig_id },
             points => \@smart_points, city => $city, tag => \%tag, street => $param{name},
         );
+        $param{name} = $address->{street} || $param{name};
     }
 
     # calculate speed class
@@ -1812,7 +1813,7 @@ sub AddRoad {
     $road{$param{id}} = {
         #comment =>  $param{comment},
         type    =>  $param{type},
-        name    =>  $address->{street},  # $param{name},
+        name    =>  $param{name},
         address =>  $address,
         chain   =>  $param{chain},
         level_l =>  $llev,
