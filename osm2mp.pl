@@ -412,6 +412,21 @@ if ( $flags->{street_relations} ) {
 
         while ( my ($relation_id, $members) = each %$list ) {
 
+            # EXPERIMENTAL: resolve addr:* roles
+            for my $member ( @$members ) {
+                my ($type, $ref, $role) = @$member{ qw/ type ref role / };
+                next if $role !~ / ^ addr: /xms;
+
+                my $tag_ref = $osm->{tags}->{$type}->{$ref};
+                next if !$tag_ref;
+
+                for my $k ( reverse sort keys %$tag_ref ) {    # 'name' before 'addr:*'!
+                    (my $nk = $k) =~ s/^ name \b/$role/xms;
+                    next if $nk !~ m/ ^ $role \b /xms;
+                    $reltag->{$relation_id}->{$nk} = $tag_ref->{$k};
+                }
+            }
+
             # house tags: addr:* and street's name* as addr:street*
             my %house_tag;
             for my $k ( reverse sort keys %{$reltag->{$relation_id}} ) {    # 'name' before 'addr:*'!
