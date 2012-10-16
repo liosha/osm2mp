@@ -8,17 +8,7 @@
 
 label:          [ name, loc_name, operator ]
 entrance:       [ name, ref ]
-place:          [ addr:city, place_name, name ]
-suburb:         [ addr:suburb, place_name, name ]
-house:          [ addr:housenumber, addr:housename ]
-addr_quarter:   [ addr:quarter ]
-addr_street:    [ addr:street ]
-addr_suburb:    [ addr:suburb ]
-addr_city:      [ addr:city ]
-subdistrict:    [ addr:subdistrict, is_in:subdistrict ]
-district:       [ addr:district, is_in:district ]
-region:         [ addr:region, is_in:region, addr:state, is_in:state ]
-country:        [ addr:country, is_in:country_code, is_in:country ]
+place:          [ place_name, name ]
 destination:    [ destination, label, name ]
 note:           [ note ]
 
