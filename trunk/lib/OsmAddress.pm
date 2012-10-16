@@ -10,7 +10,7 @@ use strict;
 use warnings;
 
 use Carp;
-use List::Util qw/ first reduce /;
+use List::Util qw/ first /;
 
 
 our $NAME_RE = qr/ ^ (?: name | place_name ) \b /xms;
@@ -18,7 +18,10 @@ our $NAME_RE = qr/ ^ (?: name | place_name ) \b /xms;
 our @ADDRESS_PREFIX = qw/ addr is_in /;
 
 our @ADDRESS_ITEMS = (
+    [ office        => { aliases => [ qw/ flat appartment / ] } ],
+    [ entrance      => {} ],
     [ housenumber   => { aliases => [ 'housename' ] } ],
+    [ postcode      => {} ],
     [ quarter       => { relation => [ 'quarter' ] } ],
     [ street        => { relation => [ qw/ street associatedStreet / ] } ],
     [ suburb        => {} ],
@@ -34,13 +37,18 @@ our %ADDRESS_TAGS = map {
     $id => [ map { my $l = $_; map {"$_:$l"} @ADDRESS_PREFIX } ($id, @{ $prop->{aliases} || [] } ) ];
 } @ADDRESS_ITEMS;
 
+our %TAG_LEVEL = map {
+        my $level = $_;
+        map {( $_ => $level )} @{ $ADDRESS_TAGS{$level} };
+    } keys %ADDRESS_TAGS;
+
 our %ADDRESS_PARENTS;
 our %ADDRESS_TAG_RE;
 
 my @addr_levels = ( q{}, map { $_->[0] } @ADDRESS_ITEMS );
 while ( @addr_levels ) {
     my $level = shift @addr_levels;
-    $ADDRESS_PARENTS{$level} = [ $level, @addr_levels ];
+    $ADDRESS_PARENTS{$level} = [ @addr_levels ];
 
     my $tag_str = join q{|}, map { @{$ADDRESS_TAGS{$_}} } (($level ? $level : ()), @addr_levels);
     $ADDRESS_TAG_RE{$level} = qr/ ^ (?: $tag_str ) \b /xms;
@@ -84,6 +92,23 @@ sub get_address_tags {
     return \%result;
 }
 
+
+sub get_multilang_address {
+    my ($tags, %opt) = @_;
+
+    my $level = $opt{level} || q{};
+
+    my %address;
+
+    while ( my ($k, $v) = each %$tags ) {
+        my ($tag, $lang) = $k =~ / ^ ( \w+ : \w+ ) (?: : (\w+) )? $ /xms;
+        next if !$tag;
+        next if !$TAG_LEVEL{$tag};
+        $address{ $TAG_LEVEL{$tag} }->{ $lang // q{} } = $v;
+    }
+
+    return \%address;
+}
 
 
 1;

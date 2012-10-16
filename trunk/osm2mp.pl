@@ -59,6 +59,7 @@ use Math::Polygon::Tree  0.041  qw{ polygon_centroid };
 use Tree::R;
 
 use OSM;
+use OsmAddress;
 use FeatureConfig;
 use AreaTree;
 use Boundary;
@@ -97,9 +98,7 @@ my $bbox;
 my $bpolyfile;
 my $osmbbox;
 
-my $default_city;
-my $default_region;
-my $default_country;
+my %default_address;
 
 my $transport_mode;
 
@@ -200,9 +199,10 @@ GetOptions (
     
     'transport=s'       => \$transport_mode,
 
-    'defaultcity=s'     => \$default_city,
-    'defaultregion=s'   => \$default_region,
-    'defaultcountry=s'  => sub { $default_country = rename_country($_[1]) },
+    # !!! make common sub
+    'defaultcity=s'     => \$default_address{'addr:city'},
+    'defaultregion=s'   => \$default_address{'addr:region'},
+    'defaultcountry=s'  => \$default_address{'addr:country'},
 
     'bbox=s'            => \$bbox,
     'bpoly=s'           => \$bpolyfile,
@@ -984,21 +984,10 @@ if ( $flags->{routing} ) {
         $objinfo{level_l}       = $llev       if $llev > 0;
         $objinfo{level_h}       = $hlev       if $hlev > $llev;
 
-        $objinfo{StreetDesc}    = $name       if $name && $flags->{navitel};
         $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
 
         if ( $road->{address} ) {
-            my %field = (
-                CityName    => 'city',
-                RegionName  => 'region',
-                CountryName => 'country',
-            );
-            
-            while ( my ($field, $a_field) = each %field ) {
-                my $value = $road->{address}->{$a_field};
-                next if !$value;
-                $objinfo{$field} = $value;
-            }
+            _hash_merge( \%objinfo, $road->{address} );
         }
 
         my @levelchain = ();
@@ -1362,8 +1351,8 @@ my @available_flags = (
     [ shorelines        => 'create sea areas from coastlines' ],
     [ water_back        => 'water background (for island maps)' ],
     [ marine            => 'process marine-specific data' ],
-    [ addressing        => 'use city polygons for addressing' ],
-    [ full_karlsruhe    => 'use addr:* tags if no city found' ],
+    [ addressing        => 'resolve addresses' ],
+#    [ full_karlsruhe    => 'use addr:* tags if no city found' ],
     [ navitel           => 'write addresses for house polygons' ],
     [ poi_contacts      => 'write contact info for POIs' ],
     [ addr_from_poly    => 'use building outlines for POI addressing' ],
@@ -1541,41 +1530,23 @@ sub WritePOI {
 
     $opts{Label} = convert_string( $label )  if $label;
 
-    my $address;
-
     # region and country - for cities
     if ( $label && $param{city} && !$param{contacts} ) {
-        $address = _get_city_address( \%tag, taglist => 'place' );
-        delete $address->{city}  if $address;
-        
         $opts{City} = 'Y';
+
+        my $address = _get_address( \%param, tag => \%tag, level => 'city' );
+        my $mp_address = _get_mp_address( $address );
+        _hash_merge( \%opts, $mp_address );
     }
 
     # contact information: address, phone
     if ( $flags->{poi_contacts}  &&  $param{contacts} ) {
-        $address = _get_address( \%param, tag => \%tag, point => ($param{nodeid} || $param{latlon}) );
-
-        my $housenumber = name_from_list( 'house', \%tag );
-        $opts{HouseNumber} = convert_string( $housenumber )     if $housenumber;
-
-        $opts{Zip}      = convert_string($tag{'addr:postcode'})   if $tag{'addr:postcode'};
+        my $address = _get_address( \%param, tag => \%tag, point => ($param{nodeid} || $param{latlon}) );
+        my $mp_address = _get_mp_address( $address );
+        _hash_merge( \%opts, $mp_address );
+        
         $opts{Phone}    = convert_string($tag{'phone'})           if $tag{'phone'};
         $opts{WebPage}  = convert_string($tag{'website'})         if $tag{'website'};
-    }
-
-    if ( $address ) {
-        my %field = (
-            StreetDesc  => 'street',
-            CityName    => 'city',
-            RegionName  => 'region',
-            CountryName => 'country',
-        );
-
-        while ( my ($field, $a_field) = each %field ) {
-            my $value = $address->{$a_field} || $param{$a_field};
-            next if !$value;
-            $opts{$field} = $value;
-        }
     }
 
     # marine data
@@ -1783,12 +1754,13 @@ sub AddRoad {
     my @smart_points = map { $param{chain}->[$_] } ( floor($#{$param{chain}}/3), ceil($#{$param{chain}}*2/3) );
     my $city = FindCity( @smart_points );
 
-    my $address = {};
+    my $mp_address;
     if ( $param{name} ) {
-        $address = _get_address( { type => 'way', id => $orig_id },
+        my $address = _get_address( { type => 'way', id => $orig_id }, level => 'street',
             points => \@smart_points, city => $city, tag => \%tag, street => $param{name},
         );
-        $param{name} = $address->{street} || $param{name};
+        $mp_address = _get_mp_address($address);
+        $param{name} = $mp_address->{StreetDesc} || $param{name};
     }
 
     # calculate speed class
@@ -1829,12 +1801,12 @@ sub AddRoad {
         #comment =>  $param{comment},
         type    =>  $param{type},
         name    =>  $param{name},
-        address =>  $address,
         chain   =>  $param{chain},
         level_l =>  $llev,
         level_h =>  $hlev,
         city    =>  $city,
         rp      =>  join( q{,}, @rp ),
+        ( $mp_address ? (address => $mp_address) : () ),
     };
 
     # FIXME: buggy object comment
@@ -1964,29 +1936,16 @@ sub WritePolygon {
     
     $opts{Label} = convert_string( $param->{name} )   if defined $param->{name} && $param->{name} ne q{};
 
-    ## Navitel
+    ## Navitel polygon addressing
+    if ( $flags->{navitel} && $tag{'addr:housenumber'} ) {
+        my $address = _get_address($obj, tag => \%tag, point => $plist[0]->[0]);
+        my $mp_address = _get_mp_address( $address );
+
+        _hash_merge( \%opts, $mp_address );
+    }
+
+    ## Navitel entrances
     if ( $flags->{navitel} ) {
-        my $housenumber = name_from_list( 'house', \%tag );
-
-        if ( $housenumber ) {
-            $opts{HouseNumber} = convert_string( $housenumber );
-
-            my $address = _get_address( $obj, tag => \%tag, point => $plist[0]->[0] );
-
-            my %field = (
-                StreetDesc  => 'street',
-                CityName    => 'city',
-                RegionName  => 'region',
-                CountryName => 'country',
-            );
-
-            while ( my ($field, $a_field) = each %field ) {
-                next if !$address->{$a_field};
-                $opts{$field} = $address->{$a_field};
-            }
-        }
-
-        # entrances
         for my $entr ( @{ $param->{entrance} } ) {
             next  if !is_inside_bounds( $entr->[0] );
             push @{$opts{EntryPoint}}, { coords => [ split /\s*,\s*/xms, $entr->[0] ], name => convert_string( $entr->[1] ) };
@@ -2287,10 +2246,10 @@ sub action_address_poi {
             map {[ reverse split q{,}, $nodes->{$_} ]} @$outer
         );
 
-        my %add_addr = map {( $_ => $obj->{tag}->{$_} )} grep {/^addr:/} keys %{$obj->{tag}};
+        my $house_address = OsmAddress::get_address_tags($obj->{tag});
 
         for my $poiobj ( @{ $poi{$id} } ) {
-            $poiobj->{tags} = { %add_addr, %{$poiobj->{tags}} };
+            $poiobj->{tags} = _hash_merge( $house_address, $poiobj->{tags} );
             $poiobj->{comment} .= "\nAddressed by $obj->{type}ID = $obj->{id}";
             WritePOI( $poiobj );
         }
@@ -2332,7 +2291,10 @@ sub _load_area {
     return if $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1];
 
     if ( $tree eq 'city' ) {
-        $info->{address} = _get_city_address($obj->{tag}, taglist => 'place');
+        $info->{address} = _hash_merge( {},
+            \%default_address,
+            OsmAddress::get_address_tags($obj->{tag}, level => 'city')
+        );
     }
 
     my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
@@ -2420,68 +2382,72 @@ sub _get_address {
 
     my ($obj, %opt) = @_;
 
-    my %tag = %{ $opt{tag} || $obj->{tag} || {} };
+    my $tags = $opt{tag} || $obj->{tag} || {};
 
-    # city
-    my $city_info;
+    # parent city
     my @point = grep { $_ } ( $opt{point}, @{ $opt{points} || [] } );
-    
-    $city_info = $opt{city}->{address}  if $opt{city};
+    my $city = $opt{city} || ( @point && FindCity(@point) );
 
-    if ( !$city_info && @point ) {
-        my $city = FindCity( @point );
-        $city_info = $city->{address}  if $city;
-    }
-
-    if ( !$city_info && $flags->{full_karlsruhe} ) {
-        $city_info = _get_city_address( \%tag, taglist => 'addr_city' );
-    }
-
-    if ( !$city_info && $default_city ) {
-        $city_info = {
-            city    => $default_city,
-            region  => $default_region,
-            country => $default_country,
-        };
-    }
-
-    my %address = %{ $city_info || {} };
-
-    # street    
-    my @street = grep { $_ } (
-        $opt{street} || name_from_list(addr_street => \%tag) || q{},    # main street name
-        name_from_list(addr_quarter => \%tag) || q{},                   # sub-street
-        name_from_list(addr_suburb  => \%tag) || q{},                   # sub-city
+    my $address_tags = _hash_merge( {},
+        OsmAddress::get_address_tags($tags, level => $opt{level}),
+        ($city ? $city->{address} : {}),
     );
 
-    push @street, $city_info->{city}  if !@street && !exists $opt{street} && $city_info;
+    my $address = OsmAddress::get_multilang_address($address_tags);
 
-    if ( my $main_street = shift @street ) {
-        $address{street} = join q{ }, $main_street, map {"($_)"} @street;
-    }
-
-    return \%address;
+    return $address;
 }
 
 
-sub _get_city_address {
-    my ($tag, %opt) = @_;
+sub _get_mp_address {
+    my ($address, %opt) = @_;
 
-    my $taglist = $opt{taglist}  or croak "No taglist";
+    my $lang = q{}; # !!!
+    my %mp_address;
 
-    my $city_name = name_from_list( $taglist => $tag )  || $default_city;
-    return if !$city_name;
+    if ( $address->{housenumber} ) {
+        $mp_address{HouseNumber} = convert_string( $address->{housenumber}->{$lang} );
+    }
 
-    my $region = join q{ }, grep { $_ }
-        map { name_from_list( $_ => $tag ) } 
-        qw/ region district subdistrict /;
-    $region ||= $default_region;
+    if ( $address->{housenumber} || $address->{street} ) {
+        my @fields = grep {$_} map { $address->{$_} && $address->{$_}->{$lang} } qw/ street quarter suburb /;
+        push @fields, $address->{city}->{$lang}  if !@fields && $address->{city} && $address->{city}->{$lang};
 
-    my $country = name_from_list( country => $tag) || $default_country;
-    
-    return {
-        city => $city_name,
-        ( $region  ? ( region  => $region )  : () ),
-        ( $country ? ( country => $country ) : () ),
-    };
+        if ( my $street = join q{ }, shift(@fields), map {"($_)"} @fields ) {
+            $mp_address{StreetDesc} = convert_string( $street );
+        }
+    }
+
+    if ( $address->{city} ) {
+        $mp_address{CityName} = convert_string( $address->{city}->{$lang} );
+    }
+
+    if ( $address->{region} ) {
+        my $region = join q{ }, grep {$_}
+            map { $address->{$_} && $address->{$_}->{$lang} } qw/ region district subdistrict /;
+        $mp_address{RegionName} = convert_string( $region );
+    }
+
+    if ( $address->{country} ) {
+        $mp_address{CountryName} = convert_string( rename_country( $address->{country}->{$lang} ) );
+    }
+
+    if ( $address->{postcode} ) {
+        $mp_address{Zip} = convert_string( $address->{postcode}->{$lang} );
+    }
+
+    return \%mp_address;
+}
+
+
+
+sub _hash_merge {
+    my $target = shift;
+    for my $hash_to_add ( @_ ) {
+        for my $key ( keys %$hash_to_add ) {
+            $target->{$key} = $hash_to_add->{$key};
+        }
+    }
+
+    return $target;
 }
