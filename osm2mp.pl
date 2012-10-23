@@ -60,6 +60,7 @@ use Tree::R;
 
 use OSM;
 use OsmAddress;
+use LangSelect;
 use FeatureConfig;
 use AreaTree;
 use Boundary;
@@ -80,7 +81,7 @@ say STDERR "\nLoading configuration...";
 my $config_file     = "$Bin/cfg/default.cfg";
 my %files;
 
-for ( @ARGV )  {  $_ = decode 'locale', $_;  }
+Encode::Locale::decode_argv();
 GetOptions(
     'config=s'          => \$config_file,
     'load-settings=s@'  => sub { push @{ $files{settings} }, $_[1] },
@@ -218,6 +219,11 @@ GetOptions (
 usage() unless (@ARGV);
 
 
+
+my $lang_select = LangSelect->new(
+    target_lang => $values->{target_lang},
+    default_lang => $values->{default_lang},
+);
 
 my %transport_code = (
     emergency   => 0,
@@ -1188,15 +1194,15 @@ sub convert_string {
 }
 
 sub name_from_list {
-    my ($list_name, $tag_ref) = @_;
+    my ($list_name, $tags) = @_;
 
-    my $key = first { exists $tag_ref->{$_} } @{$taglist{$list_name}};
+    my $result;
+    for my $base_tag ( @{ $taglist{$list_name} } ) {
+        $result = $lang_select->get_value($base_tag, $tags);
+        last if $result;
+    }
 
-    return unless $key;
-
-    my $name = $tag_ref->{$key};
-    $name = rename_country($name) if  $list_name eq 'country';
-    return $name;
+    return $result;
 }
 
 
@@ -1366,6 +1372,8 @@ my @available_values = (
     [ merge_cos         => 'max angle between roads to merge (cosine)' ],
     [ max_road_nodes    => 'maximum number of nodes in road' ],
     [ fix_close_dist    => 'minimum allowed routing segment length (m)' ],
+    [ target_lang       => 'desired map language' ],
+    [ default_lang      => 'source language for default tags' ],
 
     [ huge_sea          => undef ],
 );    
