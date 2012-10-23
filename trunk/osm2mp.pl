@@ -2413,7 +2413,7 @@ sub _get_mp_address {
         my @fields = grep {$_} map { $address->{$_} && $address->{$_}->{$lang} } qw/ street quarter suburb /;
         push @fields, $address->{city}->{$lang}  if !@fields && $address->{city} && $address->{city}->{$lang};
 
-        if ( my $street = join q{ }, shift(@fields), map {"($_)"} @fields ) {
+        if ( @fields && ( my $street = join q{ }, shift(@fields), map {"($_)"} @fields ) ) {
             $mp_address{StreetDesc} = convert_string( $street );
         }
     }
