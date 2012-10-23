@@ -2401,7 +2401,7 @@ sub _get_address {
         ($city ? $city->{address} : {}),
     );
 
-    my $address = OsmAddress::get_multilang_address($address_tags);
+    my $address = OsmAddress::get_lang_address($address_tags, $lang_select);
 
     return $address;
 }
@@ -2410,16 +2410,15 @@ sub _get_address {
 sub _get_mp_address {
     my ($address, %opt) = @_;
 
-    my $lang = q{}; # !!!
     my %mp_address;
 
     if ( $address->{housenumber} ) {
-        $mp_address{HouseNumber} = convert_string( $address->{housenumber}->{$lang} );
+        $mp_address{HouseNumber} = convert_string( $address->{housenumber} );
     }
 
     if ( $address->{housenumber} || $address->{street} ) {
-        my @fields = grep {$_} map { $address->{$_} && $address->{$_}->{$lang} } qw/ street quarter suburb /;
-        push @fields, $address->{city}->{$lang}  if !@fields && $address->{city} && $address->{city}->{$lang};
+        my @fields = grep {$_} map { $address->{$_} && $address->{$_} } qw/ street quarter suburb /;
+        push @fields, $address->{city}  if !@fields && $address->{city} && $address->{city};
 
         if ( @fields && ( my $street = join q{ }, shift(@fields), map {"($_)"} @fields ) ) {
             $mp_address{StreetDesc} = convert_string( $street );
@@ -2427,21 +2426,21 @@ sub _get_mp_address {
     }
 
     if ( $address->{city} ) {
-        $mp_address{CityName} = convert_string( $address->{city}->{$lang} );
+        $mp_address{CityName} = convert_string( $address->{city} );
     }
 
     if ( $address->{region} ) {
         my $region = join q{ }, grep {$_}
-            map { $address->{$_} && $address->{$_}->{$lang} } qw/ region district subdistrict /;
+            map { $address->{$_} && $address->{$_} } qw/ region district subdistrict /;
         $mp_address{RegionName} = convert_string( $region );
     }
 
     if ( $address->{country} ) {
-        $mp_address{CountryName} = convert_string( rename_country( $address->{country}->{$lang} ) );
+        $mp_address{CountryName} = convert_string( rename_country( $address->{country} ) );
     }
 
     if ( $address->{postcode} ) {
-        $mp_address{Zip} = convert_string( $address->{postcode}->{$lang} );
+        $mp_address{Zip} = convert_string( $address->{postcode} );
     }
 
     return \%mp_address;

@@ -96,8 +96,6 @@ sub get_address_tags {
 sub get_multilang_address {
     my ($tags, %opt) = @_;
 
-    my $level = $opt{level} || q{};
-
     my %address;
 
     while ( my ($k, $v) = each %$tags ) {
@@ -105,6 +103,20 @@ sub get_multilang_address {
         next if !$tag;
         next if !$TAG_LEVEL{$tag};
         $address{ $TAG_LEVEL{$tag} }->{ $lang // q{} } = $v;
+    }
+
+    return \%address;
+}
+
+
+sub get_lang_address {
+    my ($tags, $lang_select, %opt) = @_;
+
+    my %address;
+    while ( my ($level, $keys) = each %ADDRESS_TAGS ) {
+        my $value = first {defined} map { $lang_select->get_value($_, $tags) } @$keys;
+        next if !$value;
+        $address{$level} = $value;
     }
 
     return \%address;
