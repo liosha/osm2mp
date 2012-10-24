@@ -34,7 +34,7 @@ use warnings;
 use utf8;
 use autodie;
 
-our $VERSION = '1.01_3';
+our $VERSION = '1.02';
 
 
 
