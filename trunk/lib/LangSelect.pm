@@ -109,5 +109,28 @@ sub get_value {
 
 
 
+
+sub get_getopt {
+    return (
+        'lt-priority=s%' => sub {
+                my $d = $TRANSFORMER{$_[1]};
+                if ( !$d ) {
+                    warn "No transformer id=$_[1] found";
+                    return;
+                }
+                $d->{priority} = $_[2];
+            },
+    );
+}
+
+
+
+sub get_usage {
+    return (
+        [ 'lt-priority <id>=<val>' => 'set language tranformer priority' ],
+    );
+}
+
+
 1;
 

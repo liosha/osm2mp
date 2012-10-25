@@ -197,6 +197,7 @@ my $writer = $writer_class->new( %{ $settings{Writer} }, version => $VERSION );
 GetOptions (
     _get_settings_getopt(),
     $writer->get_getopt(),
+    LangSelect->get_getopt(),
     
     'transport=s'       => \$transport_mode,
 
@@ -1456,6 +1457,8 @@ Other options:
 
 Writer options:
 ${\( join q{}, map { _get_usage(@$_) } $writer->get_usage() )}
+Language options:
+${\( join q{}, map { _get_usage(@$_) } LangSelect->get_usage() )}
 
 END_USAGE
 
