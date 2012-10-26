@@ -66,7 +66,8 @@ sub get_transformers {
             to => $to,
             priority => $PRIORITY,
             transformer => _make_transformer($from, $to),
-        }} _get_langs();
+        }
+    } _get_langs();
 }
 
 
@@ -76,6 +77,13 @@ sub get_transformers {
 package LangTransform::YaTranslate::Cache;
 
 use Encode;
+use Fcntl qw(O_CREAT O_RDWR);
+
+our @ENGINES = (
+    [ DB_File       => 'dbfile' ],
+    [ SQLite_File   => 'sqlite' ], # buggy
+);
+
 
 sub new {
     my $class = shift;
@@ -89,12 +97,17 @@ sub _get_cache {
     return $self->{cache}  if exists $self->{cache};
 
     my %cache;
-    eval {
-        require DB_File;
-        tie %cache, DB_File => "$self->{id}.dbfile";
-        1;
+    for my $engine_info ( @ENGINES ) {
+        my ($package, $ext) = @$engine_info;
+
+        last if eval {
+            require "$package.pm";
+            tie %cache, $package => "$self->{id}.$ext", O_CREAT | O_RDWR;
+            1;
+        }
     }
-    or warn 'DB_File init failed; cache will not be saved!';
+
+    warn 'All cache engines failed; data will not be saved!'  if !tied %cache;
 
     $self->{cache} = \%cache;
     return \%cache;
