@@ -92,7 +92,10 @@ sub _get_cache {
     eval {
         require DB_File;
         tie %cache, DB_File => "$self->{id}.dbfile";
-    };
+        1;
+    }
+    or warn 'DB_File init failed; cache will not be saved!';
+
     $self->{cache} = \%cache;
     return \%cache;
 }
