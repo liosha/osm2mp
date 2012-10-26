@@ -19,6 +19,8 @@ use URI::Escape;
 our $PRIORITY = -1;  # don't use without explicit selection
 our $API_URL = 'http://translate.yandex.net/api/v1/tr.json';
 
+our $DEBUG;
+
 
 sub _get_langs {
     my $api_response = get "$API_URL/getLangs";
@@ -31,23 +33,25 @@ sub _get_langs {
 
 sub _make_transformer {
     my ($from, $to) = @_;
-    my %cache;
+    my $base_url = "$API_URL/translate?lang=$from-$to&text=";
+    my $cache = LangTransform::YaTranslate::Cache->new("yatr-$from-$to");
 
     return sub {
         my ($text) = @_;
 
-        # TODO: need external cache (sqlite?)
-        my $cached_result = $cache{$text};
+        my $cached_result = $cache->get($text);
         return $cached_result  if defined $cached_result;
 
-        my $api_response = get "$API_URL/translate?lang=$from-$to&text=" . uri_escape_utf8($text);
+        my $url = $base_url . uri_escape_utf8($text);
+        say STDERR $url  if $DEBUG;
+        my $api_response = get $url;
         my $response = decode_json $api_response;
 
         return undef if $response->{code} ne 200;
 
         # TODO: check if result really on desired lang
         my $result = join q{ }, @{ $response->{text} };
-        $cache{$text} = $result;
+        $cache->set($text => $result);
         return $result;
     };
 }
@@ -65,3 +69,51 @@ sub get_transformers {
         }} _get_langs();
 }
 
+
+1;
+
+
+package LangTransform::YaTranslate::Cache;
+
+use Encode;
+
+sub new {
+    my $class = shift;
+    my ($id) = @_;
+
+    return bless { id => $id }, $class;
+}
+
+sub _get_cache {
+    my $self = shift;
+    return $self->{cache}  if exists $self->{cache};
+
+    my %cache;
+    eval {
+        require DB_File;
+        tie %cache, DB_File => "$self->{id}.dbfile";
+    };
+    $self->{cache} = \%cache;
+    return \%cache;
+}
+
+sub set {
+    my $self = shift;
+    my ($k, $v) = map { encode utf8 => $_ } @_;
+
+    my $cache = $self->_get_cache();
+    $cache->{$k} = $v;
+    return;
+}
+
+sub get {
+    my $self = shift;
+    my ($k) = map { encode utf8 => $_ } @_;
+
+    my $cache = $self->_get_cache();
+    return decode utf8 => $cache->{$k};
+}
+
+
+
+1;
