@@ -29,17 +29,27 @@ sub _get_langs {
 }
 
 
-sub _translate {
-    my ($from, $to, $text) = @_;
+sub _make_transformer {
+    my ($from, $to) = @_;
+    my %cache;
 
-    # TODO: need cache (sqlite?)
-    my $api_response = get "$API_URL/translate?lang=$from-$to&text=" . uri_escape_utf8($text);
-    my $response = decode_json $api_response;
+    return sub {
+        my ($text) = @_;
 
-    return undef if $response->{code} ne 200;
+        # TODO: need external cache (sqlite?)
+        my $cached_result = $cache{$text};
+        return $cached_result  if defined $cached_result;
 
-    # TODO: check if result really on desired lang
-    return join q{ }, @{ $response->{text} };
+        my $api_response = get "$API_URL/translate?lang=$from-$to&text=" . uri_escape_utf8($text);
+        my $response = decode_json $api_response;
+
+        return undef if $response->{code} ne 200;
+
+        # TODO: check if result really on desired lang
+        my $result = join q{ }, @{ $response->{text} };
+        $cache{$text} = $result;
+        return $result;
+    };
 }
 
 
@@ -51,7 +61,7 @@ sub get_transformers {
             from => $from,
             to => $to,
             priority => $PRIORITY,
-            transformer => sub { _translate($from, $to, @_) },
+            transformer => _make_transformer($from, $to),
         }} _get_langs();
 }
 
