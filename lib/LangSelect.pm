@@ -37,8 +37,10 @@ sub _init_plugins {
             eval {
                 require $plugin_file;
                 for my $tr_data ( $plugin_package->get_transformers() ) {
+                    $tr_data->{plugin} = $plugin_package;
                     my $tr_id = $tr_data->{id};
-                    $TRANSFORMER{$tr_id} = $tr_data  if $tr_id;
+                    die "Transformer without id in $plugin_package"  if !$tr_id;
+                    $TRANSFORMER{$tr_id} = $tr_data;
                     push @{ $TRANSFORMERS_BY_LANG{ $tr_data->{to} // q{} } }, $tr_data;
                 }
                 1;
@@ -109,17 +111,30 @@ sub get_value {
 
 
 
+sub _set_priority {
+    my ($id, $priority) = @_;
+    my $data = $TRANSFORMER{$id};
+    croak "No transformer id=$id found"  if !$data;
+
+    $data->{priority} = $priority;
+    return;
+}
+
+
+sub _dump_transformers {
+    say "\nRegistered language transformers:";
+    for my $id ( sort keys %TRANSFORMER ) {
+        printf "%-16s %3s %3s %5d   %s\n", @{ $TRANSFORMER{$id} }{ qw/ id from to priority plugin / };
+    }
+    return;
+}
+
+
 
 sub get_getopt {
     return (
-        'lt-priority=s%' => sub {
-                my $d = $TRANSFORMER{$_[1]};
-                if ( !$d ) {
-                    warn "No transformer id=$_[1] found";
-                    return;
-                }
-                $d->{priority} = $_[2];
-            },
+        'lt-priority=s%'    => sub { shift; _set_priority (@_) },
+        'lt-dump'           => sub { _dump_transformers(); exit },
     );
 }
 
@@ -127,7 +142,8 @@ sub get_getopt {
 
 sub get_usage {
     return (
-        [ 'lt-priority <id>=<val>' => 'set language tranformer priority' ],
+        [ 'lt-priority <id>=<val>'  => 'set tranformer priority' ],
+        [ 'lt-dump'                 => 'list registered transformers' ],
     );
 }
 
