@@ -8,8 +8,9 @@
 SQLite_File - Tie to SQLite, with DB_File emulation
 
 Patched:
- * 'binary' collation instead of 'nocase'
+ * 'binary' default collation instead of 'nocase'
  * O_RDWR default mode
+ * restore PK from existing file
 
 =head1 SYNOPSIS
 
@@ -278,7 +279,6 @@ sub TIEHASH {
         $infix = '<' unless $infix;
         };
     }
-    print $infix;
     open($fh, $infix, $file) or croak(__PACKAGE__.": Can't open db file: $!");
     chmod $mode, $file if $setmode;
     # if file explicitly specified, but keep is not, 
@@ -300,7 +300,6 @@ sub TIEHASH {
      my $hash_tbl = sub {
      my $col = shift;
      $col ||= 'binary';
-#     $col ||= 'nocase';
      return <<END;
     (    
       id      blob collate $col,
@@ -327,7 +326,6 @@ END
     };
     $_ eq 'BINARY' && do {
         my $col = 'binary';
-#        my $col = 'nocase';
         if (ref($index->{'compare'}) eq 'CODE') {
         $self->dbh->func( 'usr', $index->{'compare'}, "create_collation");
         $col = 'usr';
@@ -358,6 +356,11 @@ END
     }
     $self->_index if ($infix and $infix =~ /</ and $index->{type} eq 'BINARY');
     $self->commit(1);
+
+    # restore PK counter
+    my ($max_pk) = $self->dbh->selectrow_array("SELECT max(pk) FROM hash");
+    $AUTOPK = $max_pk || 0;
+
     return $self;
 }
 
