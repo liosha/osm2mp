@@ -344,6 +344,7 @@ END
     };
     $_ eq 'HASH' && do {
         $self->dbh->do("CREATE TABLE IF NOT EXISTS hash ".$hash_tbl->());
+        $self->dbh->do($create_idx);
         last;
     };
     $_ eq 'RECNO' && do {
