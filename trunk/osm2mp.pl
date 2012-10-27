@@ -118,7 +118,7 @@ my $poi_rtree = Tree::R->new();
 
 my $ft_config = FeatureConfig->new(
     actions => {
-        load_city               => sub { _load_area( city   => @_ ) },
+        load_city               => sub { _load_area( city => @_ ) },
         load_barrier            => \&action_load_barrier,
         load_building_entrance  => \&action_load_building_entrance,
         write_poi               => \&action_write_poi,
@@ -2297,6 +2297,7 @@ sub action_write_poi {
 sub _load_area {
     my ($tree, $obj, $action) = @_;
     my $info = _get_result_object_params($obj, $action);
+
     return if !$info->{name};
 
     return if $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1];
@@ -2307,6 +2308,7 @@ sub _load_area {
             OsmAddress::get_address_tags($obj->{tag}, level => 'city')
         );
     }
+
 
     my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
     $search_area{$tree}->add_area( $info, @contours );
