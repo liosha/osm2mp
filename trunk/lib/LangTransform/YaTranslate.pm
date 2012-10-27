@@ -80,8 +80,8 @@ use Encode;
 use Fcntl qw(O_CREAT O_RDWR);
 
 our @ENGINES = (
+    [ SQLite_File   => 'sqlite' ],
     [ DB_File       => 'dbfile' ],
-    [ SQLite_File   => 'sqlite' ], # buggy
 );
 
 
