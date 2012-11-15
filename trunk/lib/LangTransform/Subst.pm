@@ -69,3 +69,6 @@ sub get_transformers {
     return @result;
 }
 
+
+1;
+
