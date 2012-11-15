@@ -34,7 +34,6 @@ sub init {
     my (undef, %callback) = @_;
 
     for my $tr ( get_transformers() ) {
-        $tr->{plugin} = __PACKAGE__;
         $callback{register_transformer}->($tr);
     }
 

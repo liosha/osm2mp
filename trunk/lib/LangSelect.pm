@@ -51,7 +51,7 @@ sub _init_plugins {
                 require $plugin_file;
                 $plugin_package->init(
                     register_getopt => \&_register_getopt,
-                    register_transformer => \&_register_transformer,
+                    register_transformer => sub { $_[0]->{plugin} = $plugin_package; _register_transformer(@_) },
                 );
                 1;
             }
