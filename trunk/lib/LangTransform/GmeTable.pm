@@ -24,8 +24,10 @@ sub init {
         my ($from, $to, $file) = $data =~ / (\w+) - (\w+) : (.+) /xms;
         croak "Invalid parameter: $data"  if !$file;
 
+        my ($fname) = $file =~ m# (?: .* [/\\] )? (.+?) ( \. \w* )? $ #xms;
+
         my $tr = {
-            id => "gme_${from}_$to",
+            id => "gme_$fname",
             from => $from,
             to => $to,
             priority => $PRIORITY,
