@@ -11,6 +11,7 @@ use warnings;
 
 use Carp;
 use List::Util qw/ first /;
+use List::MoreUtils qw/ notall /;
 use Text::Unidecode;
 
 
@@ -48,14 +49,10 @@ sub _init_plugins {
 
             eval {
                 require $plugin_file;
-
-                for my $tr_data ( $plugin_package->get_transformers() ) {
-                    $tr_data->{plugin} = $plugin_package;
-                    my $tr_id = $tr_data->{id};
-                    die "Transformer without id in $plugin_package"  if !$tr_id;
-                    $TRANSFORMER{$tr_id} = $tr_data;
-                    push @{ $TRANSFORMERS_BY_LANG{ $tr_data->{to} // q{} } }, $tr_data;
-                }
+                $plugin_package->init(
+                    register_getopt => \&_register_getopt,
+                    register_transformer => \&_register_transformer,
+                );
                 1;
             }
             or warn "Init failed for $plugin_package: $@";
@@ -66,8 +63,30 @@ sub _init_plugins {
 }
 
 
+sub _register_getopt {
+    my ($getopt) = @_;
+    croak 'Wrong getopt data'  if @$getopt < 2;
+
+    push @GETOPT, $getopt;
+    return;
+}
 
 
+sub _register_transformer {
+    my ($tr_data) = @_;
+    croak 'Wrong transformer data'  if notall { $tr_data->{$_} } qw/ id transformer / ;
+
+    my $tr_id = $tr_data->{id};
+    $TRANSFORMER{$tr_id} = $tr_data;
+    push @{ $TRANSFORMERS_BY_LANG{ $tr_data->{to} // q{} } }, $tr_data;
+
+    return;
+}
+
+
+
+=head1 METHODS
+=cut
 
 
 sub new {
