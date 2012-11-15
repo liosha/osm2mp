@@ -102,56 +102,6 @@ sub add_table_filter {
 }
 
 
-=method add_gme_filter
-
-    $filter_chain->add_gme_filter( $filename );
-
-=cut
-
-sub add_gme_filter {
-    my ($self, $file) = @_;
-
-    my $encoding = 'utf8';
-    my %table;
-
-    open my $in, '<', $file;
-    while ( defined( my $line = readline $in ) ) {
-        $line =~ s/ ^ \xEF \xBB \xBF //xms;
-        $line =~ s/ \s* $ //xms;
-
-        if ( my ($cp_code) = $line =~ / ^ \.CODEPAGE \s+ (\d+) /xms ) {
-            $encoding = "cp$cp_code";
-        }
-
-        next if $line =~ / ^ (?: \s | ; | \# | \. | $ ) /xms;
-
-        my ($from, $to) = split "\t", decode( $encoding, $line );
-        $table{$from} = $to;
-    }
-    close $in;
-
-    my $re_text;
-    eval {
-        require Regexp::Assemble;
-        $re_text = Regexp::Assemble->new()->add( map { quotemeta $_ } keys %table )->re();
-    }
-    or eval {
-        $re_text = join q{|}, map { quotemeta $_ } sort { length $b <=> length $a } keys %table;
-        require Regexp::Optimizer;
-        $re_text = Regexp::Optimizer->new()->optimize($re_text);
-    }; 
-    
-    my $re = qr/($re_text)/;
-
-    my $translator = sub {
-        my ($str) = @_;
-        $str =~ s/$re/$table{$1}/gxms;
-        return $str;
-    };
-
-    return $self->add_filter( $translator );
-}
-
 
 =method apply
 
