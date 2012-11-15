@@ -15,14 +15,15 @@ use List::Util qw/ first /;
 
 our $NAME_RE = qr/ ^ (?: name | place_name ) \b /xms;
 
-our @ADDRESS_PREFIX = qw/ addr is_in /;
+#our @ADDRESS_PREFIX = qw/ addr is_in /;
+our @ADDRESS_PREFIX = qw/ addr /;
 
 our @ADDRESS_ITEMS = (
     [ office        => { aliases => [ qw/ flat appartment / ] } ],
     [ entrance      => {} ],
     [ housenumber   => { aliases => [ 'housename' ] } ],
     [ postcode      => {} ],
-    [ quarter       => { relation => [ 'quarter' ] } ],
+    [ quarter       => { aliases => [ qw/ neighbourhood / ] } ], # relation => [ 'quarter' ] } ],
     [ street        => { relation => [ qw/ street associatedStreet / ] } ],
     [ suburb        => {} ],
     [ city          => {} ],

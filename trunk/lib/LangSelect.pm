@@ -20,6 +20,18 @@ our $PLUGIN_BASE = 'LangTransform';
 our %TRANSFORMER;
 our %TRANSFORMERS_BY_LANG;
 
+our @GETOPT = (
+    [
+        'lt-priority=s%'            => sub { shift; _set_priority (@_) },
+        'lt-priority <id>=<val>'    => 'set tranformer priority',
+    ],
+    [
+        'lt-dump'                   => sub { _dump_transformers(); exit },
+        'lt-dump'                   => 'list registered transformers',
+    ],
+);
+
+
 _init_plugins();
 
 
@@ -36,6 +48,7 @@ sub _init_plugins {
 
             eval {
                 require $plugin_file;
+
                 for my $tr_data ( $plugin_package->get_transformers() ) {
                     $tr_data->{plugin} = $plugin_package;
                     my $tr_id = $tr_data->{id};
@@ -132,19 +145,13 @@ sub _dump_transformers {
 
 
 sub get_getopt {
-    return (
-        'lt-priority=s%'    => sub { shift; _set_priority (@_) },
-        'lt-dump'           => sub { _dump_transformers(); exit },
-    );
+    return map { @$_[0,1] } @GETOPT;
 }
 
 
 
 sub get_usage {
-    return (
-        [ 'lt-priority <id>=<val>'  => 'set tranformer priority' ],
-        [ 'lt-dump'                 => 'list registered transformers' ],
-    );
+    return map {[ @$_[2,3] ]} grep { $_->[2] } @GETOPT;
 }
 
 
