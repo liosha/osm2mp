@@ -22,6 +22,17 @@ our $API_URL = 'http://translate.yandex.net/api/v1/tr.json';
 our $DEBUG;
 
 
+sub init {
+    my (undef, %callback) = @_;
+    for my $tr ( get_transformers() ) {
+        $tr->{plugin} = __PACKAGE__;
+        $callback{register_transformer}->($tr);
+    }
+    
+    return;
+}
+
+
 sub _get_langs {
     my $api_response = get "$API_URL/getLangs";
     my $dirs = decode_json($api_response)->{dirs};
