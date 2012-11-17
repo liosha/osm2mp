@@ -108,6 +108,7 @@ my $transport_mode;
 
 my %search_area = (
     city => AreaTree->new(),
+    access => AreaTree->new(),
 );
 
 my %entrance;
@@ -119,6 +120,7 @@ my $poi_rtree = Tree::R->new();
 my $ft_config = FeatureConfig->new(
     actions => {
         load_city               => sub { _load_area( city => @_ ) },
+        load_access_area        => \&action_load_access_area,
         load_barrier            => \&action_load_barrier,
         load_building_entrance  => \&action_load_building_entrance,
         write_poi               => \&action_write_poi,
@@ -136,6 +138,7 @@ my $ft_config = FeatureConfig->new(
         named       => \&cond_is_named,
         only_rel    => \&cond_is_multipolygon,
         inside_city => \&cond_is_inside_city,
+        has_access_restrictions => \&cond_has_access_restrictions,
     },
 );
 
@@ -317,6 +320,7 @@ if ( $flags->{addressing} ) {
             } );
     }
     printf STDERR "  %d cities\n", $search_area{city}->{_count} // 0;
+    printf STDERR "  %d restricted areas\n", $search_area{access}->{_count} // 0;
 }
 
 
@@ -1680,22 +1684,24 @@ sub AddBarrier {
 
 
 sub CalcAccessRules {
-    my %tag = %{ $_[0] };
-    my @acc = @{ $_[1] };
+    my ($tags, $acc_flags) = @_;
 
-    return @acc     unless exists $settings{transport};
+    my @acc = @$acc_flags;
+    return @acc if !$settings{transport};
 
     for my $rule ( @{$settings{transport}} ) {
-        next unless exists $tag{$rule->{key}};
-        next unless exists $yesno{$tag{$rule->{key}}};
+        my $key = $rule->{key};
+        next unless exists $tags->{$key};
 
-        my $val = 1-$yesno{$tag{$rule->{key}}};
-        $val = 1-$val   if $rule->{mode} && $rule->{mode} == -1;
+        my $flag = $yesno{$tags->{$key}};
+        next if !defined $flag;
 
-        my @rule = split q{,}, $rule->{val};
+        my $acc_val = $rule->{mode} && $rule->{mode} == -1  ? $flag : 1 - $flag;
+
+        my @mask = split q{,}, $rule->{val};
         for my $i ( 0 .. 7 ) {
-            next unless $rule[$i];
-            $acc[$i] = $val;
+            next if !$mask[$i];
+            $acc[$i] = $acc_val;
         }
     }
 
@@ -1758,12 +1764,17 @@ sub AddRoad {
     my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
     my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
 
-    my @rp = split q{,}, $param{routeparams};
-    @rp[4..11] = CalcAccessRules( \%tag, [ @rp[4..11] ] );
-
     # determine city
     my @smart_points = map { $param{chain}->[$_] } ( floor($#{$param{chain}}/3), ceil($#{$param{chain}}*2/3) );
     my $city = FindCity( @smart_points );
+
+    # calculate access restrictions
+    my @rp = split q{,}, $param{routeparams};
+    my @acc = CalcAccessRules( \%tag, [ @rp[4..11] ] );
+    if ( my $area_acc = _find_area( access => @smart_points ) ) {
+        @acc = map { $acc[$_] || $area_acc->[$_] } (0 .. 7);
+    }
+    @rp[4..11] = @acc;
 
     my $mp_address;
     if ( $param{name} ) {
@@ -2006,6 +2017,14 @@ sub cond_is_named {
 sub cond_is_multipolygon {
     my ($obj) = @_;
     return exists $mpoly->{$obj->{id}};
+}
+
+sub cond_has_access_restrictions {
+    my ($obj) = @_;
+
+    my @acc = CalcAccessRules( $obj->{tag}, [ (0) x 8 ] );
+
+    return any {$_} @acc;
 }
 
 
@@ -2290,6 +2309,17 @@ sub action_write_poi {
     $info->{nodeid} = $obj->{id}  if $obj->{type} eq 'Node';
 
     AddPOI ($info);
+    return;
+}
+
+
+sub action_load_access_area {
+    my ($obj, $action) = @_;
+    
+    my @acc = CalcAccessRules( $obj->{tag}, [ (0) x 8 ] );
+
+    my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
+    $search_area{access}->add_area( \@acc, @contours );
     return;
 }
 

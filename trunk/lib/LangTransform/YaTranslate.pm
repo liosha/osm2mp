@@ -55,7 +55,12 @@ sub _make_transformer {
         my $url = $base_url . uri_escape_utf8($text);
         say STDERR $url  if $DEBUG;
         my $api_response = get $url;
-        my $response = decode_json $api_response;
+        my $response = eval { decode_json $api_response };
+
+        if ( !defined $response ) {
+            warn "request: $url\nresponse: $response";
+            return undef;
+        }
 
         return undef if $response->{code} ne 200;
 
