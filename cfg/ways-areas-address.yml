@@ -13,5 +13,11 @@
     - action:       load_city
       name:         %place
     
+- condition:
+    - landuse = *
+    - has_access_restrictions
+  action:
+    - action:       load_access_area
+    
     
 
