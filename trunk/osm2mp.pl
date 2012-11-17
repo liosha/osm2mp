@@ -138,7 +138,6 @@ my $ft_config = FeatureConfig->new(
         named       => \&cond_is_named,
         only_rel    => \&cond_is_multipolygon,
         inside_city => \&cond_is_inside_city,
-        has_access_restrictions => \&cond_has_access_restrictions,
     },
 );
 
@@ -2019,13 +2018,6 @@ sub cond_is_multipolygon {
     return exists $mpoly->{$obj->{id}};
 }
 
-sub cond_has_access_restrictions {
-    my ($obj) = @_;
-
-    my @acc = CalcAccessRules( $obj->{tag}, [ (0) x 8 ] );
-
-    return any {$_} @acc;
-}
 
 
 
@@ -2317,6 +2309,7 @@ sub action_load_access_area {
     my ($obj, $action) = @_;
     
     my @acc = CalcAccessRules( $obj->{tag}, [ (0) x 8 ] );
+    return if none {$_} @acc;
 
     my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
     $search_area{access}->add_area( \@acc, @contours );
