@@ -706,7 +706,7 @@ if ( $flags->{routing} ) {
         }
     }
 
-    my $nodcount = 1;
+    my $nodcount = $values->{first_nod_id} || 1;
 
     for my $node ( keys %rnode ) {
         $nodid{$node} = $nodcount++
@@ -971,7 +971,7 @@ if ( $flags->{routing} ) {
 
     print STDERR "Writing roads...          ";
 
-    my $roadcount = 1;
+    my $roadcount = $values->{first_road_id} || 1;
 
     while ( my ($roadid, $road) = each %road ) {
 
@@ -1380,6 +1380,8 @@ my @available_values = (
     [ default_lang      => 'source language for default tags' ],
 
     [ huge_sea          => undef ],
+    [ first_nod_id      => undef ],
+    [ first_road_id     => undef ],
 );    
 
 my @onoff = ( "off", "on");
