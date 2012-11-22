@@ -85,13 +85,21 @@ sub _precompile_condition {
     }
 
     # recursive
-    if ( ref $condition eq 'HASH' && exists $condition->{or} ) {
-        my @list = map { $self->_precompile_condition($_) } @{ $condition->{or} };
-        return sub { my $object = shift; any { $_->($object) } @list };
-    }
-    if ( ref $condition eq 'HASH' && exists $condition->{and} ) {
-        my @list = map { $self->_precompile_condition($_) } @{ $condition->{and} };
-        return sub { my $object = shift; all { $_->($object) } @list };
+    if ( ref $condition eq 'HASH' ) {
+        if ( exists $condition->{or} ) {
+            my @list = map { $self->_precompile_condition($_) } @{ $condition->{or} };
+            return sub { my $object = shift; any { $_->($object) } @list };
+        }
+        if ( exists $condition->{and} ) {
+            my @list = map { $self->_precompile_condition($_) } @{ $condition->{and} };
+            return sub { my $object = shift; all { $_->($object) } @list };
+        }
+        # complex
+        if ( my $key = $condition->{key} ) {
+            my $sub = $self->{conditions}->{$key};
+            croak "Unknown condition: $key"  if !$sub;
+            return sub { $sub->($condition, @_) };
+        }
     }
 
     # id codes
