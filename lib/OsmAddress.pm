@@ -12,6 +12,8 @@ use warnings;
 use Carp;
 use List::Util qw/ first /;
 
+use AreaTree;
+
 
 our @NAME_TAGS = qw/ name place_name /;
 
@@ -84,6 +86,28 @@ sub new {
 
     return bless $self, $class;
 }
+
+
+
+sub load_area {
+    my ($self, $level, $info, @contours) = @_;
+
+    my $tree = $self->{areas}->{$level} ||= AreaTree->new();
+    $tree->add_area( $info, @contours );
+
+    return;
+}
+
+
+sub find_area {
+    my ($self, $level, @points) = @_;
+
+    my $tree = $self->{areas}->{$level}
+        or return;
+
+    return $tree->find_area(@points);
+}
+
 
 
 =head2 $addresser->get_address_tags( \%tags, %opt )
