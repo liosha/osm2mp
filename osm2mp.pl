@@ -65,6 +65,7 @@ use FeatureConfig;
 use AreaTree;
 use Boundary;
 use Coastlines;
+use TransportAccess;
 
 
 
@@ -108,7 +109,6 @@ my $transport_mode;
 
 my %search_area = (
     city => AreaTree->new(),
-    access => AreaTree->new(),
 );
 
 my %entrance;
@@ -171,9 +171,10 @@ for my $item ( @load_items ) {
     }
 }
 
+my $calc_access = TransportAccess->new( %settings );
+
 
 # !!! aliases
-my %yesno   = %{ $settings{yesno} || {} };
 my %taglist = %{ $settings{taglist} || {} }; 
 
 
@@ -319,7 +320,7 @@ if ( $flags->{addressing} ) {
             } );
     }
     printf STDERR "  %d cities\n", $search_area{city}->{_count} // 0;
-    printf STDERR "  %d restricted areas\n", $search_area{access}->{_count} // 0;
+    printf STDERR "  %d restricted areas\n", $calc_access->{areas}->{_count} // 0;
 }
 
 
@@ -355,11 +356,12 @@ if ( $flags->{routing}  &&  $flags->{restrictions} ) {
         my $via_member = first { $_->{type} eq 'node' && $_->{role} eq 'via' } @$members;
         next if !$via_member;
 
-        my @acc = ( 0,0,0,0,0,1,0,0 );      # !!! foot
-        @acc = CalcAccessRules( { map {( $_ => 'no' )} split( /\s* [,;] \s*/x, $tags->{except} ) }, \@acc )
-            if  exists $tags->{except};
-
-        next if all {$_} @acc;
+        my %vtags = (
+            foot => 'no',   # assume no foot restrictions
+            ( $tags->{except} ? (map {( $_ => 'no' )} split /\s* [,;] \s*/x, $tags->{except}) : () ),
+        );
+        my $acc = $calc_access->get_tag_flags( \%vtags );
+        next if all {$_} @$acc;
        
         my $node = $via_member->{ref};
         push @{$nodetr{$node}}, $relation_id;
@@ -373,7 +375,7 @@ if ( $flags->{routing}  &&  $flags->{restrictions} ) {
             to_dir  => 0,
             to_pos  => -1,
         };
-        $trest{$relation_id}->{param} = join q{,}, @acc  if any {$_} @acc;
+        $trest{$relation_id}->{param} = join q{,}, @$acc  if any {$_} @$acc;
     }
     printf STDERR "  %d turn restrictions\n", scalar keys %trest;
 }
@@ -1488,7 +1490,7 @@ sub AddPOI {
     my ($obj) = @_;
     if ( $flags->{addr_from_poly}
         && $obj->{nodeid} && $obj->{contacts}
-        && (!defined $obj->{inherit_address} || $yesno{$obj->{inherit_address}})
+        && (!defined $obj->{inherit_address} || $obj->{inherit_address})
     ) {
         my $id = $obj->{nodeid};
         my @bbox = ( reverse split q{,}, $nodes->{$id} ) x 2;
@@ -1512,7 +1514,7 @@ sub WritePOI {
     my $comment = $param{comment} || q{};
 
     while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $settings{comment}->{$key} && $yesno{$settings{comment}->{$key}};
+        next if !$settings{comment}->{$key};
         $comment .= "\n$key = $val";
     }
 
@@ -1667,47 +1669,18 @@ sub AddBarrier {
     return  unless  exists $param{nodeid};
     return  unless  exists $param{tags};
 
-    my $acc = [ 1,1,1,1,1,1,1,1 ];
-
-    $acc = [ split q{,}, $settings{barrier}->{$param{tags}->{'barrier'}} ]
-        if exists $settings{barrier}
-        && exists $settings{barrier}->{$param{tags}->{'barrier'}};
-
-    my @acc = map { 1-$_ } CalcAccessRules( $param{tags}, $acc );
-    return  if  all { $_ } @acc;
+    my $acc = $calc_access->get_barrier_flags($param{tags});
+    return  if  none { $_ } @$acc;
+    
+    my @tr_acc = map { 1-$_ } @$acc;
 
     $barrier{$param{nodeid}}->{type}  = $param{tags}->{'barrier'};
-    $barrier{$param{nodeid}}->{param} = join q{,}, @acc
-        if  any { $_ } @acc;
+    $barrier{$param{nodeid}}->{param} = join q{,}, @tr_acc    if any { $_ } @tr_acc;
 
     return;
 }
 
 
-sub CalcAccessRules {
-    my ($tags, $acc_flags) = @_;
-
-    my @acc = @$acc_flags;
-    return @acc if !$settings{transport};
-
-    for my $rule ( @{$settings{transport}} ) {
-        my $key = $rule->{key};
-        next unless exists $tags->{$key};
-
-        my $flag = $yesno{$tags->{$key}};
-        next if !defined $flag;
-
-        my $acc_val = $rule->{mode} && $rule->{mode} == -1  ? $flag : 1 - $flag;
-
-        my @mask = split q{,}, $rule->{val};
-        for my $i ( 0 .. 7 ) {
-            next if !$mask[$i];
-            $acc[$i] = $acc_val;
-        }
-    }
-
-    return @acc;
-}
 
 
 sub WriteLine {
@@ -1726,7 +1699,7 @@ sub WriteLine {
     my $comment = $param{comment} || q{};
 
     while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $settings{comment}->{$key} && $yesno{$settings{comment}->{$key}};
+        next if !$settings{comment}->{$key};
         $comment .= "\n$key = $val";
     }
 
@@ -1766,16 +1739,16 @@ sub AddRoad {
     my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
 
     # determine city
-    my @smart_points = map { $param{chain}->[$_] } ( floor($#{$param{chain}}/3), ceil($#{$param{chain}}*2/3) );
+    my @smart_points =
+        map { $param{chain}->[$_] }
+        ( floor($#{$param{chain}}/3), ceil($#{$param{chain}}*2/3) );
     my $city = FindCity( @smart_points );
 
     # calculate access restrictions
     my @rp = split q{,}, $param{routeparams};
-    my @acc = CalcAccessRules( \%tag, [ @rp[4..11] ] );
-    if ( my $area_acc = _find_area( access => @smart_points ) ) {
-        @acc = map { $acc[$_] || $area_acc->[$_] } (0 .. 7);
-    }
-    @rp[4..11] = @acc;
+    my @points = map { [ split q{,}, $nodes->{$_} // $_ ] } @smart_points;
+    my $acc = $calc_access->get_road_flags( \%tag, [ @rp[4..11] ], @points );
+    @rp[4..11] = @$acc;
 
     my $mp_address;
     if ( $param{name} ) {
@@ -1834,7 +1807,7 @@ sub AddRoad {
 
     # FIXME: buggy object comment
     while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $settings{comment}->{$key} && $yesno{$settings{comment}->{$key}};
+        next if !$settings{comment}->{$key};
         $road{$param{id}}->{comment} .= "\n$key = $tag{$key}";
     }
 
@@ -1947,7 +1920,7 @@ sub WritePolygon {
     return    unless @plist;
 
     while ( my ( $key, $val ) = each %tag ) {
-        next unless exists $settings{comment}->{$key} && $yesno{$settings{comment}->{$key}};
+        next if !$settings{comment}->{$key};
         $comment .= "\n$key = $val";
     }
 
@@ -2309,12 +2282,10 @@ sub action_write_poi {
 
 sub action_load_access_area {
     my ($obj, $action) = @_;
-    
-    my @acc = CalcAccessRules( $obj->{tag}, [ (0) x 8 ] );
-    return if none {$_} @acc;
 
     my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
-    $search_area{access}->add_area( \@acc, @contours );
+    $calc_access->add_area( $obj->{tag}, @contours ); 
+    
     return;
 }
 
