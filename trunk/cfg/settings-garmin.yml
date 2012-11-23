@@ -116,7 +116,32 @@ destination:    0
 ##  Transport restrictions
 ################################
 
-# emergency, delivery, car, bus, taxi, foot, bike, truck
+--- transport_types
+---
+-
+  - emergency
+  - police
+-
+  - delivery
+  - goods
+-
+  - car
+  - motorcar
+-
+  - bus
+-
+  - taxi
+-
+  - foot
+  - pedestrian
+-
+  - bike
+  - bicycle
+-
+  - truck
+  - hgv
+
+
 
 --- transport
 ---
