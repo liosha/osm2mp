@@ -171,7 +171,9 @@ for my $item ( @load_items ) {
     }
 }
 
+my $addresser = OsmAddress->new();
 my $calc_access = TransportAccess->new( %settings );
+
 
 
 # !!! aliases
@@ -2243,7 +2245,7 @@ sub action_address_poi {
             map {[ reverse split q{,}, $nodes->{$_} ]} @$outer
         );
 
-        my $house_address = OsmAddress::get_address_tags($obj->{tag});
+        my $house_address = $addresser->get_address_tags($obj->{tag});
 
         for my $poiobj ( @{ $poi{$id} } ) {
             $poiobj->{tags} = _hash_merge( $house_address, $poiobj->{tags} );
@@ -2301,7 +2303,7 @@ sub _load_area {
     if ( $tree eq 'city' ) {
         $info->{address} = _hash_merge( {},
             \%default_address,
-            OsmAddress::get_address_tags($obj->{tag}, level => 'city')
+            $addresser->get_address_tags($obj->{tag}, level => 'city')
         );
     }
 
@@ -2398,11 +2400,11 @@ sub _get_address {
     my $city = $opt{city} || ( @point && FindCity(@point) );
 
     my $address_tags = _hash_merge( {},
-        OsmAddress::get_address_tags($tags, level => $opt{level}),
+        $addresser->get_address_tags($tags, level => $opt{level}),
         ($city ? $city->{address} : {}),
     );
 
-    my $address = OsmAddress::get_lang_address($address_tags, $lang_select);
+    my $address = $addresser->get_lang_address($address_tags, $lang_select);
 
     return $address;
 }

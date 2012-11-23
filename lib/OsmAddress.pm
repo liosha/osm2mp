@@ -13,10 +13,10 @@ use Carp;
 use List::Util qw/ first /;
 
 
-our $NAME_RE = qr/ ^ (?: name | place_name ) \b /xms;
+our @NAME_TAGS = qw/ name place_name /;
 
-#our @ADDRESS_PREFIX = qw/ addr is_in /;
-our @ADDRESS_PREFIX = qw/ addr /;
+#our @ADDRESS_PREFIXES = qw/ addr is_in /;
+our @ADDRESS_PREFIXES = qw/ addr /;
 
 our @ADDRESS_ITEMS = (
     [ office        => { aliases => [ qw/ flat appartment / ] } ],
@@ -33,30 +33,60 @@ our @ADDRESS_ITEMS = (
     [ country       => {} ],
 );
 
-our %ADDRESS_TAGS = map {
-    my ($id, $prop) = @$_;
-    $id => [ map { my $l = $_; map {"$_:$l"} @ADDRESS_PREFIX } ($id, @{ $prop->{aliases} || [] } ) ];
-} @ADDRESS_ITEMS;
 
-our %TAG_LEVEL = map {
-        my $level = $_;
-        map {( $_ => $level )} @{ $ADDRESS_TAGS{$level} };
-    } keys %ADDRESS_TAGS;
+=head2 new
 
-our %ADDRESS_PARENTS;
-our %ADDRESS_TAG_RE;
+Constructor
 
-my @addr_levels = ( q{}, map { $_->[0] } @ADDRESS_ITEMS );
-while ( @addr_levels ) {
-    my $level = shift @addr_levels;
-    $ADDRESS_PARENTS{$level} = [ @addr_levels ];
+    my $addresser = OsmAddress->new( %opts );
 
-    my $tag_str = join q{|}, map { @{$ADDRESS_TAGS{$_}} } (($level ? $level : ()), @addr_levels);
-    $ADDRESS_TAG_RE{$level} = qr/ ^ (?: $tag_str ) \b /xms;
+Options:
+  * addr_items
+  * addr_prefixes
+  * name_tags
+
+=cut
+
+sub new {
+    my ($class, %opt) = @_;
+    my $self = {
+        addr_items       => $opt{addr_items}    || \@ADDRESS_ITEMS,
+        addr_prefixes    => $opt{addr_prefixes} || \@ADDRESS_PREFIXES,        
+    };
+
+    my $name_tag_str = join q{|}, @{ $opt{name_tags} || \@NAME_TAGS };
+    $self->{name_tag_re} = qr/ ^ (?: $name_tag_str ) \b /xms;
+
+    my %addr_tags =
+        map {
+            my ($id, $prop) = @$_;
+            my @taglist = 
+                map {  my $level = $_;  map {"$_:$level"} @{ $self->{addr_prefixes} }  }
+                ($id, @{ $prop->{aliases} || [] } );
+            ( $id => \@taglist )
+        }
+        @{ $self->{addr_items} };
+    $self->{addr_tags} = \%addr_tags;
+
+    my %tag_level =
+        map {  my $level = $_;  map {( $_ => $level )} @{ $addr_tags{$level} } }
+        keys %addr_tags;
+    $self->{tag_level} = \%tag_level;
+
+    my @addr_levels = ( q{}, map { $_->[0] } @{ $self->{addr_items} } );
+    while ( @addr_levels ) {
+        my $level = shift @addr_levels;
+        $self->{addr_parents}->{$level} = [ @addr_levels ];
+        
+        my $tag_str = join q{|}, map { @{ $addr_tags{$_} } } (($level ? $level : ()), @addr_levels);
+        $self->{addr_tag_re}->{$level} = qr/ ^ (?: $tag_str ) \b /xms;
+    }
+
+    return bless $self, $class;
 }
 
 
-=head2 get_address_tags( \%tags, %opt )
+=head2 $addresser->get_address_tags( \%tags, %opt )
 
     Filters out all non-address tags
 
@@ -69,18 +99,18 @@ while ( @addr_levels ) {
 
 
 sub get_address_tags {
-    my ($tags, %opt) = @_;
+    my ($self, $tags, %opt) = @_;
 
     my $level = $opt{level} // q{};
-    my $tag_re = $ADDRESS_TAG_RE{$level};
+    my $tag_re = $self->{addr_tag_re}->{$level};
     croak "Unknown level: $level"  if !$tag_re;
 
     my %result;
 
     if ( $level ) {
         while ( my ($k, $v) = each %$tags ) {
-            next if $k !~ $NAME_RE;
-            $k =~ s/$NAME_RE/addr:$level/xms;
+            next if $k !~ $self->{name_tag_re};
+            $k =~ s/$self->{name_tag_re}/addr:$level/xms;
             $result{$k} = $v;
         }
     }
@@ -94,27 +124,12 @@ sub get_address_tags {
 }
 
 
-sub get_multilang_address {
-    my ($tags, %opt) = @_;
-
-    my %address;
-
-    while ( my ($k, $v) = each %$tags ) {
-        my ($tag, $lang) = $k =~ / ^ ( \w+ : \w+ ) (?: : (\w+) )? $ /xms;
-        next if !$tag;
-        next if !$TAG_LEVEL{$tag};
-        $address{ $TAG_LEVEL{$tag} }->{ $lang // q{} } = $v;
-    }
-
-    return \%address;
-}
-
 
 sub get_lang_address {
-    my ($tags, $lang_select, %opt) = @_;
+    my ($self, $tags, $lang_select, %opt) = @_;
 
     my %address;
-    while ( my ($level, $keys) = each %ADDRESS_TAGS ) {
+    while ( my ($level, $keys) = each %{ $self->{addr_tags} } ) {
         my $value = first {defined} map { $lang_select->get_value($_, $tags) } @$keys;
         next if !$value;
         $address{$level} = $value;
