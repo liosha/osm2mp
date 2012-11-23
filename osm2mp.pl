@@ -1472,14 +1472,10 @@ END_USAGE
 }
 
 
-sub _find_area {
-    my $tree = shift;
-    my @points = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $nodes->{$_} ? $nodes->{$_} : $_ ) ] } @_;
-    return $addresser->find_area($tree, @points);
-}
 
 sub FindCity {
-    return _find_area( city => @_ );
+    my @points = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $nodes->{$_} ? $nodes->{$_} : $_ ) ] } @_;
+    return $addresser->find_area( city => @points );
 }
 
 
