@@ -62,7 +62,6 @@ use OSM;
 use OsmAddress;
 use LangSelect;
 use FeatureConfig;
-use AreaTree;
 use Boundary;
 use Coastlines;
 use TransportAccess;
@@ -107,16 +106,13 @@ my $transport_mode;
 
 ####    Global vars
 
-my %search_area = (
-    city => AreaTree->new(),
-);
-
 my %entrance;
 my %main_entrance;
 
 my %poi;
 my $poi_rtree = Tree::R->new();
 
+my $addresser = OsmAddress->new();
 my $ft_config = FeatureConfig->new(
     actions => {
         load_city               => sub { _load_area( city => @_ ) },
@@ -171,7 +167,6 @@ for my $item ( @load_items ) {
     }
 }
 
-my $addresser = OsmAddress->new();
 my $calc_access = TransportAccess->new( %settings );
 
 
@@ -321,7 +316,7 @@ if ( $flags->{addressing} ) {
                 outer   => ( $mpoly->{$id} ? $mpoly->{$id}->[0] : [ $chains->{$id} ] ),
             } );
     }
-    printf STDERR "  %d cities\n", $search_area{city}->{_count} // 0;
+    printf STDERR "  %d cities\n", $addresser->{areas}->{city} && $addresser->{areas}->{city}->{_count} // 0;
     printf STDERR "  %d restricted areas\n", $calc_access->{areas}->{_count} // 0;
 }
 
@@ -1480,7 +1475,7 @@ END_USAGE
 sub _find_area {
     my $tree = shift;
     my @points = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $nodes->{$_} ? $nodes->{$_} : $_ ) ] } @_;
-    return $search_area{$tree}->find_area(@points);
+    return $addresser->find_area($tree, @points);
 }
 
 sub FindCity {
@@ -2293,23 +2288,22 @@ sub action_load_access_area {
 
 
 sub _load_area {
-    my ($tree, $obj, $action) = @_;
+    my ($level, $obj, $action) = @_;
     my $info = _get_result_object_params($obj, $action);
 
     return if !$info->{name};
 
     return if $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1];
 
-    if ( $tree eq 'city' ) {
-        $info->{address} = _hash_merge( {},
-            \%default_address,
-            $addresser->get_address_tags($obj->{tag}, level => 'city')
-        );
-    }
-
+    $info->{address} = _hash_merge( {},
+        \%default_address,
+        $addresser->get_address_tags($obj->{tag}, level => $level)
+    );
 
     my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
-    $search_area{$tree}->add_area( $info, @contours );
+
+    $addresser->load_area($level, $info, @contours);
+
     return;
 }
 
