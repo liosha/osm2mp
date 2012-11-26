@@ -2285,21 +2285,17 @@ sub action_load_access_area {
 
 sub _load_area {
     my ($level, $obj, $action) = @_;
-    my $info = _get_result_object_params($obj, $action);
-
-    return if !$info->{name};
-
+    
     return if $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1];
 
-    $info->{address} = _hash_merge( {},
+    my $address_tags = _hash_merge( {},
         \%default_address,
         $addresser->get_address_tags($obj->{tag}, level => $level)
     );
 
     my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
 
-    $addresser->load_area($level, $info, @contours);
-
+    $addresser->load_area($level, $address_tags, @contours);
     return;
 }
 
@@ -2391,7 +2387,7 @@ sub _get_address {
 
     my $address_tags = _hash_merge( {},
         $addresser->get_address_tags($tags, level => $opt{level}),
-        ($city ? $city->{address} : {}),
+        ($city || {}),
     );
 
     my $address = $addresser->get_lang_address($address_tags, $lang_select);
