@@ -101,8 +101,6 @@ my $osmbbox;
 
 my %default_address;
 
-my $transport_mode;
-
 
 ####    Global vars
 
@@ -199,7 +197,7 @@ GetOptions (
     $writer->get_getopt(),
     LangSelect->get_getopt(),
     
-    'transport=s'       => \$transport_mode,
+#    'transport=s'       => \$transport_mode,
 
     # !!! make common sub
     'defaultcity=s'     => \$default_address{'addr:city'},
@@ -226,22 +224,6 @@ my $lang_select = LangSelect->new(
     default_lang => $values->{default_lang},
 );
 
-my %transport_code = (
-    emergency   => 0,
-    police      => 0,
-    delivery    => 1,
-    car         => 2,
-    motorcar    => 2,
-    bus         => 3,
-    taxi        => 4,
-    foot        => 5,
-    pedestrian  => 5,
-    bike        => 6,
-    bicycle     => 6,
-    truck       => 7,
-);
-$transport_mode = $transport_code{ $transport_mode }
-    if defined $transport_mode && exists $transport_code{ $transport_mode };
 
 
 
