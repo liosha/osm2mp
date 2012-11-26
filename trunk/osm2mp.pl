@@ -99,8 +99,6 @@ my $bbox;
 my $bpolyfile;
 my $osmbbox;
 
-my %default_address;
-
 
 ####    Global vars
 
@@ -196,13 +194,9 @@ GetOptions (
     _get_settings_getopt(),
     $writer->get_getopt(),
     LangSelect->get_getopt(),
+    $addresser->get_getopt(),
     
 #    'transport=s'       => \$transport_mode,
-
-    # !!! make common sub
-    'defaultcity=s'     => \$default_address{'addr:city'},
-    'defaultregion=s'   => \$default_address{'addr:region'},
-    'defaultcountry=s'  => \$default_address{'addr:country'},
 
     'bbox=s'            => \$bbox,
     'bpoly=s'           => \$bpolyfile,
@@ -1436,10 +1430,7 @@ Boundaries:
 
 Other options:
  --namelist <key>=<list>   comma-separated list of tags to select names
- --transport <mode>        single transport mode
- --defaultcity <name>      default city for addresses
- --defaultregion <name>    default region
- --defaultcountry <name>   default country
+${\( join q{}, map { _get_usage(@$_) } $addresser->get_usage() )}
 
 Writer options:
 ${\( join q{}, map { _get_usage(@$_) } $writer->get_usage() )}
@@ -2270,11 +2261,7 @@ sub _load_area {
     
     return if $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1];
 
-    my $address_tags = _hash_merge( {},
-        \%default_address,
-        $addresser->get_address_tags($obj->{tag}, level => $level)
-    );
-
+    my $address_tags = $addresser->get_address_tags($obj->{tag}, level => $level);
     my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
 
     $addresser->load_area($level, $address_tags, @contours);

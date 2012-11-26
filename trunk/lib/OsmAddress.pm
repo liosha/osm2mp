@@ -11,6 +11,7 @@ use warnings;
 
 use Carp;
 use List::Util qw/ first /;
+use List::MoreUtils qw/ none first_index /;
 
 use AreaTree;
 
@@ -35,6 +36,8 @@ our @ADDRESS_ITEMS = (
     [ country       => {} ],
 );
 
+our $MIN_DEFAULT_LEVEL = 'city';
+
 
 =head2 new
 
@@ -53,7 +56,8 @@ sub new {
     my ($class, %opt) = @_;
     my $self = {
         addr_items       => $opt{addr_items}    || \@ADDRESS_ITEMS,
-        addr_prefixes    => $opt{addr_prefixes} || \@ADDRESS_PREFIXES,        
+        addr_prefixes    => $opt{addr_prefixes} || \@ADDRESS_PREFIXES,
+        default_address  => {},
     };
 
     my $name_tag_str = join q{|}, @{ $opt{name_tags} || \@NAME_TAGS };
@@ -91,6 +95,8 @@ sub new {
 
 sub load_area {
     my ($self, $level, $info, @contours) = @_;
+
+    return if none { /addr:$level\b/xms } keys %$info;
 
     my $tree = $self->{areas}->{$level} ||= AreaTree->new();
     $tree->add_area( $info, @contours );
@@ -155,11 +161,52 @@ sub get_lang_address {
     my %address;
     while ( my ($level, $keys) = each %{ $self->{addr_tags} } ) {
         my $value = first {defined} map { $lang_select->get_value($_, $tags) } @$keys;
+        if ( !$value && %{ $self->{default_address} } ) {
+            $value = first {defined} map { $lang_select->get_value($_, $self->{default_address}) } @$keys;
+        }
         next if !$value;
         $address{$level} = $value;
     }
 
     return \%address;
+}
+
+
+
+sub get_getopt {
+    my ($self) = @_;
+
+    my $first_idx = first_index { $_->[0] eq $MIN_DEFAULT_LEVEL } @{ $self->{addr_items} };
+
+    my @opt_list;
+    for my $i ( $first_idx .. $#{ $self->{addr_items} } ) {
+        my $level = $self->{addr_items}->[$i]->[0];
+        push @opt_list, ( "default-$level|default$level=s" => sub {
+                my ($lang, $name) = $_[1] =~ / (?: (\w{1,3}) : )? (.*) /xms;
+                my $vtag = $lang ? "addr:$level:$lang" : "addr:$level";
+                $self->{default_address}->{$vtag} = $_[1];
+            } );
+    }
+
+    return @opt_list;
+}
+   
+
+=method get_usage()
+
+=cut
+
+sub get_usage {
+    my ($self) = @_;
+    my $first_idx = first_index { $_->[0] eq $MIN_DEFAULT_LEVEL } @{ $self->{addr_items} };
+    
+    my @opt_list;
+    for my $i ( $first_idx .. $#{ $self->{addr_items} } ) {
+        my $level = $self->{addr_items}->[$i]->[0];
+        push @opt_list, [ "default-$level" => "default $level" ];
+    }
+    
+    return @opt_list;
 }
 
 
