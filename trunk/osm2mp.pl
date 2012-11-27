@@ -2375,7 +2375,7 @@ sub _get_mp_address {
     }
 
     if ( $address->{housenumber} || $address->{street} ) {
-        my @fields = grep {$_} map { $address->{$_} && $address->{$_} } qw/ street quarter suburb /;
+        my @fields = grep {$_} map { $address->{$_} } qw/ street quarter suburb /;
         push @fields, $address->{city}  if !@fields && $address->{city} && $address->{city};
 
         if ( @fields && ( my $street = join q{ }, shift(@fields), map {"($_)"} @fields ) ) {
