@@ -788,7 +788,7 @@ if ( $flags->{routing} ) {
                     $rnod = 2;
                 }
 
-                elsif ( $rnod == $values->{max_road_nodes} ) {
+                elsif ( $rnod == $values->{max_road_nodes} // 999 ) {
                     $countlong ++;
                     $break = $prev;
                     push @breaks, $break;
