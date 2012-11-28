@@ -20,6 +20,13 @@ use TextFilter;
 use YAML;
 
 
+
+our @POINT_ATTRS = (
+    [ NAME => 'C', 250 ],
+    [ GRMN_TYPE => 'C', 32 ],
+);
+
+
 =method new( param => $value )
 
 Create writer instance
@@ -52,16 +59,46 @@ sub new {
 sub output {
     my ( $self, $template, $data ) = @_;
 
-    my $group = $self->{output_base} // q{};
+    my %writer = (
+        section => undef,
+        info => undef,
+        point => sub { $self->_write_point(@_) },
 
-    if ( !$self->{shp} ) {
-        my $prefix = $self->{output_base} ? "$self->{output_base}." : q{};
-        $self->{shp}->{points} = Geo::Shapefile::Writer->new("$prefix.points", 'POINT', 'type' );
-        # ...
+        # !!!
+        polygon => undef,
+        polyline => undef,
+        turn_restriction => undef,
+    );
+
+    if ( !exists $writer{$template} ) {
+        say Dump $template, $data;
+        exit;
     }
 
-    say Dump $template, $data; exit;
-#    print {$fh} $self->_process( $template => $data );
+    my $writer = $writer{$template};
+    return if !$writer;
+    
+    $writer->($data);
+    return;
+}
+
+
+sub _write_point {
+    my ($self, $data) = @_;
+
+#    say Dump $data; exit;
+
+    my $shp = $self->{shp}->{points};
+    if ( !$shp ) {
+        my $prefix = $self->{output_base} ? "$self->{output_base}." : q{};
+        $shp = $self->{shp}->{points} = Geo::Shapefile::Writer->new("${prefix}points", 'POINT', @POINT_ATTRS );
+    }
+
+    $shp->add_shape(
+        [ reverse @{ $data->{opts}->{coords} } ],
+        encode( $self->{codepage}, $data->{opts}->{Label} ),
+        encode( $self->{codepage}, $data->{opts}->{Type} ),
+    );
     return;
 }
 
