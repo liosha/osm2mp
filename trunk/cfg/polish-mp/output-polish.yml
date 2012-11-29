@@ -75,13 +75,21 @@ footer: |
 point: |
   [% INCLUDE comment  text = comment  IF comment -%]
   [POI]
-  Data[% opts.lzoom %]=([% opts.coords.0 %],[% opts.coords.1 %])
-  [% IF opts.hzoom -%]
-  EndLevel=[% opts.hzoom %]
+  Data[% level_l || 0 %]=([% coords.1 %],[% coords.0 %])
+  [% IF level_h -%]
+  EndLevel=[% level_h %]
   [% END -%]
-  [% opts.delete( 'lzoom', 'hzoom', 'coords' ) -%]
-  [% FOREACH key IN opts.keys -%]
-  [% key %]=[% opts.$key | mp_filter %]
+  Type=[% type %]
+  [% label = name;
+  IF extra_fields.exists('Label');
+      label = extra_fields.Label;
+      extra_fields.delete('Label');
+  END;
+  IF label.defined -%]
+  Label=[% label | mp_filter %]
+  [% END -%]
+  [% FOREACH key IN extra_fields -%]
+  [% key %]=[% extra_fields.$key | mp_filter %]
   [% END -%]
   [END]
   [% %]
