@@ -1452,53 +1452,20 @@ sub FindCity {
 }
 
 
-sub AddPOI {
-    my ($obj) = @_;
-    if ( $flags->{addr_from_poly}
-        && $obj->{nodeid} && $obj->{contacts}
-        && (!defined $obj->{inherit_address} || $obj->{inherit_address})
-    ) {
-        my $id = $obj->{nodeid};
-        my @bbox = ( reverse split q{,}, $nodes->{$id} ) x 2;
-        push @{$poi{$id}}, $obj;
-        $poi_rtree->insert( $id, @bbox );
-    }
-    else {
-        return WritePOI( @_ );
-    }
-    return;
-}
-
 
 sub WritePOI {
-    my %param = %{$_[0]};
+    my ($info) = @_;
 
-    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
-
-    return  unless  exists $param{nodeid}  ||  exists $param{latlon};
-
-    my $comment = $param{comment} || q{};
-
-    while ( my ( $key, $val ) = each %tag ) {
-        next if !$settings{comment}->{$key};
-        $comment .= "\n$key = $val";
+    while ( my ( $key, $val ) = each %{ $info->{tags} } ) {
+        next if !$settings{comment}->{$key}; # ???
+        $info->{comment} .= "\n$key = $val";
     }
 
-    my $data = $param{latlon} || $nodes->{$param{nodeid}};
-    return unless $data;
-
-    my %opts = (
-        coords  => [ split /\s*,\s*/xms, $data ],
-        lzoom   => $param{level_l} || '0',
-        hzoom   => $param{level_h} || '0',
-        Type    => $param{type},
-    );
-
-    my $label = defined $param{name} ? $param{name} : q{};
-
-    if ( exists $param{ele} && exists $tag{'ele'} ) {
+=disable
+    if ( $info->{ele} && $info->{tags}->{ele} ) {
         $label .= '~[0x1f]' . $tag{'ele'};
     }
+
     if ( $flags->{transport_stops} && exists $param{transport} ) {
         my @stops;
         @stops = ( @{ $trstop{$param{nodeid}} } )
@@ -1511,8 +1478,11 @@ sub WritePOI {
                 $aa && $bb  ?  $aa <=> $bb : $a cmp $b;
             } @stops ) . q{)}   if @stops;
     }
+=cut
 
-    $opts{Label} = convert_string( $label )  if $label;
+    $info->{name} = convert_string( $info->{name} )  if $info->{name};
+
+=disable
 
     # region and country - for cities
     if ( $label && $param{city} && !$param{contacts} ) {
@@ -1624,6 +1594,10 @@ sub WritePOI {
     }
 
     $writer->output( point => { comment => $comment, opts => \%opts } );
+=cut
+
+#    say Dump $info;
+    $writer->output( point => $info );
 
     return;
 }
@@ -1679,11 +1653,9 @@ sub WriteLine {
         push @{ $opts{nods} }, [ @$nod[0,1], $$nod[2] || '0' ];
     }
 
-    # the rest tags (capitals!)
-    for my $key ( sort keys %param ) {
-        next unless $key =~ / ^ _* [A-Z] /xms;
-        delete $opts{$key} and next if !defined $param{$key} || $param{$key} eq q{};
-        $opts{$key} = convert_string( $param{$key} );
+    for my $key ( keys %{ $param{extra_fields} } ) {
+        next if !defined $param{extra_fields}->{$key} || $param{extra_fields}->{$key} eq q{};
+        $opts{$key} = convert_string( $param{extra_fields}->{$key} );
     }
 
     $writer->output( polyline => { comment => $comment, opts => \%opts } );
@@ -1919,10 +1891,9 @@ sub WritePolygon {
         push @{ $opts{contours} }, [ map { [ reverse @{$_} ] } @$polygon ];
     }
 
-    for my $key ( keys %$param ) {
-        next unless $key =~ /^_*[A-Z]/;
-        delete $opts{$key} and next if !defined $param->{$key} || $param->{$key} eq q{};
-        $opts{$key} = convert_string( $param->{$key} );
+    for my $key ( keys %{ $param->{extra_fields} } ) {
+        next if !defined $param->{extra_fields}->{$key} || $param->{extra_fields}->{$key} eq q{};
+        $opts{$key} = convert_string( $param->{extra_fields}->{$key} );
     }
 
     $writer->output( polygon => { comment => $comment, opts => \%opts } );
@@ -1991,7 +1962,7 @@ sub action_load_coastline {
 sub _get_field_content {
     my ($field, $obj) = @_;
 
-    return if !$field;
+    return if !defined $field;
 
     for ( ref $field ) {
         # !!!
@@ -2014,15 +1985,25 @@ sub _get_field_content {
 sub _get_result_object_params {
     my ($obj, $action) = @_;
 
-    my %info = %$action;
-    $info{name} //= '%label';
+    $action->{name} = '%label'  if !exists $action->{name};
 
-    for my $key ( keys %info ) {
-        next if !defined $info{$key};
-        $info{$key} &&= _get_field_content($info{$key}, $obj);
-        delete $info{$key} if !defined $info{$key};
+    my %info = %$action;
+
+    # requred fields
+    for my $key ( qw/ name type / ) {
+        next if !$info{$key};
+        $info{$key} = _get_field_content($info{$key}, $obj);
     }
-    delete $info{name} if !$info{name};
+
+    my $extra = $info{extra_fields} = {};
+    for my $key ( keys %{ $action->{extra_fields} || {} } ) {
+        $extra->{$key} = _get_field_content($action->{extra_fields}->{$key}, $obj);
+    }
+    # !!! old config compatibility, to remove
+    for my $key ( keys %$action ) {
+        next if $key !~ /^_?[A-Z]/;
+        $extra->{$key} =  _get_field_content($action->{$key}, $obj);
+    }        
     
     $info{tags} = $obj->{tag};
     $info{comment} = "$obj->{type}ID = $obj->{id}";
@@ -2228,6 +2209,8 @@ sub action_write_poi {
     my $info = _get_result_object_params($obj, $action);
 
     my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $nodes->{$obj->{id}} );
+
+    # for areas: place poi at main entrance if exists
     if ( !$latlon && $obj->{type} eq 'Way' ) {
         my $outer = $mpoly->{$obj->{id}} ? $mpoly->{$obj->{id}}->[0]->[0] : $chains->{$obj->{id}};
         my $entrance_node = first { exists $main_entrance{$_} } @$outer;
@@ -2238,10 +2221,23 @@ sub action_write_poi {
 
     return  unless $latlon && is_inside_bounds( $latlon );
 
-    $info->{latlon} = $latlon;
-    $info->{nodeid} = $obj->{id}  if $obj->{type} eq 'Node';
+    $info->{coords} = [ reverse split q{,}, $latlon ];
 
-    AddPOI ($info);
+    if ( $flags->{addr_from_poly}
+        && $obj->{type} eq 'Node' # ???
+        && $info->{contacts}
+        && (!defined $info->{inherit_address} || $info->{inherit_address})
+    ) {
+        # save poi for addressing
+        my $id = $obj->{id};
+        my @bbox = ( (@{ $info->{coords} }) x 2 );
+        push @{$poi{$id}}, $info;
+        $poi_rtree->insert( $id, @bbox );
+    }
+    else {
+        WritePOI( $info );
+    }
+
     return;
 }
 

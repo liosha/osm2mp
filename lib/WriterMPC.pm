@@ -98,14 +98,14 @@ sub _write_point {
         $shp = $self->{shp}->{points} = Geo::Shapefile::Writer->new("${prefix}points", 'POINT', @POINT_ATTRS );
     }
 
-    my $type = $POI_TYPE{ $data->{opts}->{Type} };
-    carp "Unknown type $data->{opts}->{Type}"  if !$type;
-    $type ||= $data->{opts}->{Type};
+    my $type = $POI_TYPE{ $data->{type} };
+    carp "Unknown type $data->{type}"  if !$type;
+    $type ||= $data->{type};
 
     $shp->add_shape(
-        [ reverse @{ $data->{opts}->{coords} } ],
-        encode( $self->{codepage}, $data->{opts}->{Label} ),
-        encode( $self->{codepage}, $type ),
+        $data->{coords},
+        map { encode( $self->{codepage}, $_ ) }
+            ( $data->{name}, $type ),
     );
     return;
 }
