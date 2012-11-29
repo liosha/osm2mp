@@ -1,0 +1,66 @@
+################################
+##  Name selection priority
+################################
+
+
+--- taglist
+---
+
+label:          [ name, loc_name, operator, description ]
+entrance:       [ name, ref ]
+place:          [ place_name, name ]
+destination:    [ destination, label, name ]
+
+phone:          [ 'contact:phone', phone ]
+
+
+
+################################
+##  Field presets
+################################
+
+--- presets
+---
+contacts:
+    PHONE: %phone
+
+
+
+################################
+##  Tags to skip
+################################
+
+
+--- skip_tags
+---
+
+created_by:         1
+
+
+
+################################
+##  Tags for comment
+################################
+
+
+--- comment
+---
+
+
+
+################################
+##  Common types
+################################
+
+
+--- types
+---
+
+background:
+    type:       DATA_BOUNDS
+
+sea:
+    type:       SEA
+  
+
+

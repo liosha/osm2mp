@@ -83,7 +83,7 @@ my %files;
 
 Encode::Locale::decode_argv();
 GetOptions(
-    'config=s'          => \$config_file,
+    'c|config=s'        => \$config_file,
     'load-settings=s@'  => sub { push @{ $files{settings} }, $_[1] },
     'load-features=s@'  => sub { push @{ $files{features} }, $_[1] }
 );
@@ -1488,9 +1488,6 @@ sub WritePOI {
         $info->{address} = _get_address( $info, level => 'city' );
     }
 
-#        $opts{Phone}    = convert_string($tag{'phone'})           if $tag{'phone'};
-#        $opts{WebPage}  = convert_string($tag{'website'})         if $tag{'website'};
-
     $writer->output( point => $info );
 
     return;
@@ -1986,6 +1983,18 @@ sub _get_result_object_params {
     }
 
     my $extra = $info{extra_fields} = {};
+    
+    # preset fields
+    my @presets = @{ $info{presets} || [] };
+    push @presets, 'contacts'  if $info{contacts};
+    for my $preset_name ( @presets ) {
+        my $preset = $settings{presets}->{$preset_name}
+            or croak "Unknown preset $preset_name";
+        while ( my ($key, $val) = each %$preset ) {
+            $extra->{$key} =  _get_field_content($val, $obj);
+        }
+    }
+    # individual fields
     for my $key ( keys %{ $action->{extra_fields} || {} } ) {
         $extra->{$key} = _get_field_content($action->{extra_fields}->{$key}, $obj);
     }
@@ -1993,8 +2002,8 @@ sub _get_result_object_params {
     for my $key ( keys %$action ) {
         next if $key !~ /^_?[A-Z]/;
         $extra->{$key} =  _get_field_content($action->{$key}, $obj);
-    }        
-    
+    }
+
     $info{tags} = $obj->{tag};
     $info{comment} = "$obj->{type}ID = $obj->{id}";
 

@@ -1,0 +1,109 @@
+################################
+##  Name selection priority
+################################
+
+
+--- taglist
+---
+
+label:          [ name, loc_name, operator, description ]
+entrance:       [ name, ref ]
+place:          [ place_name, name ]
+destination:    [ destination, label, name ]
+
+phone:          [ 'contact:phone', phone ]
+website:        [ 'contact:website', website, url ]
+email:          [ 'contact:email', email ]
+fax:            [ 'contact:fax', fax ]
+
+
+
+################################
+##  Field presets
+################################
+
+--- presets
+---
+contacts:
+    Phone: %phone
+    WebPage: %website
+    Email: %email
+    Fax: %fax
+
+
+
+################################
+##  Tags to skip
+################################
+
+
+--- skip_tags
+---
+
+created_by:         1
+
+
+
+################################
+##  Tags for comment
+################################
+
+
+--- comment
+---
+
+access:             1
+aerialway:          1
+aeroway:            1
+admin_level:        1
+amenity:            1
+barrier:            1
+boundary:           1
+bridge:             1
+building:           1
+capital:            1
+highway:            1
+historic:           1
+junction:           1
+layer:              1
+landuse:            1
+leisure:            1
+man_made:           1
+military:           1
+natural:            1
+place:              1
+power:              1
+railway:            1
+religion:           1
+route:              1
+service:            1
+shop:               1
+sport:              1
+surface:            1
+tourism:            1
+tracktype:          1
+traffic_calming:    1
+tunnel:             1
+waterway:           1
+whitewater:         1
+  
+
+
+################################
+##  Common types
+################################
+
+
+--- types
+---
+
+background:
+    type:       0x4B
+    endlevel:   4
+
+sea:
+    type:       0x3C
+    endlevel:   4
+  
+
+
