@@ -19,6 +19,7 @@ use Template::Context;
 use YAML;
 
 use TextFilter;
+use GarminTools;
 
 
 =method new( param => $value )
@@ -84,11 +85,33 @@ sub new {
 internal
 
 =cut
+{
+my %mp_addr_field = (
+    housenumber => 'HouseNumber',
+    street      => 'StreetDesc',
+    city        => 'CityName',
+    region      => 'RegionName',
+    country     => 'CountryName',
+    postcode    => 'Zip',
+);
 
 sub _process {
     my ($self, $tt_name, $vars) = @_;
     $self->{_count}->{$tt_name} ++;
+
+    if ( $vars->{city} ) {
+        $vars->{extra_fields}->{City} = 'Y';
+    }
+
+    if ( $vars->{address} ) {
+        my $garmin_address = GarminTools::get_garmin_address($vars->{address});
+        while ( my ($k, $v) = each %$garmin_address ) {
+            $vars->{extra_fields}->{ $mp_addr_field{$k} } = $v;
+        }
+    }
+
     return $self->{tt_context}->process($tt_name => $vars);
+}
 }
 
 

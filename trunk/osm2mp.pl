@@ -1337,7 +1337,6 @@ my @available_flags = (
     [ water_back        => 'water background (for island maps)' ],
     [ marine            => 'process marine-specific data' ],
     [ addressing        => 'resolve addresses' ],
-#    [ full_karlsruhe    => 'use addr:* tags if no city found' ],
     [ navitel           => 'write addresses for house polygons' ],
     [ poi_contacts      => 'write contact info for POIs' ],
     [ addr_from_poly    => 'use building outlines for POI addressing' ],
@@ -1482,27 +1481,24 @@ sub WritePOI {
 
     $info->{name} = convert_string( $info->{name} )  if $info->{name};
 
-=disable
-
     # region and country - for cities
-    if ( $label && $param{city} && !$param{contacts} ) {
-        $opts{City} = 'Y';
-
-        my $address = _get_address( \%param, tag => \%tag, level => 'city' );
-        my $mp_address = _get_mp_address( $address );
-        _hash_merge( \%opts, $mp_address );
+    if ( $info->{name} && $info->{city} && !$info->{contacts} ) {
+        $info->{address} = _get_address( $info, level => 'city' );
     }
 
     # contact information: address, phone
-    if ( $flags->{poi_contacts}  &&  $param{contacts} ) {
-        my $address = _get_address( \%param, tag => \%tag, point => ($param{nodeid} || $param{latlon}) );
-        my $mp_address = _get_mp_address( $address );
-        _hash_merge( \%opts, $mp_address );
+    if ( $flags->{poi_contacts} && $info->{contacts} ) {
+        $info->{address} = _get_address( $info, point => $info->{coords} );
         
-        $opts{Phone}    = convert_string($tag{'phone'})           if $tag{'phone'};
-        $opts{WebPage}  = convert_string($tag{'website'})         if $tag{'website'};
+#        $opts{Phone}    = convert_string($tag{'phone'})           if $tag{'phone'};
+#        $opts{WebPage}  = convert_string($tag{'website'})         if $tag{'website'};
     }
 
+    $writer->output( point => $info );
+
+    return;
+
+=disable
     # marine data
     my %buoy_color = (
         # Region A
@@ -1597,9 +1593,6 @@ sub WritePOI {
 =cut
 
 #    say Dump $info;
-    $writer->output( point => $info );
-
-    return;
 }
 
 
@@ -2344,7 +2337,7 @@ sub _get_address {
 
     my ($obj, %opt) = @_;
 
-    my $tags = $opt{tag} || $obj->{tag} || {};
+    my $tags = $opt{tag} || $opt{tags} || $obj->{tag} || $obj->{tags} || {};
 
     # parent city
     my @point = grep { $_ } ( $opt{point}, @{ $opt{points} || [] } );
