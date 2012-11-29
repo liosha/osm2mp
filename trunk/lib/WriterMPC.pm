@@ -24,6 +24,12 @@ use YAML;
 our @POINT_ATTRS = (
     [ NAME => 'C', 250 ],
     [ GRMN_TYPE => 'C', 32 ],
+    [ STRT_ADDR => 'C', 64 ],
+    [ CITY => 'C', 64 ],
+    [ STATE => 'C', 64 ],
+    [ COUNTRY => 'C', 64 ],
+    [ PCODE => 'C', 64 ],
+    [ PHONE => 'C', 64 ],
 );
 
 
@@ -87,6 +93,15 @@ sub output {
 }
 
 
+{
+my %addr_field = (
+    STRT_ADDR   => [ q{, } => qw/ street housenumber / ],
+    CITY        => 'city',
+    STATE       => 'region',
+    COUNTRY     => 'country',
+    PCODE       => 'postcode',
+);
+
 sub _write_point {
     my ($self, $data) = @_;
 
@@ -102,12 +117,29 @@ sub _write_point {
     carp "Unknown type $data->{type}"  if !$type;
     $type ||= $data->{type};
 
+    my %record = (
+        NAME => $data->{name},
+        GRMN_TYPE => $type,
+    );
+
+    if ( my $addr = $data->{address} ) {
+        while ( my ($field, $info) = each %addr_field ) {
+            if ( ref $info ) {
+                my ($sep, @fields) = @$info;
+                $record{$field} = join $sep, grep {$_} map {$addr->{$_}} @fields;
+            }
+            else {
+                $record{$field} = $addr->{$info};
+            }
+        }
+    }
+
     $shp->add_shape(
         $data->{coords},
-        map { encode( $self->{codepage}, $_ ) }
-            ( $data->{name}, $type ),
+        { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
     );
     return;
+}
 }
 
 
