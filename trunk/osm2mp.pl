@@ -1175,13 +1175,13 @@ sub convert_string {
 sub name_from_list {
     my ($list_name, $tags) = @_;
 
-    my $result;
-    for my $base_tag ( @{ $taglist{$list_name} } ) {
-        $result = $lang_select->get_value($base_tag, $tags);
-        last if $result;
+    my $list = $taglist{$list_name} || [ $list_name ];
+    for my $base_tag ( @$list ) {
+        my $result = $lang_select->get_value($base_tag, $tags);
+        return $result  if $result;
     }
 
-    return $result;
+    return;
 }
 
 
@@ -1479,20 +1479,17 @@ sub WritePOI {
     }
 =cut
 
-    $info->{name} = convert_string( $info->{name} )  if $info->{name};
-
-    # region and country - for cities
-    if ( $info->{name} && $info->{city} && !$info->{contacts} ) {
+    if ( $flags->{poi_contacts} && $info->{contacts} ) {
+        # full address
+        $info->{address} = _get_address( $info, point => $info->{coords} );
+    }
+    elsif ( $info->{name} && $info->{city} && !$info->{contacts} ) {
+        # just region and country
         $info->{address} = _get_address( $info, level => 'city' );
     }
 
-    # contact information: address, phone
-    if ( $flags->{poi_contacts} && $info->{contacts} ) {
-        $info->{address} = _get_address( $info, point => $info->{coords} );
-        
 #        $opts{Phone}    = convert_string($tag{'phone'})           if $tag{'phone'};
 #        $opts{WebPage}  = convert_string($tag{'website'})         if $tag{'website'};
-    }
 
     $writer->output( point => $info );
 
