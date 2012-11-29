@@ -113,13 +113,17 @@ sub _write_point {
         $shp = $self->{shp}->{points} = Geo::Shapefile::Writer->new("${prefix}points", 'POINT', @POINT_ATTRS );
     }
 
-    my $type = $POI_TYPE{ $data->{type} };
-    carp "Unknown type $data->{type}"  if !$type;
-    $type ||= $data->{type};
+    my $type = $POI_TYPE{ $data->{type} }
+    # filter out incompatible mp records
+    or do {
+        carp "Unknown type $data->{type}";
+        return;
+    };
 
     my %record = (
         NAME => $data->{name},
         GRMN_TYPE => $type,
+        %{ $data->{extra_fields} },
     );
 
     if ( my $addr = $data->{address} ) {
