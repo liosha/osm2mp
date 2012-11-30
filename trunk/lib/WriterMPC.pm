@@ -20,21 +20,23 @@ use TextFilter;
 use YAML;
 
 
-
-our @POINT_ATTRS = (
+our @COMMON_ATTRS = (
     [ NAME => 'C', 250 ],
     [ GRMN_TYPE => 'C', 32 ],
-    [ STRT_ADDR => 'C', 64 ],
-    [ CITY => 'C', 64 ],
-    [ STATE => 'C', 64 ],
-    [ COUNTRY => 'C', 64 ],
-    [ PCODE => 'C', 64 ],
-    [ PHONE => 'C', 64 ],
 );
 
-our @POLYGON_ATTRS = (
-    [ NAME => 'C', 250 ],
-    [ GRMN_TYPE => 'C', 32 ],
+our %ATTRS = (
+    points => [
+        @COMMON_ATTRS,
+        [ STRT_ADDR => 'C', 64 ],
+        [ CITY => 'C', 64 ],
+        [ STATE => 'C', 64 ],
+        [ COUNTRY => 'C', 64 ],
+        [ PCODE => 'C', 64 ],
+        [ PHONE => 'C', 64 ],
+    ],
+    areas => \@COMMON_ATTRS,
+    lines => \@COMMON_ATTRS,
 );
 
 
@@ -102,14 +104,14 @@ sub output {
 
 
 sub _get_shp {
-    my ($self, $name, $type, $attrs) = @_;
+    my ($self, $name, $type) = @_;
 
     my $shp = $self->{shp}->{$name} ||= do {
         my $prefix = q{};
         $prefix .= $self->{output_base}  if $self->{output_base};
         $prefix .= q{.}  if $prefix && $prefix !~ m#[\\/]$#x;
 
-        Geo::Shapefile::Writer->new("$prefix$name", $type, @$attrs );
+        Geo::Shapefile::Writer->new("$prefix$name", $type, @{ $ATTRS{$name} } );
     };
 
     return $shp;
@@ -129,7 +131,7 @@ my %addr_field = (
 sub _write_point {
     my ($self, $data) = @_;
 
-    my $shp = $self->_get_shp( 'points', 'POINT', \@POINT_ATTRS );
+    my $shp = $self->_get_shp( 'points', 'POINT' );
     my $type = $MP2SHP{1}->{lc $data->{type}} // $data->{type};
     carp "Unknown point type: $type"  if !$type || $type =~ /^0/;
 
@@ -164,7 +166,7 @@ sub _write_point {
 sub _write_polygon {
     my ($self, $data) = @_;
 
-    my $shp = $self->_get_shp( 'areas', 'POLYGON', \@POLYGON_ATTRS );
+    my $shp = $self->_get_shp( 'areas', 'POLYGON' );
     my $type = $MP2SHP{5}->{lc $data->{type}} // $data->{type};
     carp "Unknown area type: $type"  if $type =~ /^0/;
 
