@@ -100,6 +100,23 @@ sub output {
 }
 
 
+
+sub _get_shp {
+    my ($self, $name, $type, $attrs) = @_;
+
+    my $shp = $self->{shp}->{$name} ||= do {
+        my $prefix = q{};
+        $prefix .= $self->{output_base}  if $self->{output_base};
+        $prefix .= q{.}  if $prefix && $prefix !~ m#[\\/]$#x;
+
+        Geo::Shapefile::Writer->new("$prefix$name", $type, @$attrs );
+    };
+
+    return $shp;
+}
+
+
+
 {
 my %addr_field = (
     STRT_ADDR   => [ q{, } => qw/ street housenumber / ],
@@ -112,14 +129,7 @@ my %addr_field = (
 sub _write_point {
     my ($self, $data) = @_;
 
-#    say Dump $data; exit;
-
-    my $shp = $self->{shp}->{points};
-    if ( !$shp ) {
-        my $prefix = $self->{output_base} ? "$self->{output_base}." : q{};
-        $shp = $self->{shp}->{points} = Geo::Shapefile::Writer->new("${prefix}points", 'POINT', @POINT_ATTRS );
-    }
-
+    my $shp = $self->_get_shp( 'points', 'POINT', \@POINT_ATTRS );
     my $type = $MP2SHP{1}->{lc $data->{type}} // $data->{type};
     carp "Unknown point type: $type"  if !$type || $type =~ /^0/;
 
@@ -154,12 +164,7 @@ sub _write_point {
 sub _write_polygon {
     my ($self, $data) = @_;
 
-    my $shp = $self->{shp}->{areas};
-    if ( !$shp ) {
-        my $prefix = $self->{output_base} ? "$self->{output_base}." : q{};
-        $shp = $self->{shp}->{areas} = Geo::Shapefile::Writer->new("${prefix}areas", 'POLYGON', @POLYGON_ATTRS );
-    }
-
+    my $shp = $self->_get_shp( 'areas', 'POLYGON', \@POLYGON_ATTRS );
     my $type = $MP2SHP{5}->{lc $data->{type}} // $data->{type};
     carp "Unknown area type: $type"  if $type =~ /^0/;
 
