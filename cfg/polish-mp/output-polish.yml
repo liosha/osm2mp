@@ -71,12 +71,9 @@ footer: |
    %]
 
 
-
-point: |
-  [% INCLUDE comment  text = comment  IF comment -%]
-  [POI]
-  Data[% level_l || 0 %]=([% coords.1 %],[% coords.0 %])
+_common_fields: |
   [% IF level_h && level_h > level_l -%]
+  [% # IF level_h -%]
   EndLevel=[% level_h %]
   [% END -%]
   Type=[% type %]
@@ -88,9 +85,17 @@ point: |
   IF label.defined -%]
   Label=[% label | mp_filter %]
   [% END -%]
-  [% FOREACH key IN extra_fields.keys.sort -%]
-  [% key %]=[% extra_fields.$key | mp_filter %]
+  [% FOREACH key IN extra.keys.sort -%]
+  [% key %]=[% extra.$key | mp_filter %]
   [% END -%]
+
+
+
+point: |
+  [% INCLUDE comment  text = comment  IF comment -%]
+  [POI]
+  Data[% level_l || 0 %]=([% coords.1 %],[% coords.0 %])
+  [% INCLUDE _common_fields type=type, level_h=level_h, name=name, extra=extra_fields -%]
   [END]
   [% %]
 
@@ -99,22 +104,14 @@ point: |
 polygon: |
   [% INCLUDE comment  text = comment  IF comment -%]
   [POLYGON]
-  [% FOREACH contour IN opts.contours -%]
-  Data[% opts.lzoom %]=([% contour.0.0 %],[% contour.0.1 %])
+  [% FOREACH contour IN contours -%]
+  Data[% level_l || 0 %]=([% contour.0.1 %],[% contour.0.0 %])
   [%- temp = contour.shift; FOREACH point IN contour -%]
-  ,([% point.0 %],[% point.1 %])
+  ,([% point.1 %],[% point.0 %])
   [%- END %]
   [% END -%]
-  [% IF opts.hzoom -%]
-  EndLevel=[% opts.hzoom %]
-  [% END -%]
-  [% entrances = opts.EntryPoint; opts.delete( 'lzoom', 'hzoom', 'contours', 'EntryPoint' ) -%]
-  [% FOREACH key IN opts.keys -%]
-  [% key %]=[% opts.$key | mp_filter %]
-  [% END -%]
-  [% FOREACH entrance IN entrances -%]
-  EntryPoint=([% entrance.coords.0 %],[% entrance.coords.1 %]),[% entrance.name | mp_filter %]
-  [% END -%]
+  [% INCLUDE _common_fields type=type, level_h=level_h, name=name, extra=extra_fields -%]
+  [% # entrances -%]
   [END]
   [% %]
 
