@@ -49,6 +49,7 @@ Options:
   * addr_items
   * addr_prefixes
   * name_tags
+  * rename_*
 
 =cut
 
@@ -59,6 +60,7 @@ sub new {
         addr_prefixes    => $opt{addr_prefixes} || \@ADDRESS_PREFIXES,
         default_address  => {},
     };
+    bless $self, $class;
 
     my $name_tag_str = join q{|}, @{ $opt{name_tags} || \@NAME_TAGS };
     $self->{name_tag_re} = qr/ ^ (?: $name_tag_str ) \b /xms;
@@ -86,9 +88,23 @@ sub new {
         
         my $tag_str = join q{|}, map { @{ $addr_tags{$_} } } (($level ? $level : ()), @addr_levels);
         $self->{addr_tag_re}->{$level} = qr/ ^ (?: $tag_str ) \b /xms;
+
+        next if !$level;
+        my $table = $opt{"rename_$level"};
+        next if !$table;
+        $self->add_rename_table( $level => $table );
     }
 
-    return bless $self, $class;
+    return $self;
+}
+
+
+# !!! should be lang-dependent!
+sub add_rename_table {
+    my ($self, $level, $table) = @_;
+
+    $self->{rename}->{$level} = $table;
+    return;
 }
 
 
@@ -165,6 +181,11 @@ sub get_lang_address {
             $value = first {defined} map { $lang_select->get_value($_, $self->{default_address}) } @$keys;
         }
         next if !$value;
+
+        if ( my $table = $self->{rename}->{$level} ) {
+            $value = $table->{uc $value} // $value;
+        }
+
         $address{$level} = $value;
     }
 

@@ -108,7 +108,6 @@ my %main_entrance;
 my %poi;
 my $poi_rtree = Tree::R->new();
 
-my $addresser = OsmAddress->new();
 my $ft_config = FeatureConfig->new(
     actions => {
         load_city               => sub { _load_area( city => @_ ) },
@@ -162,6 +161,10 @@ for my $item ( @load_items ) {
         $settings{$key} = $data                     if $type ~~ 'settings';
     }
 }
+
+my $addresser = OsmAddress->new(
+    $settings{country_name} ? (rename_country => $settings{country_name}) : (),
+);
 
 my $calc_access = TransportAccess->new( %settings );
 
@@ -1183,20 +1186,6 @@ sub name_from_list {
 
     return;
 }
-
-
-sub rename_country {
-    my ($name) = @_;
-    return $name  if !$name;
-    
-    my $table = $settings{country_name};
-    return $name  if !$table;
-
-    my $full_name = $table->{uc $name};
-    return $full_name  if $full_name;
-    return $name;
-}
-
 
 
 sub fix_close_nodes {                # NodeID1, NodeID2
@@ -2396,7 +2385,7 @@ sub _get_mp_address {
     }
 
     if ( $address->{country} ) {
-        $mp_address{CountryName} = convert_string( rename_country( $address->{country} ) );
+        $mp_address{CountryName} = convert_string( $address->{country} );
     }
 
     if ( $address->{postcode} ) {
