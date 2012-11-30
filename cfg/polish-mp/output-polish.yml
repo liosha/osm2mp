@@ -76,7 +76,7 @@ point: |
   [% INCLUDE comment  text = comment  IF comment -%]
   [POI]
   Data[% level_l || 0 %]=([% coords.1 %],[% coords.0 %])
-  [% IF level_h -%]
+  [% IF level_h && level_h > level_l -%]
   EndLevel=[% level_h %]
   [% END -%]
   Type=[% type %]

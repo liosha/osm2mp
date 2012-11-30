@@ -1949,7 +1949,7 @@ sub action_load_coastline {
 sub _get_field_content {
     my ($field, $obj) = @_;
 
-    return if !defined $field;
+    return $field if !defined $field || !length $field;
 
     for ( ref $field ) {
         # !!!
@@ -1957,6 +1957,7 @@ sub _get_field_content {
 
         when (q{}) {
             $field =~ s[%(\w+)][ name_from_list($1, $obj->{tag}) // q{} ]ge;
+            return undef if !length $field;
             return $field;
         }
         when ('CODE') {
@@ -1978,7 +1979,7 @@ sub _get_result_object_params {
 
     # requred fields
     for my $key ( qw/ name type / ) {
-        next if !$info{$key};
+        next if !defined $info{$key};
         $info{$key} = _get_field_content($info{$key}, $obj);
     }
 
@@ -1991,17 +1992,23 @@ sub _get_result_object_params {
         my $preset = $settings{presets}->{$preset_name}
             or croak "Unknown preset $preset_name";
         while ( my ($key, $val) = each %$preset ) {
-            $extra->{$key} =  _get_field_content($val, $obj);
+            my $val = _get_field_content($val, $obj);
+            next if !defined $val;
+            $extra->{$key} = $val;
         }
     }
     # individual fields
     for my $key ( keys %{ $action->{extra_fields} || {} } ) {
-        $extra->{$key} = _get_field_content($action->{extra_fields}->{$key}, $obj);
+        my $val = _get_field_content($action->{extra_fields}->{$key}, $obj);
+        next if !defined $val;
+        $extra->{$key} = $val;
     }
     # !!! old config compatibility, to remove
     for my $key ( keys %$action ) {
         next if $key !~ /^_?[A-Z]/;
-        $extra->{$key} =  _get_field_content($action->{$key}, $obj);
+        my $val = _get_field_content($action->{$key}, $obj);
+        next if !defined $val;
+        $extra->{$key} = $val;
     }
 
     $info{tags} = $obj->{tag};
