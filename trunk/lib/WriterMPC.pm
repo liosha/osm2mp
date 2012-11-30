@@ -32,8 +32,15 @@ our @POINT_ATTRS = (
     [ PHONE => 'C', 64 ],
 );
 
+our @POLYGON_ATTRS = (
+    [ NAME => 'C', 250 ],
+    [ GRMN_TYPE => 'C', 32 ],
+);
 
-our %POI_TYPE = _init_poi_codes();
+
+
+# !!!
+our %MP2SHP = _init_code_table();
 
 
 =method new( param => $value )
@@ -70,11 +77,11 @@ sub output {
 
     my %writer = (
         section => undef,
-        info => undef,
+        info    => undef,
 
-        point => sub { $self->_write_point(@_) },
+        point   => sub { $self->_write_point(@_) },
+        polygon => sub { $self->_write_polygon(@_) },
         # !!!
-        polygon => undef,
         polyline => undef,
         turn_restriction => undef,
         destination_sign => undef,
@@ -113,12 +120,8 @@ sub _write_point {
         $shp = $self->{shp}->{points} = Geo::Shapefile::Writer->new("${prefix}points", 'POINT', @POINT_ATTRS );
     }
 
-    my $type = $POI_TYPE{ $data->{type} }
-    # filter out incompatible mp records
-    or do {
-        carp "Unknown type $data->{type}";
-        return;
-    };
+    my $type = $MP2SHP{1}->{lc $data->{type}} // $data->{type};
+    carp "Unknown point type: $type"  if !$type || $type =~ /^0/;
 
     my %record = (
         NAME => $data->{name},
@@ -144,6 +147,33 @@ sub _write_point {
     );
     return;
 }
+}
+
+
+
+sub _write_polygon {
+    my ($self, $data) = @_;
+
+    my $shp = $self->{shp}->{areas};
+    if ( !$shp ) {
+        my $prefix = $self->{output_base} ? "$self->{output_base}." : q{};
+        $shp = $self->{shp}->{areas} = Geo::Shapefile::Writer->new("${prefix}areas", 'POLYGON', @POLYGON_ATTRS );
+    }
+
+    my $type = $MP2SHP{5}->{lc $data->{type}} // $data->{type};
+    carp "Unknown area type: $type"  if $type =~ /^0/;
+
+    my %record = (
+        NAME => $data->{name},
+        GRMN_TYPE => $type,
+        %{ $data->{extra_fields} },
+    );
+
+    $shp->add_shape(
+        $data->{contours},
+        { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
+    );
+    return;
 }
 
 
@@ -198,8 +228,6 @@ sub get_getopt {
     my ($self) = @_;
     return (
         'o|output=s'            => \$self->{output_base},
-#        'mapid=s'               => sub { $self->{header_opts}->{ID} = $_[1] },
-#        'mapname=s'             => sub { $self->{header_opts}->{Name} = $_[1] },
         'codepage=s'            => sub { $self->_register_codepage( $_[1] ) },
         'filter=s'              => sub { $self->{filter_chain}->add_filter( $_[1] ) },
         'upcase!'               => sub { $self->{filter_chain}->add_filter( 'upcase' ) },
@@ -228,202 +256,694 @@ sub get_usage {
 }
 
 
-
-sub _init_poi_codes {
-    my %code = (
-        CITY_10M        =>  '0x0100',
-        CITY_5M         =>  '0x0200',
-        LARGE_CITY      =>  '0x0200',
-        CITY_2M         =>  '0x0300',
-        CITY_1M         =>  '0x0400',
-        CITY_500K       =>  '0x0500',
-        CITY_200K       =>  '0x0600',
-        CITY_100K       =>  '0x0700',
-        CITY_50K        =>  '0x0800',
-        MEDIUM_CITY     =>  '0x0800',
-        CITY_20K        =>  '0x0900',
-        CITY_10K        =>  '0x0A00',
-        CITY_5K         =>  '0x0B00',
-        CITY_LT5K       =>  '0x0C00',
-        SMALL_CITY      =>  '0x0C00',
-        CITY_UNKNOWN    =>  '0x0D00',
-
-        RESTAURANT           =>  '0x2A00',
-        RESTAURANT_AMERICAN  =>  '0x2A01',
-        RESTAURANT_ASIAN     =>  '0x2A02',
-        RESTAURANT_BARBECUE  =>  '0x2A03',
-        RESTAURANT_CHINESE   =>  '0x2A04',
-        RESTAURANT_DELI      =>  '0x2A05',
-        RESTAURANT_INTRNTNL  =>  '0x2A06',
-        RESTAURANT_FAST_FOOD =>  '0x2A07',
-        RESTAURANT_ITALIAN   =>  '0x2A08',
-        RESTAURANT_MEXICAN   =>  '0x2A09',
-        RESTAURANT_PIZZA     =>  '0x2A0A',
-        RESTAURANT_SEAFOOD   =>  '0x2A0B',
-        RESTAURANT_STEAK     =>  '0x2A0C',
-        RESTAURANT_DONUTS    =>  '0x2A0D',
-        RESTAURANT_CAFES     =>  '0x2A0E',
-        RESTAURANT_FRENCH    =>  '0x2A0F',
-        RESTAURANT_GERMAN    =>  '0x2A10',
-        RESTAURANT_BRITISH   =>  '0x2A11',
-
-        HOTEL               =>  '0x2B01',
-        BED_AND_BREAKFAST   =>  '0x2B02',
-        CAMPGROUND          =>  '0x2B03',
-        RESORT              =>  '0x2B04',
-
-        THEME_PARK      =>  '0x2C01',
-        MUSEUM          =>  '0x2C02',
-        LANDMARK        =>  '0x2C04',
-        PARK            =>  '0x2C06',
-        GARDEN          =>  '0x2C06',
-        ZOO             =>  '0x2C07',
-        ARENA           =>  '0x2C08',
-        HALL            =>  '0x2C09',
-        WINERY          =>  '0x2C0A',
-
-        GOLF_COURSE     =>  '0x2D05',
-        SKI_CENTER      =>  '0x2D06',
-        BOWLING         =>  '0x2D07',
-        SKATING         =>  '0x2D08',
-        SWIMMING_POOL   =>  '0x2D09',
-        FITNESS_CENTER  =>  '0x2D0A',
-        SPORT_AIRPORT   =>  '0x2D0B',
-
-        LIVE_THEATER    =>  '0x2D01',
-        BAR             =>  '0x2D02',
-        MOVIE_THEATER   =>  '0x2D03',
-        CASINO          =>  '0x2D04',
-
-        DEPARTMENT_STORE        =>  '0x2E01',
-        GROCERY_STORE           =>  '0x2E02',
-        GENERAL_STORE           =>  '0x2E03',
-        SHOPPING_CENTER         =>  '0x2E04',
-        PHARMACY                =>  '0x2E05',
-        CONVENIENCE_STORE       =>  '0x2E06',
-        CLOTHING_RETAIL         =>  '0x2E07',
-        HOME_AND_GARDEN_STORE   =>  '0x2E08',
-        HOME_FURNISHINGS_STORE  =>  '0x2E09',
-        SPECIALTY_RETAIL        =>  '0x2E0A',
-        SOFTWARE_RETAIL         =>  '0x2E0B',
-
-        GAS_STATION             =>  '0x2F01',
-        AUTO_RENTAL             =>  '0x2F02',
-        AUTO_REPAIR             =>  '0x2F03',
-        DEALER                  =>  '0x2F07',
-        WRECKER_SERVICE         =>  '0x2F0A',
-        PARKING                 =>  '0x2F0B',
-        REST_AREA_TOURIST_INFO  =>  '0x2F0C',
-        AUTO_CLUB               =>  '0x2F0D',
-        CAR_WASH                =>  '0x2F0E',
-        TRUCK_STOP              =>  '0x2F16',
-
-        AIRPORT                 =>  '0x2F04',
-        GND_TRANSPORT           =>  '0x2F08',
-        TRANSIT_SERVICES        =>  '0x2F17',
-
-        LIBRARY             =>  '0x2C03',
-        SCHOOL              =>  '0x2C05',
-        PLACE_OF_WORSHIP    =>  '0x2C0B',
-        POW_CHURCH          =>  '0x2C0E',
-        POW_MOSQUE          =>  '0x2C0D',
-        POW_TEMPLE          =>  '0x2C0F',
-        POW_SYNAGOGUE       =>  '0x2C10',
-        POLICE_STATION      =>  '0x3001',
-        CITY_HALL           =>  '0x3003',
-        COURTHOUSE          =>  '0x3004',
-        COMMUNITY_CENTER    =>  '0x3005',
-        BORDER_CROSSING     =>  '0x3006',
-        GOV_OFFICE          =>  '0x3007',
-        FIRE_DEPT           =>  '0x3008',
-        POST_OFFICE         =>  '0x2F05',
-        BANK                =>  '0x2F06',
-        UTILITY             =>  '0x2F15',
-
-        BANK    =>  '0x2F06',
-
-        MARINA                  =>  '0x2F09',
-        GARMIN_DEALERS          =>  '0x2F0F',
-        SERVICES_PERSONAL       =>  '0x2F10',
-        SERVICES_BUSINESS       =>  '0x2F11',
-        COMMUNICATION_SERVICES  =>  '0x2F12',
-        REPAIR_SERVICE          =>  '0x2F13',
-        SOCIAL_SERVICES         =>  '0x2F14',
-        
-        HOSPITAL    =>  '0x3002',
-
-        BRIDGE          =>  '0x6401',
-        BUILDING        =>  '0x6402',
-        CEMETERY        =>  '0x6403',
-        CHURCH          =>  '0x6404',
-        CIVIL_BUILDING  =>  '0x6405',
-        CROSSING        =>  '0x6406',
-        DAM             =>  '0x6407',
-        LEVEE           =>  '0x6409',
-        LOCALE          =>  '0x640A',
-        MILITARY        =>  '0x640B',
-        MINE            =>  '0x640C',
-        OILFIELD        =>  '0x640D',
-        TOWER           =>  '0x6411',
-        TRAIL           =>  '0x6412',
-        TUNNEL          =>  '0x6413',
-        WELL            =>  '0x6414',
-        HISTORICAL_TOWN =>  '0x6415',
-        SUBDIVISION     =>  '0x6416',
-
-        ARROYO      =>  '0x6501',
-        SAND_BAR    =>  '0x6502',
-        BAY         =>  '0x6503',
-        CANAL       =>  '0x6505',
-        CHANNEL     =>  '0x6506',
-        COVE        =>  '0x6507',
-        WATERFALL   =>  '0x6508',
-        GEYSER      =>  '0x6509',
-        GLACIER     =>  '0x650A',
-        HARBOR      =>  '0x650B',
-        LAKE        =>  '0x650D',
-        RAPIDS      =>  '0x650E',
-        RESERVOIR   =>  '0x650F',
-        SEA         =>  '0x6510',
-        SPRING      =>  '0x6511',
-        STREAM      =>  '0x6512',
-        SWAMP       =>  '0x6513',
-
-        ARCH        =>  '0x6601',
-        BASIN       =>  '0x6603',
-        BEACH       =>  '0x6604',
-        BENCH       =>  '0x6605',
-        CAPE        =>  '0x6606',
-        CLIFF       =>  '0x6607',
-        CRATER      =>  '0x6608',
-        FLAT        =>  '0x6609',
-        FOREST      =>  '0x660A',
-        GAP         =>  '0x660B',
-        GUT         =>  '0x660C',
-        ISTHMUS     =>  '0x660D',
-        LAVA_FLOW   =>  '0x660E',
-        PILLAR      =>  '0x660F',
-        PLAIN       =>  '0x6610',
-        RANGE       =>  '0x6611',
-        RESERVE     =>  '0x6612',
-        RIDGE       =>  '0x6613',
-        ROCK        =>  '0x6614',
-        SLOPE       =>  '0x6615',
-        SUMMIT      =>  '0x6616',
-        VALLEY      =>  '0x6617',
-        WOODS       =>  '0x6618',
-
-        MAJOR_COUNTRY   =>  '0x1400',
-        MINOR_COUNTRY   =>  '0x1500',
-        STATE           =>  '0x1E00',
-        PROVINCE        =>  '0x1E00',
-        COUNTY          =>  '0x1F00',
-    );
-
-    return map {( $_ => $_, $code{$_} => $_ )} keys %code;
+sub _init_code_table {
+    my %table;
+    for my $line (<DATA>) {
+        my ($mp_code, $type, $grmn_code) = split /\s+/x, $line;
+        $table{$type}->{lc $mp_code} = $grmn_code;
+    }
+    return %table;
 }
 
-
-
 1;
+
+
+
+# mp -> garmin type translation
+# taken from vasyusya's _mp2shp distribution 
+__DATA__
+
+0x00 3   RESIDENTIAL
+0x01 3   MAJOR_HWY
+0x01 5   LARGE_CITY
+0x02 3   PRINCIPAL_HWY
+0x02 5   SMALL_CITY
+0x03 3   OTHER_HWY
+0x03 5   TOWN
+0x04 3   ARTERIAL
+0x04 5   MILITARY_BASE
+0x05 3   COLLECTOR
+0x05 5   PARKING_LOT
+0x06 3   RESIDENTIAL
+0x06 5   PARKING_GARAGE
+0x07 3   ALLEY
+0x07 5   AIRPORT
+0x08 3   LOW_SPEED_RAMP
+0x08 5   SHOPPING_AREA
+0x09 3   HIGH_SPEED_RAMP
+0x09 5   MARINA
+0x0a 3   UNPAVED_ROAD
+0x0a 5   COLLEGE
+0x0b 3   MAJOR_CONNECTOR
+0x0b 5   HOSPITAL
+0x0c 3   ROUNDABOUT
+0x0c 5   INDUSTRIAL_COMPLEX
+0x0d 5   RESERVATION
+0x0e 5   AIRPORT_RUNWAYS
+0x13    5   GENERIC_MANMADE
+0x14    3   RAILROAD
+0x14    5   NATIONAL_PARK
+0x15    3   SHORELINE
+0x16    3   TRAIL
+0x17    5   URBAN_PARK
+0x18    3   STREAM
+0x18    5   GOLF_COURSE
+0x19    5   SPORTS_COMPLEX
+0x1a    3   FERRY
+0x1a    5   CEMETARY
+0x1e    3   INTRN_PLTCL_BDRY
+0x1e    5   STATE_PARK
+0x1f    3   RIVER
+0x1f    5   STATE_PARK
+0x20    3   MINOR_CONTOUR
+0x20    5   STATE_PARK
+0x21    3   INT_CONTOUR
+0x22    3   MAJOR_CONTOUR
+0x23    3   MINOR_BATHY_CONTOUR
+0x26    3   INTERMITTENT_STREAM
+0x28    3   PIPELINE
+0x29    5   LAKE
+0x32    5   SEA
+0x3b    5   SMALL_LAKE
+0x3c    5   LARGE_LAKE
+0x3d    5   LARGE_LAKE
+0x3e    5   LAKE
+0x3f    3   CUSTOMIZABLE_LINE_1
+0x3f    5   LAKE
+0x40    5   SMALL_LAKE
+0x41    3   CUSTOMIZABLE_LINE_1
+0x41    5   SMALL_LAKE
+0x42    3   UNPAVED_ROAD
+0x43    3   CUSTOMIZABLE_ROUTE_LINE_1
+0x44    3   RIVER
+0x45    3   MNR_PLTCL_BDRY
+0x45    5   LAKE
+0x46    3   MISC_LINE
+0x46    5   LARGE_RIVER
+0x47    3   CUSTOMIZABLE_LINE_2
+0x47    5   LARGE_RIVER
+0x48    3   UNPAVED_ROAD
+0x48    5   SMALL_RIVER
+0x49    5   SMALL_RIVER
+0x4b    5   DATA_BOUNDS
+0x4e    5   ORCHARD
+0x4f    5   SCRUB
+0x50    5   WOODS
+0x51    5   WETLAND
+0x53    5   FLAT
+0x68    5   GENERIC_MANMADE
+0x69    5   GENERIC_MANMADE
+0x6a    5   MISC_AREA
+0x6b    5   MISC_AREA
+0x6c    5   GENERIC_MANMADE
+0x6d    5   GENERIC_MANMADE
+0x6e    5   GENERIC_MANMADE
+0x6f    5   GENERIC_MANMADE
+0x78    5   MISC_AREA
+0x7a    5   MISC_AREA
+0x7b    5   MISC_AREA
+0x81    5   WETLAND
+0x83    5   WOODS
+0x85    5   WOODS
+0x88    5   LAND
+0x89    5   FLAT
+0x8a    5   LAND
+0x8c    5   INTERMITTENT_LAKE
+0x8d    5   MARINE_MISC_AREA
+0x95    5   ORCHARD
+0x98    5   LAND
+0x0300   1   CITY_2M
+0x0400   1   CITY_1M
+0x0500   1   CITY_500K
+0x0600   1   CITY_200K
+0x0700   1   CITY_100K
+0x0800   1   CITY_50K
+0x0900   1   CITY_20K
+0x0a00   1   CITY_10K
+0x0b00   1   CITY_5K
+0x0c00   1   CITY_LT5K
+0x0d00   1   CITY_LT5K
+0x0e00   1   CITY_LT5K
+0x0f00   1   CITY_LT5K
+0x1000  1   CITY_LT5K
+0x1100  1   CITY_LT5K
+0x1200  1   MARINA
+0x1600  1   LIGHT_UNDEFINED
+0x1610  1   LIGHT_UNDEFINED
+0x1c01  1   NONE
+0x1f00  1   COUNTY
+0x2000  1   NONE
+0x2400  1   CUSTOMIZABLE_POINT_1
+0x2800  1   CUSTOMIZABLE_POINT_2
+0x2900  1   BUSINESS
+0x2a00  1   RESTAURANT
+0x2a01  1   RESTAURANT_AMERICAN
+0x2a02  1   RESTAURANT_ASIAN
+0x2a03  1   RESTAURANT_BARBECUE
+0x2a06  1   RESTAURANT_INTRNTNL
+0x2a07  1   RESTAURANT_FAST_FOOD
+0x2a08  1   RESTAURANT_ITALIAN
+0x2a0a  1   RESTAURANT_PIZZA
+0x2a0c  1   RESTAURANT_STEAK
+0x2a0e  1   RESTAURANT_CAFES
+0x2b00  1   HOTEL
+0x2b01  1   HOTEL
+0x2b02  1   BED_AND_BREAKFAST
+0x2b03  1   CAMPGROUND
+0x2b04  1   RESORT
+0x2c00  1   CUSTOMIZABLE_POINT_3
+0x2c01  1   NONE
+0x2c02  1   MUSEUM
+0x2c03  1   LIBRARY
+0x2c04  1   LANDMARK
+0x2c05  1   SCHOOL
+0x2c06  1   PARK
+0x2c07  1   ZOO
+0x2c08  1   ARENA
+0x2c09  1   HALL
+0x2c0a  1   WINERY
+0x2c0b  1   PLACE_OF_WORSHIP
+0x2d00  1   CUSTOMIZABLE_POINT_4
+0x2d01  1   LIVE_THEATER
+0x2d02  1   BAR
+0x2d03  1   MOVIE_THEATER
+0x2d04  1   CASINO
+0x2d06  1   SKI_CENTER
+0x2d07  1   BOWLING
+0x2d08  1   ICE_SKATING
+0x2d09  1   SWIMMING_POOL
+0x2d0a  1   FITNESS_CENTER
+0x2d0b  1   SPORT_AIRPORT
+0x2e00  1   GENERAL_STORE
+0x2e01  1   NONE
+0x2e02  1   GROCERY_STORE
+0x2e03  1   GENERAL_STORE
+0x2e04  1   SHOPPING_CENTER
+0x2e05  1   PHARMACY
+0x2e06  1   CONVENIENCE_STORE
+0x2e08  1   HOME_AND_GARDEN_STORE
+0x2e09  1   HOME_FURNISHINGS_STORE
+0x2e0a  1   SPECIALTY_RETAIL
+0x2e0b  1   SOFTWARE_RETAIL
+0x2f00  1   NONE
+0x2f01  1   GAS_STATION
+0x2f03  1   AUTO_REPAIR
+0x2f04  1   AIRPORT
+0x2f05  1   POST_OFFICE
+0x2f06  1   BANK
+0x2f07  1   DEALER
+0x2f08  1   GND_TRANSPORT
+0x2f09  1   MARINA
+0x2f0a  1   WRECKER_SERVICE
+0x2f0b  1   PARKING
+0x2f0c  1   REST_AREA_TOURIST_INFO
+0x2f0d  1   AUTO_CLUB
+0x2f0e  1   CAR_WASH
+0x2f10  1   NONE
+0x2f11  1   SERVICES_BUSINESS
+0x2f12  1   NONE
+0x2f13  1   NONE
+0x2f14  1   NONE
+0x2f15  1   NONE
+0x2f16  1   TRUCK_STOP
+0x3000  1   CUSTOMIZABLE_POINT_5
+0x3001  1   POLICE_STATION
+0x3002  1   HOSPITAL
+0x3003  1   CITY_HALL
+0x3004  1   COURTHOUSE
+0x3005  1   COMMUNITY_CENTER
+0x3006  1   BORDER_CROSSING
+0x3007  1   GOV_OFFICE
+0x3008  1   FIRE_DEPT
+0x4000  1   GOLF_COURSE
+0x4100  1   FISHING_SPOT
+0x4300  1   MARINA
+0x4400  1   NONE
+0x4500  1   RESTAURANT
+0x4600  1   BAR
+0x4700  1   BOAT_RAMP
+0x4800  1   CAMPGROUND
+0x4900  1   PARK
+0x4a00  1   PICNIC_AREA
+0x4b00  1   FIRST_AID
+0x4c00  1   INFORMATION
+0x4d00  1   PARKING
+0x4e00  1   RESTROOMS
+0x5000  1   DRINKING_WATER
+0x5100  1   PHONE
+0x5200  1   SCENIC_AREA
+0x5300  1   SKI_CENTER
+0x5400  1   SWIMMING_AREA
+0x5500  1   DAM
+0x5900  1   AIRPORT
+0x5901  1   AIRPORT
+0x5c00  1   DIVING_AREA
+0x6400  1   BUILDING
+0x6401  1   BRIDGE
+0x6402  1   NONE
+0x6403  1   CEMETERY
+0x6404  1   CHURCH
+0x6407  1   NONE
+0x6408  1   HOSPITAL
+0x640d  1   OILFIELD
+0x640e  1   PARK
+0x640f  1   POST_OFFICE
+0x6410  1   NONE
+0x6411  1   TOWER
+0x6412  1   TRAIL
+0x6413  1   TUNNEL
+0x6414  1   WELL
+0x6415  1   NONE
+0x6503  1   NONE
+0x6505  1   NONE
+0x6506  1   NONE
+0x6508  1   WATERFALL
+0x6509  1   GEYSER
+0x650c  1   ISLAND
+0x650d  1   NONE
+0x6511  1   SPRING
+0x6512  1   STREAM
+0x6600  1   CUSTOMIZABLE_POINT_6
+0x6601  1   NONE
+0x6605  1   BENCH
+0x6606  1   CAPE
+0x660a  1   NONE
+0x660f  1   PILLAR
+0x6610  1   PLAIN
+0x6611  1   RANGE
+0x6612  1   RESERVE
+0x6613  1   RIDGE
+0x6614  1   ROCK
+0x6616  1   SUMMIT
+0xf001  1   GND_TRANSPORT
+0xf002  1   GND_TRANSPORT
+0xf003  1   NONE
+0xf004  1   NONE
+0xf005  1   NONE
+0xf006  1   CUSTOMIZABLE_POINT_7
+0xf007  1   CUSTOMIZABLE_POINT_8
+0xf009  1   CUSTOMIZABLE_POINT_9
+0xf00a  1   MARINA
+0xf00c  1   NONE
+0xf101  1   POW_CHURCH
+0xf102  1   POW_CHURCH
+0xf103  1   POW_CHURCH
+0xf104  1   POW_MOSQUE
+0xf105  1   POW_SYNAGOGUE
+0xf201  1   CUSTOMIZABLE_POINT_10
+0xf202  1   CUSTOMIZABLE_POINT_11
+0xf203  1   CROSSING
+0xf204  1   CUSTOMIZABLE_POINT_12
+0xf206  1   CUSTOMIZABLE_POINT_13
+0xf207  1   CUSTOMIZABLE_POINT_14
+0xf208  1   GAS_STATION
+0xf209  1   AUTO_REPAIR
+0xf20a  1   NONE
+0xf20b  1   CROSSING
+0xf301  1   CUSTOMIZABLE_POINT_15
+0xf302  1   SPRING
+0xf303  1   CUSTOMIZABLE_POINT_16
+0xf306  1   CUSTOMIZABLE_POINT_17
+0xf30a  1   ROCK
+0xf30c  1   BRIDGE
+0xf30d  1   CUSTOMIZABLE_POINT_18
+0xf501  1   SCHOOL
+0xf502  1   SCHOOL
+0xf503  1   SCHOOL
+0xf504  1   SCHOOL
+0xf505  1   SCHOOL
+0xf601  1   BANK
+0xf602  1   SERVICES_PERSONAL
+0xf603  1   SERVICES_PERSONAL
+0xf605  1   NONE
+0xf607  1   NONE
+0xf60d  1   NONE
+0xf60e  1   NONE
+0xf60f  1   NONE
+0xf611  1   NONE
+0xf613  1   SERVICES_PERSONAL
+0xf614  1   NONE
+0xf615  1   COMMUNICATION_SERVICES
+0xf616  1   NONE
+0xf701  1   CUSTOMIZABLE_POINT_19
+0xf703  1   CUSTOMIZABLE_POINT_20
+0xf705  1   CUSTOMIZABLE_POINT_21
+0xf707  1   NONE
+0xf708  1   NONE
+0xf801  1   NONE
+0xf802  1   NONE
+0xf901  1   NONE
+
+
+
+0x00	3	RESIDENTIAL
+0x01	3	MAJOR_HWY
+0x01	5	LARGE_CITY
+0x02	3	PRINCIPAL_HWY
+0x02	5	SMALL_CITY
+0x03	3	OTHER_HWY
+0x03	5	TOWN
+0x04	3	ARTERIAL
+0x04	5	MILITARY_BASE
+0x05	3	COLLECTOR
+0x05	5	PARKING_LOT
+0x06	3	RESIDENTIAL
+0x06	5	PARKING_GARAGE
+0x07	3	ALLEY
+0x07	5	AIRPORT
+0x08	3	LOW_SPEED_RAMP
+0x08	5	SHOPPING_AREA
+0x09	3	HIGH_SPEED_RAMP
+0x09	5	MARINA
+0x0a	3	UNPAVED_ROAD
+0x0a	5	COLLEGE
+0x0b	3	MAJOR_CONNECTOR
+0x0b	5	HOSPITAL
+0x0c	3	ROUNDABOUT
+0x0c	5	INDUSTRIAL_COMPLEX
+0x0d	5	RESERVATION
+0x0e	5	AIRPORT_RUNWAYS
+0x13	5	GENERIC_MANMADE
+0x14	3	RAILROAD
+0x14	5	NATIONAL_PARK
+0x15	3	SHORELINE
+0x16	3	TRAIL
+0x1c	3	MJR_PLTCL_BDRY
+0x17	5	URBAN_PARK
+0x18	3	STREAM
+0x18	5	GOLF_COURSE
+0x19	5	SPORTS_COMPLEX
+0x1a	3	FERRY
+0x1d	3	MNR_PLTCL_BDRY
+0x1a	5	CEMETARY
+0x1e	3	INTRN_PLTCL_BDRY
+0x1e	5	STATE_PARK
+0x1f	3	RIVER
+0x1f	5	STATE_PARK
+0x20	3	MINOR_CONTOUR
+0x20	5	STATE_PARK
+0x21	3	INT_CONTOUR
+0x22	3	MAJOR_CONTOUR
+0x23	3	MINOR_BATHY_CONTOUR
+0x26	3	INTERMITTENT_STREAM
+0x27	3	AIRPORT_RUNWAY
+0x28	3	PIPELINE
+0x29	5	LAKE
+0x32	5	SEA
+0x3b	5	SMALL_LAKE
+0x3c	5	SMALL_LAKE
+0x3d	5	LARGE_LAKE
+0x3e	5	LAKE
+0x3f	3	CUSTOMIZABLE_LINE_1
+0x3f	5	LAKE
+0x40	5	SMALL_LAKE
+0x41	3	CUSTOMIZABLE_LINE_1
+0x41	5	SMALL_LAKE
+0x42	3	UNPAVED_ROAD
+0x43	3	CUSTOMIZABLE_ROUTE_LINE_1
+0x44	3	RIVER
+0x44	5	LARGE_LAKE
+0x45	3	MNR_PLTCL_BDRY
+0x45	5	LAKE
+0x46	3	MISC_LINE
+0x46	5	LARGE_RIVER
+0x47	3	CUSTOMIZABLE_LINE_2
+0x47	5	LARGE_RIVER
+0x48	3	UNPAVED_ROAD
+0x48	5	SMALL_RIVER
+0x49	5	SMALL_RIVER
+0x4b	5	DATA_BOUNDS
+0x4e	5	ORCHARD
+0x4f	5	SCRUB
+0x50	5	WOODS
+0x4c	5	WETLAND
+0x53	5	FLAT
+0x68	5	GENERIC_MANMADE
+0x69	5	GENERIC_MANMADE
+0x6a	5	MISC_AREA
+0x6b	5	MISC_AREA
+0x6c	5	GENERIC_MANMADE
+0x6d	5	GENERIC_MANMADE
+0x6e	5	GENERIC_MANMADE
+0x6f	5	GENERIC_MANMADE
+0x78	5	MISC_AREA
+0x7a	5	MISC_AREA
+0x7b	5	MISC_AREA
+0x81	5	WETLAND
+0x83	5	WOODS
+0x85	5	WOODS
+0x88	5	LAND
+0x89	5	FLAT
+0x8a	5	LAND
+0x8c	5	INTERMITTENT_LAKE
+0x8d	5	MARINE_MISC_AREA
+0x95	5	ORCHARD
+0x98	5	LAND
+0x0100	1	LARGE_CITY
+0x0200	1	MEDIUM_CITY
+0x0300	1	MEDIUM_CITY
+0x0400	1	MEDIUM_CITY
+0x0500	1	MEDIUM_CITY
+0x0600	1	SMALL_CITY
+0x0700	1	SMALL_CITY
+0x0800	1	SMALL_CITY
+0x0900	1	SMALL_CITY
+0x0a00	1	SMALL_CITY
+0x0b00	1	SMALL_CITY
+0x0c00	1	SMALL_CITY
+0x0d00	1	SMALL_CITY
+0x0e00	1	SMALL_CITY
+0x0f00	1	SMALL_CITY
+0x1000	1	SMALL_CITY
+0x1100	1	SMALL_CITY
+0x1200	1	MARINA
+0x1600	1	LIGHT_UNDEFINED
+0x1610	1	LIGHT_UNDEFINED
+0x1c01	1	NONE
+0x1f00	1	COUNTY
+0x10f07	5	CUSTOMIZABLE_AREA_1
+0x10f09	5	CUSTOMIZABLE_AREA_2
+0x10f0e	5	CUSTOMIZABLE_AREA_3
+0x10f0f	5	CUSTOMIZABLE_AREA_4
+0x2000	1	NONE
+0x2110	1	PARKING
+0x2200	1	PARKING
+0x2400	1	CUSTOMIZABLE_POINT_1
+0x2800	1	CUSTOMIZABLE_POINT_2
+0x2900	1	BUSINESS
+0x2a00	1	RESTAURANT
+0x2a01	1	RESTAURANT_AMERICAN
+0x2a02	1	RESTAURANT_ASIAN
+0x2a03	1	RESTAURANT_BARBECUE
+0x2a05	1	RESTAURANT
+0x2a06	1	RESTAURANT_INTRNTNL
+0x2a07	1	RESTAURANT_FAST_FOOD
+0x2a08	1	RESTAURANT_ITALIAN
+0x2a11	1	RESTAURANT_BRITISH
+0x2a0a	1	RESTAURANT_PIZZA
+0x2a0b	1	RESTAURANT_SEAFOOD
+0x2a0c	1	RESTAURANT_STEAK
+0x2a0e	1	RESTAURANT_CAFES
+0x2a0f	1	RESTAURANT_FRENCH
+0x2b00	1	HOTEL
+0x2b01	1	HOTEL
+0x2b02	1	BED_AND_BREAKFAST
+0x2b03	1	CAMPGROUND
+0x2b04	1	RESORT
+0x2c00	1	CUSTOMIZABLE_POINT_3
+0x2c01	1	NONE
+0x2c02	1	MUSEUM
+0x2c03	1	LIBRARY
+0x2c04	1	LANDMARK
+0x2c05	1	SCHOOL
+0x2c06	1	PARK
+0x2c07	1	ZOO
+0x2c08	1	ARENA
+0x2c09	1	HALL
+0x2c0a	1	WINERY
+0x2c0b	1	PLACE_OF_WORSHIP
+0x2d00	1	CUSTOMIZABLE_POINT_4
+0x2d01	1	LIVE_THEATER
+0x2d02	1	BAR
+0x2d03	1	MOVIE_THEATER
+0x2d04	1	CASINO
+0x2d06	1	SKI_CENTER
+0x2d07	1	BOWLING
+0x2d08	1	ICE_SKATING
+0x2d09	1	SWIMMING_POOL
+0x2d0a	1	FITNESS_CENTER
+0x2d0b	1	SPORT_AIRPORT
+0x2e00	1	GENERAL_STORE
+0x2e01	1	NONE
+0x2e02	1	GROCERY_STORE
+0x2e03	1	GENERAL_STORE
+0x2e04	1	SHOPPING_CENTER
+0x2e05	1	PHARMACY
+0x2e06	1	CONVENIENCE_STORE
+0x2e07	1	CLOTHING_RETAIL
+0x2e08	1	HOME_AND_GARDEN_STORE
+0x2e09	1	HOME_FURNISHINGS_STORE
+0x2e0a	1	SPECIALTY_RETAIL
+0x2e0b	1	SOFTWARE_RETAIL
+0x2f00	1	NONE
+0x2f01	1	GAS_STATION
+0x2f02	1	AUTO_RENTAL
+0x2f03	1	AUTO_REPAIR
+0x2f04	1	AIRPORT
+0x2f05	1	POST_OFFICE
+0x2f06	1	BANK
+0x2f07	1	DEALER
+0x2f08	1	GND_TRANSPORT
+0x2f09	1	MARINA
+0x2f0a	1	WRECKER_SERVICE
+0x2f0b	1	PARKING
+0x2f0c	1	REST_AREA_TOURIST_INFO
+0x2f0d	1	AUTO_CLUB
+0x2f0e	1	CAR_WASH
+0x2f0f	1	SPECIALTY_RETAIL
+0x2f10	1	NONE
+0x2f11	1	SERVICES_BUSINESS
+0x2f12	1	NONE
+0x2f13	1	NONE
+0x2f14	1	NONE
+0x2f15	1	NONE
+0x2f16	1	TRUCK_STOP
+0x2f17	1	GND_TRANSPORT
+0x3000	1	CUSTOMIZABLE_POINT_5
+0x3001	1	POLICE_STATION
+0x3002	1	HOSPITAL
+0x3003	1	CITY_HALL
+0x3004	1	COURTHOUSE
+0x3005	1	COMMUNITY_CENTER
+0x3006	1	BORDER_CROSSING
+0x3007	1	GOV_OFFICE
+0x3008	1	FIRE_DEPT
+0x4000	1	GOLF_COURSE
+0x4100	1	FISHING_SPOT
+0x4300	1	MARINA
+0x4400	1	NONE
+0x4500	1	RESTAURANT
+0x4600	1	BAR
+0x4700	1	BOAT_RAMP
+0x4800	1	CAMPGROUND
+0x4900	1	PARK
+0x4a00	1	PICNIC_AREA
+0x4b00	1	FIRST_AID
+0x4c00	1	INFORMATION
+0x4d00	1	PARKING
+0x4f00	1	SHOWERS
+0x4e00	1	RESTROOMS
+0x5000	1	DRINKING_WATER
+0x5100	1	PHONE
+0x5200	1	SCENIC_AREA
+0x5300	1	SKI_CENTER
+0x5400	1	SWIMMING_AREA
+0x5500	1	DAM
+0x5900	1	AIRPORT
+0x5901	1	AIRPORT
+0x5c00	1	DIVING_AREA
+0x6400	1	BUILDING
+0x6401	1	BRIDGE
+0x6402	1	NONE
+0x6403	1	CEMETERY
+0x6404	1	CHURCH
+0x6407	1	NONE
+0x6408	1	HOSPITAL
+0x640b	1	PILLAR
+0x640c	1	MINE
+0x640d	1	OILFIELD
+0x640e	1	PARK
+0x640f	1	POST_OFFICE
+0x6405	1	HOUSE
+0x6410	1	NONE
+0x6411	1	TOWER
+0x6412	1	TRAIL
+0x6413	1	TUNNEL
+0x6414	1	WELL
+0x6415	1	NONE
+0x6503	1	NONE
+0x6505	1	NONE
+0x6506	1	NONE
+0x6508	1	WATERFALL
+0x6509	1	GEYSER
+0x650c	1	ISLAND
+0x650d	1	NONE
+0x6511	1	SPRING
+0x6512	1	STREAM
+0x6600	1	CUSTOMIZABLE_POINT_6
+0x6601	1	NONE
+0x6604	1	BEACH
+0x6605	1	BENCH
+0x6606	1	CAPE
+0x660a	1	NONE
+0x660f	1	PILLAR
+0x6610	1	PLAIN
+0x6611	1	RANGE
+0x6612	1	RESERVE
+0x6613	1	RIDGE
+0x6614	1	ROCK
+0x6616	1	SUMMIT
+0xf001	1	GND_TRANSPORT
+0xf002	1	GND_TRANSPORT
+0xf003	1	NONE
+0xf004	1	NONE
+0xf005	1	NONE
+0xf006	1	CUSTOMIZABLE_POINT_7
+0xf007	1	CUSTOMIZABLE_POINT_8
+0xf009	1	CUSTOMIZABLE_POINT_9
+0xf00a	1	MARINA
+0xf00c	1	NONE
+0xf101	1	POW_CHURCH
+0xf102	1	POW_CHURCH
+0xf103	1	POW_CHURCH
+0xf104	1	POW_MOSQUE
+0xf105	1	POW_SYNAGOGUE
+0xf201	1	CUSTOMIZABLE_POINT_10
+0xf202	1	CUSTOMIZABLE_POINT_11
+0xf203	1	CROSSING
+0xf204	1	CUSTOMIZABLE_POINT_12
+0xf206	1	CUSTOMIZABLE_POINT_13
+0xf207	1	CUSTOMIZABLE_POINT_14
+0xf208	1	GAS_STATION
+0xf209	1	AUTO_REPAIR
+0xf20a	1	NONE
+0xf20b	1	CROSSING
+0xf301	1	CUSTOMIZABLE_POINT_15
+0xf302	1	SPRING
+0xf303	1	CUSTOMIZABLE_POINT_16
+0xf306	1	CUSTOMIZABLE_POINT_17
+0xf30a	1	ROCK
+0xf30c	1	BRIDGE
+0xf30d	1	CUSTOMIZABLE_POINT_18
+0xf501	1	SCHOOL
+0xf502	1	SCHOOL
+0xf503	1	SCHOOL
+0xf504	1	SCHOOL
+0xf505	1	SCHOOL
+0xf601	1	BANK
+0xf602	1	SERVICES_PERSONAL
+0xf603	1	SERVICES_PERSONAL
+0xf605	1	NONE
+0xf607	1	NONE
+0xf60d	1	NONE
+0xf60e	1	NONE
+0xf60f	1	NONE
+0xf611	1	NONE
+0xf613	1	SERVICES_PERSONAL
+0xf614	1	NONE
+0xf615	1	COMMUNICATION_SERVICES
+0xf616	1	NONE
+0xf701	1	CUSTOMIZABLE_POINT_19
+0xf703	1	CUSTOMIZABLE_POINT_20
+0xf705	1	CUSTOMIZABLE_POINT_21
+0xf707	1	NONE
+0xf708	1	NONE
+0xf801	1	NONE
+0xf802	1	NONE
+0xf901	1	NONE
+0x1500	1	CUSTOMIZABLE_POINT_22
+0x11501	1	CUSTOMIZABLE_POINT_23
+0x11502	1	CUSTOMIZABLE_POINT_24
+0x11503	1	CUSTOMIZABLE_POINT_25
+0X11504	1	CUSTOMIZABLE_POINT_26
 

@@ -534,7 +534,7 @@ if ( %poi ) {
     print_section( 'Non-addressed POIs' );
     while ( my ($id,$list) = each %poi ) {
         for my $poi ( @$list ) {
-            WritePOI( $poi );
+            output_poi( $poi );
         }
     }
     undef %poi;
@@ -1441,7 +1441,7 @@ sub FindCity {
 
 
 
-sub WritePOI {
+sub output_poi {
     my ($info) = @_;
 
     while ( my ( $key, $val ) = each %{ $info->{tags} } ) {
@@ -1783,26 +1783,27 @@ sub AddRoad {
 
 
 sub WritePolygon {
-
     my ($param, $obj, %opt) = @_;
 
-    my %tag   = $param->{tags} ? %{$param->{tags}} : ();
-
-    return  unless  $param->{areas};
-    return  unless  @{$param->{areas}};
-
-    my $comment = $param->{comment} || q{};
-    my $lzoom   = $param->{level_l} || '0';
-    my $hzoom   = $param->{level_h} || '0';
+    return  if !$param->{areas} || !@{$param->{areas}};
+    
+    while ( my ( $key, $val ) = each %{ $param->{tags} } ) {
+        next if !$settings{comment}->{$key}; # ???
+        $param->{comment} .= "\n$key = $val";
+    }
 
     #   area-dependent zoomlevel
-    if ( ref $hzoom ) {
-        my $square = sum map { Math::Polygon::Calc::polygon_area( @$_ )
-                                * cos( [polygon_centroid( @{$param->{areas}->[0]} )]->[1] / 180 * 3.14159 )
-                                * (40000/360)**2 } @{$param->{areas}};
-        $hzoom = $lzoom + last_index { $square >= $_ } @$hzoom;
-        return if $hzoom < $lzoom;
-        $param->{comment} .= "\narea: $square km2 -> $hzoom";
+    if ( ref $param->{level_h} )  {
+        my $square = sum map {
+                Math::Polygon::Calc::polygon_area( @$_ )
+                * cos( [polygon_centroid( @{$param->{areas}->[0]} )]->[1] / 180 * 3.14159 )
+                * (40000/360)**2
+            } @{$param->{areas}};
+        my $tholds = delete $param->{level_h};
+        my $level_h = ($param->{level_l} || 0) + last_index { $square >= $_ } @$tholds;
+        return if $level_h < ($param->{level_l} || 0);
+        $param->{level_h} = $level_h;
+        $param->{comment} .= "\narea: $square km2 -> $level_h";
     }
 
     #   test if inside bounds
@@ -1817,8 +1818,6 @@ sub WritePolygon {
 
     $param->{holes} = []      unless $param->{holes};
     my @plist = grep { scalar @$_ > 3 } ( @{$param->{areas}}, @{$param->{holes}} );
-
-    # TODO: filter bad holes
 
     #   clip
     if ( $bound && !$opt{no_clip} && any { !defined } @inside ) {
@@ -1837,27 +1836,14 @@ sub WritePolygon {
 
     return    unless @plist;
 
-    while ( my ( $key, $val ) = each %tag ) {
-        next if !$settings{comment}->{$key};
-        $comment .= "\n$key = $val";
-    }
-
-    my %opts = (
-        lzoom   => $lzoom || '0',
-        hzoom   => $hzoom || '0',
-        Type    => $param->{type},
-    );
-    
-    $opts{Label} = convert_string( $param->{name} )   if defined $param->{name} && $param->{name} ne q{};
-
     ## Navitel polygon addressing
-    if ( $flags->{navitel} && $tag{'addr:housenumber'} ) {
-        my $address = _get_address($obj, tag => \%tag, point => $plist[0]->[0]);
-        my $mp_address = _get_mp_address( $address );
-
-        _hash_merge( \%opts, $mp_address );
+    if ( $flags->{navitel} && $param->{tags}->{'addr:housenumber'} ) {
+        $param->{address} = _get_address($obj, point => $plist[0]->[0]);
+#        my $mp_address = _get_mp_address( $address );
+#        _hash_merge( \%opts, $mp_address );
     }
 
+=disable
     ## Navitel entrances
     if ( $flags->{navitel} ) {
         for my $entr ( @{ $param->{entrance} } ) {
@@ -1865,19 +1851,12 @@ sub WritePolygon {
             push @{$opts{EntryPoint}}, { coords => [ split /\s*,\s*/xms, $entr->[0] ], name => convert_string( $entr->[1] ) };
         }
     }
+=cut
 
-    for my $polygon ( @plist ) {
-        next if @$polygon < 3;
-        push @{ $opts{contours} }, [ map { [ reverse @{$_} ] } @$polygon ];
-    }
+    # !!! need rearranging contours
+    $param->{contours} = [ grep { @$_ > 3 } @plist ];
 
-    for my $key ( keys %{ $param->{extra_fields} } ) {
-        next if !defined $param->{extra_fields}->{$key} || $param->{extra_fields}->{$key} eq q{};
-        $opts{$key} = convert_string( $param->{extra_fields}->{$key} );
-    }
-
-    $writer->output( polygon => { comment => $comment, opts => \%opts } );
-
+    $writer->output( polygon => $param );
     return;
 }
 
@@ -2194,7 +2173,7 @@ sub action_address_poi {
         for my $poiobj ( @{ $poi{$id} } ) {
             $poiobj->{tags} = _hash_merge( $house_address, $poiobj->{tags} );
             $poiobj->{comment} .= "\nAddressed by $obj->{type}ID = $obj->{id}";
-            WritePOI( $poiobj );
+            output_poi( $poiobj );
         }
         delete $poi{$id};
     }
@@ -2234,7 +2213,7 @@ sub action_write_poi {
         $poi_rtree->insert( $id, @bbox );
     }
     else {
-        WritePOI( $info );
+        output_poi( $info );
     }
 
     return;

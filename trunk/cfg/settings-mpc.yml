@@ -10,6 +10,7 @@ label:          [ name, loc_name, operator, description ]
 entrance:       [ name, ref ]
 place:          [ place_name, name ]
 destination:    [ destination, label, name ]
+house:          [ 'addr:housename', 'addr:housenumber' ]
 
 phone:          [ 'contact:phone', phone ]
 
@@ -24,6 +25,8 @@ phone:          [ 'contact:phone', phone ]
 contacts:
     PHONE: %phone
 
+building:
+    NAME: %house
 
 
 ################################
