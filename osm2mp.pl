@@ -1600,7 +1600,6 @@ sub AddBarrier {
 
 
 sub WriteLine {
-
     my %param = %{$_[0]};
     my %tag   = ref $param{tags} ? %{$param{tags}} : ();
 
@@ -1632,6 +1631,11 @@ sub WriteLine {
     for my $key ( keys %{ $param{extra_fields} } ) {
         next if !defined $param{extra_fields}->{$key} || $param{extra_fields}->{$key} eq q{};
         $opts{$key} = convert_string( $param{extra_fields}->{$key} );
+    }
+    for my $key ( sort keys %param ) {
+        next unless $key =~ / ^ _* [A-Z] /xms;
+        delete $opts{$key} and next if !defined $param{$key} || $param{$key} eq q{};
+        $opts{$key} = convert_string( $param{$key} );
     }
 
     $writer->output( polyline => { comment => $comment, opts => \%opts } );
