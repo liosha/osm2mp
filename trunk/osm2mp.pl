@@ -1019,13 +1019,13 @@ if ( $flags->{routing} ) {
 
 if ( $bound && $flags->{background}  &&  exists $settings{types}->{background} ) {
 
-    print_section( 'Background' );
-
-    WritePolygon({
-            type    => $settings{types}->{background}->{type},
-            level_h => $settings{types}->{background}->{endlevel},
-            areas   => [ $bound->get_points() ],
-        });
+    my %bound_info = (
+        comment => 'map background',
+        type    => $settings{types}->{background}->{type},
+        level_h => $settings{types}->{background}->{endlevel},
+        areas   => [ $bound->get_points() ],
+    );
+    WritePolygon( \%bound_info );
 }
 
 

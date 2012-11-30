@@ -173,7 +173,7 @@ sub _write_polygon {
     my %record = (
         NAME => $data->{name},
         GRMN_TYPE => $type,
-        %{ $data->{extra_fields} },
+        %{ $data->{extra_fields} || {} },
     );
 
     $shp->add_shape(
