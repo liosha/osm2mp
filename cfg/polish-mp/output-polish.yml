@@ -138,6 +138,28 @@ polyline: |
 
 
 
+road: |
+  [% INCLUDE comment  text = comment  IF comment -%]
+  [POLYLINE]
+  Data[% opts.lzoom %]=([% opts.chain.0.0 %],[% opts.chain.0.1 %])
+  [%- temp = opts.chain.shift; FOREACH point IN opts.chain -%]
+  ,([% point.0 %],[% point.1 %])
+  [%- END %]
+  [% IF opts.hzoom -%]
+  EndLevel=[% opts.hzoom %]
+  [% END -%]
+  [% nods = opts.nods; opts.delete( 'lzoom', 'hzoom', 'chain', 'nods' ) -%]
+  [% FOREACH key IN opts.keys -%]
+  [% key %]=[% opts.$key | mp_filter %]
+  [% END -%]
+  [% IF nods; FOREACH nnod IN [ 0 .. nods.max ] -%]
+  Nod[% nnod %]=[% nods.$nnod.join(',') %]
+  [% END; END -%]
+  [END]
+  [% %]
+
+
+
 turn_restriction: |
   [% INCLUDE comment  text = comment  IF comment -%]
   [Restrict]
