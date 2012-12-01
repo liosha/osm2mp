@@ -127,7 +127,8 @@ my %addr_field = (
 );
 
 sub _write_point {
-    my ($self, $data) = @_;
+    my ($self, $vars) = @_;
+    my $data = $vars->{data} || {};
 
     my $shp = $self->_get_shp( 'points', 'POINT' );
     my $type = $MP2SHP{1}->{lc $data->{type}} // $data->{type};
@@ -162,7 +163,10 @@ sub _write_point {
 
 
 sub _write_polygon {
-    my ($self, $data) = @_;
+    my ($self, $vars) = @_;
+    my $data = $vars->{data} || {};
+
+    return if !@{$data->{contours}};
 
     my $shp = $self->_get_shp( 'areas', 'POLYGON' );
     my $type = $MP2SHP{5}->{lc $data->{type}} // $data->{type};
