@@ -99,14 +99,16 @@ sub _process {
     my ($self, $tt_name, $vars) = @_;
     $self->{_count}->{$tt_name} ++;
 
-    if ( $vars->{city} ) {
-        $vars->{extra_fields}->{City} = 'Y';
+    my $data = $vars->{data} || {};
+
+    if ( $data->{city} ) {
+        $data->{extra_fields}->{City} = 'Y';
     }
 
-    if ( $vars->{address} ) {
-        my $garmin_address = GarminTools::get_garmin_address($vars->{address});
+    if ( my $address = $data->{address} ) {
+        my $garmin_address = GarminTools::get_garmin_address($address);
         while ( my ($k, $v) = each %$garmin_address ) {
-            $vars->{extra_fields}->{ $mp_addr_field{$k} } = $v;
+            $data->{extra_fields}->{ $mp_addr_field{$k} } = $v;
         }
     }
 
