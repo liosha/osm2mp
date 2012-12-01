@@ -1477,7 +1477,7 @@ sub output_poi {
         $info->{address} = _get_address( $info, level => 'city' );
     }
 
-    $writer->output( point => $info );
+    $writer->output( point => { data => $info } );
 
     return;
 
@@ -1856,7 +1856,7 @@ sub WritePolygon {
     # !!! need rearranging contours
     $param->{contours} = [ grep { @$_ > 3 } @plist ];
 
-    $writer->output( polygon => $param );
+    $writer->output( polygon => { data => $param } );
     return;
 }
 

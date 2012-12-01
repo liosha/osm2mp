@@ -110,9 +110,6 @@ sub _process {
         }
     }
 
-    $vars->{level_l} //= 0;
-    $vars->{level_h} //= $vars->{level_l};
-
     return $self->{tt_context}->process($tt_name => $vars);
 }
 }
