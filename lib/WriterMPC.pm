@@ -268,6 +268,11 @@ sub _init_code_table {
 # taken from vasyusya's _mp2shp distribution 
 __DATA__
 
+0x2C0D 1 POW_MOSQUE
+0x2C0E 1 POW_CHURCH
+0x2C0F 1 POW_TEMPLE
+0x2C10 1 POW_SYNAGOGUE
+
 0x00 3   RESIDENTIAL
 0x01 3   MAJOR_HWY
 0x01 5   LARGE_CITY

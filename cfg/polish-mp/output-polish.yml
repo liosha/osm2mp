@@ -72,45 +72,44 @@ footer: |
 
 
 _common_fields: |
-  [% IF level_h && level_h > level_l -%]
-  [% # IF level_h -%]
-  EndLevel=[% level_h %]
+  [% IF data.level_h && data.level_h > (data.level_l || 0) -%]
+  EndLevel=[% data.level_h %]
   [% END -%]
-  Type=[% type %]
-  [% label = name;
-  IF extra_fields.exists('Label');
-      label = extra_fields.Label;
-      extra_fields.delete('Label');
+  Type=[% data.type %]
+  [% label = data.name;
+  IF data.extra_fields.exists('Label');
+      label = data.extra_fields.Label;
+      data.extra_fields.delete('Label');
   END;
   IF label.defined -%]
   Label=[% label | mp_filter %]
   [% END -%]
-  [% FOREACH key IN extra.keys.sort -%]
-  [% key %]=[% extra.$key | mp_filter %]
+  [% FOREACH key IN data.extra_fields.keys.sort -%]
+  [% key %]=[% data.extra_fields.$key | mp_filter %]
   [% END -%]
 
 
 
 point: |
-  [% INCLUDE comment  text = comment  IF comment -%]
+  [% INCLUDE comment  text = data.comment  IF data.comment -%]
   [POI]
-  Data[% level_l || 0 %]=([% coords.1 %],[% coords.0 %])
-  [% INCLUDE _common_fields type=type, level_h=level_h, name=name, extra=extra_fields -%]
+  Data[% data.level_l || 0 %]=([% data.coords.1 %],[% data.coords.0 %])
+  [% INCLUDE _common_fields data = data -%]
   [END]
   [% %]
 
 
 
 polygon: |
-  [% INCLUDE comment  text = comment  IF comment -%]
+  [% INCLUDE comment  text = data.comment  IF data.comment -%]
   [POLYGON]
-  [% FOREACH contour IN contours -%]
-  Data[% level_l || 0 %]=([% contour.0.1 %],[% contour.0.0 %])
+  [% FOREACH contour IN data.contours -%]
+  Data[% data.level_l || 0 %]=([% contour.0.1 %],[% contour.0.0 %])
   [%- temp = contour.shift; FOREACH point IN contour -%]
   ,([% point.1 %],[% point.0 %])
   [%- END %]
   [% END -%]
-  [% INCLUDE _common_fields type=type, level_h=level_h, name=name, extra=extra_fields -%]
+  [% INCLUDE _common_fields data = data -%]
   [% # entrances -%]
   [END]
   [% %]
