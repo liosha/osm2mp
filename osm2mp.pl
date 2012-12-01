@@ -248,7 +248,7 @@ my $osm = OSM->new(
 );
 $osm->merge_multipolygons();
 
-close $in;
+close $in  if $infile ne q{-};
 
 my ($nodes, $chains, $mpoly, $relations) = @$osm{ qw/ nodes chains mpoly relations / };
 my ($nodetag, $waytag, $reltag) = @{$osm->{tags}}{ qw/ node way relation / };
