@@ -109,12 +109,14 @@ whitewater:         1
 ---
 
 background:
+    comment:    map background
     type:       0x4B
-    endlevel:   4
+    level_h:    4
 
 sea:
+    comment:    sea areas from costlines
     type:       0x3C
-    endlevel:   4
+    level_l:    4
   
 
 
