@@ -1817,7 +1817,7 @@ sub WritePolygon {
     my @plist = grep { scalar @$_ > 3 } ( @{$param->{areas}}, @{$param->{holes}} );
 
     #   clip
-    if ( $bound && $flags->{area_clip} && !$opt{no_clip} && any { !defined } @inside ) {
+    if ( $bound && $flags->{clip_areas} && !$opt{no_clip} && any { !defined } @inside ) {
         my $gpc = new_gpc();
 
         for my $area ( @{$param->{areas}} ) {
