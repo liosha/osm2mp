@@ -553,9 +553,7 @@ if ( $flags->{shorelines} ) {
     print_section( 'Sea areas generated from coastlines' );
     for my $sea_poly ( @sea_areas ) {
         my %objinfo = (
-            type    => $settings{types}->{sea}->{type},
-            level_h => $settings{types}->{sea}->{endlevel},
-            comment => 'sea area',
+            %{ $settings{types}->{sea} },
             areas   => [ shift @$sea_poly ],
             holes   => $sea_poly,
         );
@@ -1017,12 +1015,10 @@ if ( $flags->{routing} ) {
 ####    Background object (?)
 
 
-if ( $bound && $flags->{background}  &&  exists $settings{types}->{background} ) {
+if ( $bound && $flags->{background} && $settings{types}->{background} ) {
 
     my %bound_info = (
-        comment => 'map background',
-        type    => $settings{types}->{background}->{type},
-        level_h => $settings{types}->{background}->{endlevel},
+        %{ $settings{types}->{background} },
         areas   => [ $bound->get_points() ],
     );
     WritePolygon( \%bound_info );
