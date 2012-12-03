@@ -79,10 +79,11 @@ sub output {
         section => undef,
         info    => undef,
 
-        point   => sub { $self->_write_point(@_) },
-        polygon => sub { $self->_write_polygon(@_) },
-        # !!!
-        polyline => undef,
+        point       => sub { $self->_write_point(@_) },
+        polygon     => sub { $self->_write_polygon(@_) },
+        polyline    => sub { $self->_write_polyline(@_) },,
+        # !!! todo
+        road => undef,
         turn_restriction => undef,
         destination_sign => undef,
     );
@@ -180,6 +181,30 @@ sub _write_polygon {
 
     $shp->add_shape(
         $data->{contours},
+        { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
+    );
+    return;
+}
+
+
+sub _write_polyline {
+    my ($self, $vars) = @_;
+    my $data = $vars->{data} || {};
+
+    return if !@{$data->{chain}};
+
+    my $shp = $self->_get_shp( lines => 'POLYLINE' );
+    my $type = $MP2SHP{3}->{lc $data->{type}} // $data->{type};
+    carp "Unknown area type: $type"  if $type =~ /^0/;
+
+    my %record = (
+        NAME => $data->{name},
+        GRMN_TYPE => $type,
+        %{ $data->{extra_fields} || {} },
+    );
+
+    $shp->add_shape(
+        [ $data->{chain} ],
         { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
     );
     return;
