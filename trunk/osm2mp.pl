@@ -1318,6 +1318,7 @@ my @available_flags = (
     [ street_relations  => 'use street relations for addressing' ],
     [ interchange_3d    => 'navitel-style 3D interchanges' ],
     [ background        => 'create background object' ],
+    [ clip_areas        => 'clip polygons to map boundary' ],
     [ shorelines        => 'create sea areas from coastlines' ],
     [ water_back        => 'water background (for island maps)' ],
     [ marine            => 'process marine-specific data' ],
@@ -1816,7 +1817,7 @@ sub WritePolygon {
     my @plist = grep { scalar @$_ > 3 } ( @{$param->{areas}}, @{$param->{holes}} );
 
     #   clip
-    if ( $bound && !$opt{no_clip} && any { !defined } @inside ) {
+    if ( $bound && $flags->{area_clip} && !$opt{no_clip} && any { !defined } @inside ) {
         my $gpc = new_gpc();
 
         for my $area ( @{$param->{areas}} ) {
