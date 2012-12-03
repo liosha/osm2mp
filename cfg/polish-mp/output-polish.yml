@@ -117,22 +117,13 @@ polygon: |
 
 
 polyline: |
-  [% INCLUDE comment  text = comment  IF comment -%]
+  [% INCLUDE comment  text = data.comment  IF data.comment -%]
   [POLYLINE]
-  Data[% opts.lzoom %]=([% opts.chain.0.0 %],[% opts.chain.0.1 %])
-  [%- temp = opts.chain.shift; FOREACH point IN opts.chain -%]
-  ,([% point.0 %],[% point.1 %])
+  Data[% data.level_l || 0 %]=([% data.chain.0.1 %],[% data.chain.0.0 %])
+  [%- temp = data.chain.shift; FOREACH point IN data.chain -%]
+  ,([% point.1 %],[% point.0 %])
   [%- END %]
-  [% IF opts.hzoom -%]
-  EndLevel=[% opts.hzoom %]
-  [% END -%]
-  [% nods = opts.nods; opts.delete( 'lzoom', 'hzoom', 'chain', 'nods' ) -%]
-  [% FOREACH key IN opts.keys -%]
-  [% key %]=[% opts.$key | mp_filter %]
-  [% END -%]
-  [% IF nods; FOREACH nnod IN [ 0 .. nods.max ] -%]
-  Nod[% nnod %]=[% nods.$nnod.join(',') %]
-  [% END; END -%]
+  [% INCLUDE _common_fields data = data -%]
   [END]
   [% %]
 
