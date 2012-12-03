@@ -557,7 +557,7 @@ if ( $flags->{shorelines} ) {
             areas   => [ shift @$sea_poly ],
             holes   => $sea_poly,
         );
-        WritePolygon( \%objinfo, undef, no_clip => 1 );
+        output_area( \%objinfo, undef, no_clip => 1 );
     }
     printf STDERR "  %d areas\n", scalar @sea_areas;
 }
@@ -1012,7 +1012,7 @@ if ( $flags->{routing} ) {
 
 }
 
-####    Background object (?)
+####    Background object
 
 
 if ( $bound && $flags->{background} && $settings{types}->{background} ) {
@@ -1021,7 +1021,7 @@ if ( $bound && $flags->{background} && $settings{types}->{background} ) {
         %{ $settings{types}->{background} },
         areas   => [ $bound->get_points() ],
     );
-    WritePolygon( \%bound_info );
+    output_area( \%bound_info, undef, no_clip => 1 );
 }
 
 
@@ -1779,7 +1779,7 @@ sub AddRoad {
 }
 
 
-sub WritePolygon {
+sub output_area {
     my ($param, $obj, %opt) = @_;
 
     return  if !$param->{areas} || !@{$param->{areas}};
@@ -1836,8 +1836,6 @@ sub WritePolygon {
     ## Navitel polygon addressing
     if ( $flags->{navitel} && $param->{tags}->{'addr:housenumber'} ) {
         $param->{address} = _get_address($obj, point => $plist[0]->[0]);
-#        my $mp_address = _get_mp_address( $address );
-#        _hash_merge( \%opts, $mp_address );
     }
 
 =disable
@@ -1845,13 +1843,16 @@ sub WritePolygon {
     if ( $flags->{navitel} ) {
         for my $entr ( @{ $param->{entrance} } ) {
             next  if !is_inside_bounds( $entr->[0] );
-            push @{$opts{EntryPoint}}, { coords => [ split /\s*,\s*/xms, $entr->[0] ], name => convert_string( $entr->[1] ) };
+            push @{$opts{EntryPoint}}, {
+                coords => [ split /\s*,\s*/xms, $entr->[0] ],
+                name => convert_string( $entr->[1] )
+            };
         }
     }
 =cut
 
     # !!! need rearranging contours
-    $param->{contours} = [ grep { @$_ > 3 } @plist ];
+    $param->{contours} = [ grep { @$_ >= 3 } @plist ];
 
     $writer->output( polygon => { data => $param } );
     return;
@@ -2142,7 +2143,7 @@ sub action_write_polygon {
         ];
     }
 
-    WritePolygon( $info, $obj );
+    output_area( $info, $obj );
     return;
 }
 
