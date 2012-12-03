@@ -1611,7 +1611,8 @@ sub WriteLine {
     my $comment = $param{comment} || q{};
 
     while ( my ( $key, $val ) = each %tag ) {
-        next if !$settings{comment}->{$key};
+        
+    next if !$settings{comment}->{$key};
         $comment .= "\n$key = $val";
     }
 
@@ -1635,7 +1636,23 @@ sub WriteLine {
         $opts{$key} = convert_string( $param{$key} );
     }
 
-    $writer->output( polyline => { comment => $comment, opts => \%opts } );
+    $writer->output( road => { comment => $comment, opts => \%opts } );
+    return;
+}
+
+
+sub output_line {
+    my ($info) = @_;
+    my %param = %$info;
+
+    while ( my ( $key, $val ) = each %{ $param{tags} } ) {
+        next if !$settings{comment}->{$key}; # ???
+        $param{comment} .= "\n$key = $val";
+    }
+
+    $param{chain} = [ map {[ reverse split /\s*,\s*/xms, $nodes->{$_} ]} @{ $info->{chain} } ];
+
+    $writer->output( polyline => { data => \%param } );
     return;
 }
 
@@ -1999,7 +2016,7 @@ sub action_write_line {
     my $info = _get_result_object_params($obj, $action);
     for my $part ( @parts ) {
         $info->{chain} = $part;
-        WriteLine( $info );
+        output_line( $info );
     }
     return;
 }
