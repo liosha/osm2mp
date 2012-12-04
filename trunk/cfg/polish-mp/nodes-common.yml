@@ -120,7 +120,6 @@
     - action: write_poi
       type: 0x2A00
       contacts: yes
-
 - condition:
     - amenity = restaurant
     - cuisine = asian
@@ -418,6 +417,9 @@
     - action: write_poi
       type: 0x2E02
       contacts: yes
+      name:
+        - %label
+        - Food store
 
 - condition:
     - shop = mall|hypermarket
