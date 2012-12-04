@@ -116,7 +116,7 @@ background:
 sea:
     comment:    sea areas from costlines
     type:       0x3C
-    level_l:    4
+    level_h:    4
   
 
 
