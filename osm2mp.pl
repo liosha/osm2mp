@@ -1939,9 +1939,19 @@ sub _get_field_content {
     return $field if !defined $field || !length $field;
 
     for ( ref $field ) {
-        # !!!
-        return $field when 'ARRAY';
-
+        when ('ARRAY') {
+            for my $template ( @$field ) {
+                my $text = $template;
+                my $failed;
+                $text =~ s[%(\w+)][
+                        my $r = name_from_list($1, $obj->{tag});
+                        $failed++ if !defined $r;
+                        $r // q{}
+                    ]ge;
+                return $text  if !$failed;
+            }
+            return undef;
+        }
         when (q{}) {
             $field =~ s[%(\w+)][ name_from_list($1, $obj->{tag}) // q{} ]ge;
             return undef if !length $field;
@@ -1965,7 +1975,9 @@ sub _get_result_object_params {
     my %info = %$action;
 
     # requred fields
-    for my $key ( qw/ name type / ) {
+    # !!! temporarely disable type resolution
+    #for my $key ( qw/ name type / ) {
+    for my $key ( qw/ name / ) {
         next if !defined $info{$key};
         $info{$key} = _get_field_content($info{$key}, $obj);
     }
