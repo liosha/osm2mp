@@ -34,7 +34,7 @@ use warnings;
 use utf8;
 use autodie;
 
-our $VERSION = '1.02';
+our $VERSION = '1.02' . do { my ($r) = '$Rev$' =~ /(\d+)/xms; $r ? "-$r" : q{} };
 
 
 
@@ -69,8 +69,7 @@ use TransportAccess;
 
 
 
-(my $rev = '$Rev$') =~ s/\D//gxms;
-print STDERR "\n  ---|   OSM -> MP converter  $VERSION-$rev   (c) 2008-2012 liosha, xliosha\@gmail.com\n";
+print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2012 liosha, xliosha\@gmail.com\n";
 
 
 
@@ -187,7 +186,7 @@ for my $key ( keys %{ $settings{Writer} } ) {
     $settings{Writer}->{$key} = File::Spec->catpath($cfgvol, $cfgdir, $settings{Writer}->{$key});
 }
 
-my $writer = $writer_class->new( %{ $settings{Writer} }, version => "$VERSION-$rev" );
+my $writer = $writer_class->new( %{ $settings{Writer} }, version => $VERSION );
 
 
 
