@@ -4,7 +4,7 @@
 ##  osm2mp.pl - OpenStreetMap to 'polish' format converter
 ##
 
-# $Id: osm2mp.pl 658 2012-12-04 13:59:58Z xliosha@gmail.com $
+# $Id$
 
 ##
 ##  Required packages:
