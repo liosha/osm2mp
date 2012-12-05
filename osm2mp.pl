@@ -4,7 +4,7 @@
 ##  osm2mp.pl - OpenStreetMap to 'polish' format converter
 ##
 
-# $Id$
+# $Id: osm2mp.pl 658 2012-12-04 13:59:58Z xliosha@gmail.com $
 
 ##
 ##  Required packages:
@@ -69,8 +69,8 @@ use TransportAccess;
 
 
 
-
-print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2012 liosha, xliosha\@gmail.com\n";
+(my $rev = '$Rev$') =~ s/Rev (?: ision )? :? \s*//xms;
+print STDERR "\n  ---|   OSM -> MP converter  $VERSION-$rev   (c) 2008-2012 liosha, xliosha\@gmail.com\n";
 
 
 
