@@ -69,7 +69,7 @@ use TransportAccess;
 
 
 
-(my $rev = '$Rev$') =~ s/Rev (?: ision )? :? \s*//xms;
+(my $rev = '$Rev$') =~ s/\D//gxms;
 print STDERR "\n  ---|   OSM -> MP converter  $VERSION-$rev   (c) 2008-2012 liosha, xliosha\@gmail.com\n";
 
 
@@ -187,7 +187,7 @@ for my $key ( keys %{ $settings{Writer} } ) {
     $settings{Writer}->{$key} = File::Spec->catpath($cfgvol, $cfgdir, $settings{Writer}->{$key});
 }
 
-my $writer = $writer_class->new( %{ $settings{Writer} }, version => $VERSION );
+my $writer = $writer_class->new( %{ $settings{Writer} }, version => "$VERSION-$rev" );
 
 
 
