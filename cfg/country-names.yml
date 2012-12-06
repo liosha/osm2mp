@@ -80,7 +80,7 @@ BJ:
   ru: Бенин
 BL:
   en: Saint Barthelemy
-  ru: ~
+  ru: Сен-Бартелеми
 BM:
   en: Bermuda
   ru: Бермуды
@@ -88,7 +88,7 @@ BN:
   en: Brunei Darussalam
   ru: Бруней
 BO:
-  en: 'Bolivia, Plurinational State of'
+  en: Bolivia
   ru: Боливия
 BR:
   en: Brazil
@@ -118,7 +118,7 @@ CC:
   en: Cocos (Keeling) Islands
   ru: Кокосовые острова
 CD:
-  en: 'Congo, the Democratic Republic of the'
+  en: Congo DR
   ru: ДР Конго
 CF:
   en: Central African Republic
@@ -150,9 +150,6 @@ CO:
 CR:
   en: Costa Rica
   ru: Коста-Рика
-CS:
-  en: ~
-  ru: Сербия и Черногория
 CU:
   en: Cuba
   ru: Куба
@@ -207,9 +204,6 @@ ES:
 ET:
   en: Ethiopia
   ru: Эфиопия
-EU:
-  en: ~
-  ru: Европейский союз
 FI:
   en: Finland
   ru: Финляндия
@@ -217,10 +211,10 @@ FJ:
   en: Fiji
   ru: Фиджи
 FK:
-  en: Falkland Islands (Malvinas)
+  en: Falkland Islands
   ru: Фолклендские острова
 FM:
-  en: 'Micronesia, Federated States of'
+  en: Micronesia
   ru: Микронезия
 FO:
   en: Faroe Islands
@@ -245,7 +239,7 @@ GF:
   ru: Французская Гвиана
 GG:
   en: Guernsey
-  ru: ~
+  ru: Гернси
 GH:
   en: Ghana
   ru: Гана
@@ -314,7 +308,7 @@ IL:
   ru: Израиль
 IM:
   en: Isle of Man
-  ru: ~
+  ru: Остров Мэн
 IN:
   en: India
   ru: Индия
@@ -325,7 +319,7 @@ IQ:
   en: Iraq
   ru: Ирак
 IR:
-  en: 'Iran, Islamic Republic of'
+  en: Iran
   ru: Иран
 IS:
   en: Iceland
@@ -335,7 +329,7 @@ IT:
   ru: Италия
 JE:
   en: Jersey
-  ru: ~
+  ru: Джерси
 JM:
   en: Jamaica
   ru: Ямайка
@@ -364,10 +358,10 @@ KN:
   en: Saint Kitts and Nevis
   ru: Сент-Китс и Невис
 KP:
-  en: "Korea, Democratic People's Republic of"
+  en: North Korea
   ru: КНДР
 KR:
-  en: 'Korea, Republic of'
+  en: South Korea
   ru: Республика Корея
 KW:
   en: Kuwait
@@ -379,7 +373,7 @@ KZ:
   en: Kazakhstan
   ru: Казахстан
 LA:
-  en: Lao People's Democratic Republic
+  en: Lao
   ru: Лаос
 LB:
   en: Lebanon
@@ -409,7 +403,7 @@ LV:
   en: Latvia
   ru: Латвия
 LY:
-  en: Libyan Arab Jamahiriya
+  en: Libya
   ru: Ливия
 MA:
   en: Morocco
@@ -418,14 +412,14 @@ MC:
   en: Monaco
   ru: Монако
 MD:
-  en: 'Moldova, Republic of'
+  en: Moldova
   ru: Молдавия
 ME:
   en: Montenegro
   ru: Черногория
 MF:
-  en: Saint Martin (French part)
-  ru: ~
+  en: Saint Martin
+  ru: Сен-Мартен
 MG:
   en: Madagascar
   ru: Мадагаскар
@@ -433,7 +427,7 @@ MH:
   en: Marshall Islands
   ru: Маршалловы Острова
 MK:
-  en: 'Macedonia, the former Yugoslav Republic of'
+  en: Macedonia
   ru: Македония
 ML:
   en: Mali
@@ -550,7 +544,7 @@ PR:
   en: Puerto Rico
   ru: Пуэрто-Рико
 PS:
-  en: 'Palestinian Territory, Occupied'
+  en: Palestina
   ru: Палестина
 PT:
   en: Portugal
@@ -574,7 +568,7 @@ RS:
   en: Serbia
   ru: Сербия
 RU:
-  en: Russian Federation
+  en: Russia
   ru: Россия
 RW:
   en: Rwanda
@@ -627,14 +621,11 @@ SR:
 ST:
   en: Sao Tome and Principe
   ru: Сан-Томе и Принсипи
-SU:
-  en: ~
-  ru: СССР
 SV:
   en: El Salvador
   ru: Сальвадор
 SY:
-  en: Syrian Arab Republic
+  en: Syria
   ru: Сирия
 SZ:
   en: Swaziland
@@ -682,10 +673,10 @@ TV:
   en: Tuvalu
   ru: Тувалу
 TW:
-  en: 'Taiwan, Province of China'
-  ru: Китайская Республика
+  en: Taiwan
+  ru: Тайвань
 TZ:
-  en: 'Tanzania, United Republic of'
+  en: Tanzania
   ru: Танзания
 UA:
   en: Ukraine
@@ -694,7 +685,7 @@ UG:
   en: Uganda
   ru: Уганда
 UM:
-  en: United States Minor Outlying Islands
+  en: US Minor Outlying Islands
   ru: Внешние малые острова (США)
 US:
   en: United States
@@ -706,13 +697,13 @@ UZ:
   en: Uzbekistan
   ru: Узбекистан
 VA:
-  en: Holy See (Vatican City State)
+  en: Vatican
   ru: Ватикан
 VC:
   en: Saint Vincent and the Grenadines
   ru: Сент-Винсент и Гренадины
 VE:
-  en: 'Venezuela, Bolivarian Republic of'
+  en: Venezuela
   ru: Венесуэла
 VG:
   en: 'Virgin Islands, British'

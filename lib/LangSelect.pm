@@ -116,7 +116,8 @@ sub get_value {
 
     my $re = $self->{tag_re}->{$base_key} ||= do {
         my $k = quotemeta $base_key;
-        qr/ ^ $k (?: : (\w+) )? $ /xms
+        my $div = length $k ? q{:} : q{};
+        qr/ ^ $k (?: $div (\w+) )? $ /xms
     };
 
     my %val = map { m/$re/xms ? (($1 || q{}) => $tags->{$_}) : () } keys %$tags;
@@ -136,6 +137,9 @@ sub get_value {
         my $result = $tr->{transformer}->($val);
         return $result  if defined $result;
     }
+
+    # use english value if exists
+    return $val{en}  if $val{en};
 
     # last chance: return unidecoded default value
     return unidecode( $val{q{}} // first {defined} values %val );

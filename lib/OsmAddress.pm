@@ -99,7 +99,6 @@ sub new {
 }
 
 
-# !!! should be lang-dependent!
 sub add_rename_table {
     my ($self, $level, $table) = @_;
 
@@ -183,7 +182,8 @@ sub get_lang_address {
         next if !$value;
 
         if ( my $table = $self->{rename}->{$level} ) {
-            $value = $table->{uc $value} // $value;
+            my $vtags = $table->{uc $value};
+            $value = $lang_select->get_value(q{}, $vtags) // $value  if $vtags;
         }
 
         $address{$level} = $value;
