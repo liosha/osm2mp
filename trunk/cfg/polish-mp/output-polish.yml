@@ -103,14 +103,15 @@ point: |
 polygon: |
   [% INCLUDE comment  text = data.comment  IF data.comment -%]
   [POLYGON]
-  [% FOREACH contour IN data.contours -%]
-  Data[% data.level_l || 0 %]=([% contour.0.1 %],[% contour.0.0 %])
-  [%- temp = contour.shift; FOREACH point IN contour -%]
-  ,([% point.1 %],[% point.0 %])
-  [%- END %]
+  [% FOREACH contour IN data.contours;
+      latlons = [];
+      FOREACH point IN contour; 
+        latlons.push( point.1 _ ',' _ point.0 );
+      END -%]
+  Data[% data.level_l || 0 %]=([% latlons.join('),(') %])
   [% END -%]
   [% INCLUDE _common_fields data = data -%]
-  [% # entrances -%]
+  [% # TODO: entrances -%]
   [END]
   [% %]
 
@@ -119,10 +120,11 @@ polygon: |
 polyline: |
   [% INCLUDE comment  text = data.comment  IF data.comment -%]
   [POLYLINE]
-  Data[% data.level_l || 0 %]=([% data.chain.0.1 %],[% data.chain.0.0 %])
-  [%- temp = data.chain.shift; FOREACH point IN data.chain -%]
-  ,([% point.1 %],[% point.0 %])
-  [%- END %]
+  [% latlons = [];
+    FOREACH point IN data.chain; 
+      latlons.push( point.1 _ ',' _ point.0 );
+    END -%]
+  Data[% data.level_l || 0 %]=([% latlons.join('),(') %])
   [% INCLUDE _common_fields data = data -%]
   [END]
   [% %]
