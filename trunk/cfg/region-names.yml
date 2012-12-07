@@ -1,0 +1,252 @@
+--- region_name
+---
+RU-AD:
+  ru: Республика Адыгея
+  en: Adygea Republic
+RU-BA:
+  ru: Республика Башкортостан
+  en: Bachkortostan Republic
+RU-AL: 
+  ru: Республика Алтай
+  en: Altai Republic
+RU-ALT: 
+  ru: Алтайский край
+  en: Altaisky krai
+RU-AMU:
+  ru: Амурская область
+  en: Amurskaya oblast
+RU-ARK:
+  ru: Архангельская область
+  en: Arkhangelskaya oblast
+RU-AST:
+  ru: Астраханская область
+  en: Astrakhanskaya oblast
+RU-BEL:
+  ru: Белгородская область
+  en: Belgorodskaya oblast
+RU-BRY:
+  ru: Брянская область
+  en: Bryanskaya oblast
+RU-BU:
+  ru: Республика Бурятия
+  en: Buryatia republic
+RU-CE:
+  ru: Чеченская Республика
+  en: Chechen republic
+RU-CHE:
+  ru: Челябинская область
+  en: Chelyabinskaya oblast
+RU-CHU:
+  ru: Чукотский автономный округ
+  en: Chukotkskiy Autonomous Region
+RU-CU:
+  ru: Чувашская Республика
+  en: Chuvashia republic
+RU-DA:
+  ru: Республика Дагестан
+  en: Dagestan republic
+RU-IN:
+  ru: Республика Ингушетия
+  en: Ingushetia republic
+RU-IRK:
+  ru: Иркутская область
+  en: Irkutskaya oblast
+RU-IVA:
+  ru: Ивановская область
+  en: Ivanovskaya oblast
+RU-KAM:
+  ru: Камчатский край
+  en: Kamchatskiy krai
+RU-KB:
+  ru: Кабардино-Балкарская республика
+  en: Kabardino-Balkarskaya republic
+RU-KC:
+  ru: Карачаево-Черкесская республика
+  en: Karachayevo-Cherkesskaya republic
+RU-KDA:
+  ru: Краснодарский край
+  en: Krasnodarskiy krai
+RU-KEM:
+  ru: Кемеровская область
+  en: Kemerovskaya oblast
+RU-KGD:
+  ru: Калининградская область
+  en: Kaliningradskaya oblast
+RU-KGN:
+  ru: Курганская область
+  en: Kurganskaya oblast
+RU-KHA:
+  ru: Хабаровский край
+  en: Khabarovskiy krai
+RU-KHM:
+  en: Khanty-Mansiyskiy Autonomous Region
+  ru: Ханты-Мансийский автономный округ - Югра
+RU-KIR:
+  ru: Кировская область
+  en: Kirovskaya oblast
+RU-KK:
+  ru: Республика Хакасия
+  en: Khakassia republic
+RU-KL:
+  ru: Республика Калмыкия
+  en: Kalmykia republic
+RU-KLU:
+  ru: Калужская область
+  en: Kaluzhskaya oblast
+RU-KO:
+  ru: Республика Коми
+  en: Komi republic
+RU-KOS:
+  ru: Костромская область
+  en: Kostromskaya oblast
+RU-KR:
+  ru: Республика Карелия
+  en: Karelia republic
+RU-KRS:
+  ru: Курская область
+  en: Kursk oblast
+RU-KYA:
+  ru: Красноярский край
+  en: Krasnoyarskiy krai
+RU-LEN:
+  ru: Ленинградская область
+  en: Leningradskaya oblast
+RU-LIP:
+  ru: Липецкая область
+  en: Lipetskaya oblast
+RU-MAG:
+  ru: Магаданская область
+  en: Magadan oblast
+RU-ME:
+  ru: Республика Марий Эл
+  en: Mari El republic
+RU-MO:
+  ru: Республика Мордовия
+  en: Mordovia republic
+RU-MOS:
+  ru: Московская область
+  en: Moscow oblast
+RU-MOW:
+  ru: Москва
+  en: Moscow
+RU-MUR:
+  ru: Мурманская область
+  en: Murmanskaya oblast
+RU-NEN:
+  ru: Ненецкий автономный округ
+  en: Nenetskiy Autonomous Region
+RU-NGR:
+  ru: Новгородская область
+  en: Novgorodskaya oblast
+RU-NIZ:
+  ru: Нижегородская область
+  en: Nizhegorodskaya oblast
+RU-NVS:
+  ru: Новосибирская область
+  en: Novosibirskaya oblast
+RU-OMS:
+  ru: Омская область
+  en: Omskaya oblast
+RU-ORE:
+  ru: Оренбургская область
+  en: Orenburgskaya oblast
+RU-ORL:
+  ru: Орловская область
+  en: Orlovskaya oblast
+RU-PER:
+  ru: Пермский край
+  en: Permskiy krai
+RU-PNZ:
+  ru: Пензенская область
+  en: Penzinskaya oblast
+RU-PRI:
+  ru: Приморский край
+  en: Primorskiy krai
+RU-PSK:
+  ru: Псковская область
+  en: Pskovskaya oblast
+RU-ROS:
+  ru: Ростовская область
+  en: Rostovskaya oblast
+RU-RYA:
+  ru: Рязанская область
+  en: Ryazanskaya oblast
+RU-SA:
+  ru: Республика Саха (Якутия)
+  en: Sakha (Yakutiya) republic
+RU-SAK:
+  ru: Сахалинская область
+  en: Sakhalinskaya oblast
+RU-SAM:
+  ru: Самарская область
+  en: Samarskaya oblast
+RU-SAR:
+  ru: Саратовская область
+  en: Saratovskaya oblast
+RU-SE:
+  ru: Республика Северная Осетия-Алания
+  en: North Ossetia-Alania republic
+RU-SMO:
+  ru: Смоленская область
+  en: Smolenskaya oblast
+RU-SPE:
+  ru: Санкт-Петербург
+  en: St.Petersburg
+RU-STA:
+  ru: Ставропольский край
+  en: Stavropolskiy krai
+RU-SVE:
+  ru: Свердловская область
+  en: Sverdlovskaya oblast
+RU-TA:
+  ru: Республика Татарстан
+  en: Tatarstan republic
+RU-TAM:
+  ru: Тамбовская область
+  en: Tambovskaya oblast
+RU-TOM:
+  ru: Томская область
+  en: Tomskaya oblast
+RU-TUL:
+  ru: Тульская область
+  en: Tulskaya oblast
+RU-TVE:
+  ru: Тверская область
+  en: Tverskaya oblast
+RU-TY:
+  ru: Республика Тыва
+  en: Tuva republic
+RU-TYU:
+  ru: Тюменская область
+  en: Tyumenskaya oblast
+RU-UD:
+  ru: Удмуртская Республика
+  en: Udmurtia republic
+RU-ULY:
+  ru: Ульяновская область
+  en: Ulyanovskaya oblast
+RU-VGG:
+  ru: Волгоградская область
+  en: Volgogradskaya oblast
+RU-VLA:
+  ru: Владимирская область
+  en: Vladimirskaya oblast
+RU-VLG:
+  ru: Вологодская область
+  en: Vologodskaya oblast
+RU-VOR:
+  ru: Воронежская область
+  en: Voronezhskaya oblast
+RU-YAN:
+  ru: Ямало-Ненецкий автономный округ
+  en: Yamalo-Nenetskiy Autonomous Region
+RU-YAR:
+  ru: Ярославская область
+  en: Yaroslavskaya oblast
+RU-YEV:
+  ru: Еврейская автономная область
+  en: Yevreyskaya Autonomous Region
+RU-ZAB:
+  ru: Забайкальский край
+  en: Zabaykalskiy Krai
+
