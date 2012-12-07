@@ -1335,8 +1335,8 @@ my @available_values = (
     [ merge_cos         => 'max angle between roads to merge (cosine)' ],
     [ max_road_nodes    => 'maximum number of nodes in road' ],
     [ fix_close_dist    => 'minimum allowed routing segment length (m)' ],
-    [ target_lang       => 'desired map language' ],
-    [ default_lang      => 'source language for default tags' ],
+    [ target_lang       => 'desired map language', 'tl' ],
+    [ default_lang      => 'source language for default tags', 'dl' ],
 
     [ huge_sea          => undef ],
     [ first_nod_id      => undef ],
@@ -1347,20 +1347,26 @@ my @onoff = ( "off", "on");
 
 
 sub _get_getopt_key {
-    my ($opt) = $_;
-    my @results = ($opt);
-    $opt =~ s/_/-/gx;
-    push @results, $opt;
-    $opt =~ s/-//gx;
-    push @results, $opt;
+    my @keys = @_;
+    
+    my @results;
+    for my $key (@keys) {
+        next if !$key;
+        push @results, $key;
+        $key =~ s/_/-/gx;
+        push @results, $key;
+        $key =~ s/-//gx;
+        push @results, $key;
+    }
+
     return join q{|}, uniq @results;
 }
 
 
 sub _get_settings_getopt {
     return (
-        ( map {( _get_getopt_key($_) . q{!}  => \$flags->{$_}  )} map {$_->[0]} @available_flags ),
-        ( map {( _get_getopt_key($_) . q{=s} => \$values->{$_} )} map {$_->[0]} @available_values ),
+        ( map {( _get_getopt_key($_->[0], $_->[2]) . q{!}  => \$flags->{$_->[0]}  )} @available_flags ),
+        ( map {( _get_getopt_key($_->[0], $_->[2]) . q{=s} => \$values->{$_->[0]} )} @available_values  ),
     );
 }
 
