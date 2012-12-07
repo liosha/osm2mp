@@ -62,9 +62,12 @@ sub new {
     };
     bless $self, $class;
 
+    # regexp for all addr tag names
     my $name_tag_str = join q{|}, @{ $opt{name_tags} || \@NAME_TAGS };
     $self->{name_tag_re} = qr/ ^ (?: $name_tag_str ) \b /xms;
 
+    # taglist for addr levels
+    # { city => [ 'addr:city', 'is_in:city' ], ... }
     my %addr_tags =
         map {
             my ($id, $prop) = @$_;
@@ -103,6 +106,19 @@ sub add_rename_table {
     my ($self, $level, $table) = @_;
 
     $self->{rename}->{$level} = $table;
+    return;
+}
+
+
+sub add_rename_table_yml {
+    my ($self, $file) = @_;
+
+    require YAML;
+    my ($key, $table) = YAML::LoadFile( $file );
+    my ($level) = $key =~ /^ (\w+)_name $ /xms;
+    croak "Invalid rename table key: $key"  if !$level || !$self->{addr_tags}->{$level};
+
+    $self->add_rename_table( $level => $table );
     return;
 }
 
@@ -199,7 +215,10 @@ sub get_getopt {
 
     my $first_idx = first_index { $_->[0] eq $MIN_DEFAULT_LEVEL } @{ $self->{addr_items} };
 
-    my @opt_list;
+    my @opt_list = (
+        'rename-table=s' => sub { $self->add_rename_table_yml($_[1]) },
+    );
+
     for my $i ( $first_idx .. $#{ $self->{addr_items} } ) {
         my $level = $self->{addr_items}->[$i]->[0];
         push @opt_list, ( "default-$level|default$level=s" => sub {
@@ -221,7 +240,10 @@ sub get_usage {
     my ($self) = @_;
     my $first_idx = first_index { $_->[0] eq $MIN_DEFAULT_LEVEL } @{ $self->{addr_items} };
     
-    my @opt_list;
+    my @opt_list = (
+        [ 'rename-table' => 'table for renaming, yaml-file' ],
+    );
+
     for my $i ( $first_idx .. $#{ $self->{addr_items} } ) {
         my $level = $self->{addr_items}->[$i]->[0];
         push @opt_list, [ "default-$level" => "default $level" ];
