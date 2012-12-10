@@ -1938,37 +1938,78 @@ sub action_load_coastline {
 }
 
 
+# calculate config field value
+
+sub _get_field_by_template_string {
+    my ($template, $obj, %opt) = @_;
+    
+    my $failed;
+    $template =~ s[%(\w+)][
+        my $r = name_from_list($1, $obj->{tag});
+        $failed++ if !defined $r;
+        $r // q{}
+    ]ge;
+
+    return undef  if $failed && $opt{empty_failed};
+    return $template;
+}
+
+
+sub _get_field_by_lang {
+    my ($selector, $obj, %opt) = @_;
+
+    my $selected =
+        $selector->{ $values->{target_lang} }
+        || $selector->{en}
+        || first { $_ ne 'selector' && $selector->{$_} } keys %$selector;
+    croak "Bad lang selector"  if !$selected;
+
+    return _get_field_content($selected, $obj, %opt);
+}
+
+
+BEGIN {
+    my %selector = (
+        lang => \&_get_field_by_lang,
+    );
+
 sub _get_field_content {
-    my ($field, $obj) = @_;
+    my ($field, $obj, %opt) = @_;
 
     return $field if !defined $field || !length $field;
 
     for ( ref $field ) {
-        when ('ARRAY') {
-            for my $template ( @$field ) {
-                my $text = $template;
-                my $failed;
-                $text =~ s[%(\w+)][
-                        my $r = name_from_list($1, $obj->{tag});
-                        $failed++ if !defined $r;
-                        $r // q{}
-                    ]ge;
-                return $text  if !$failed;
-            }
-            return undef;
-        }
+        # string: resolve templates
         when (q{}) {
-            $field =~ s[%(\w+)][ name_from_list($1, $obj->{tag}) // q{} ]ge;
-            return undef if !length $field;
-            return $field;
+            return _get_field_by_template_string($field, $obj, %opt);
         }
+        # sub: execute 
         when ('CODE') {
             return $field->($obj);
         }
+        # array: select first succeed result
+        when ('ARRAY') {
+            for my $subfield ( @$field ) {
+                my $text = _get_field_content($subfield, $obj, empty_failed => 1);
+                return $text  if defined $text && length $text;
+            }
+            return undef;
+        }
+        # special selector, based on 'selector' key
+        when ('HASH') {
+            my $selector_key = $field->{selector};
+            croak 'Undefined selector key'  if !$selector_key;
+            my $selector_sub = $selector{$selector_key};
+            croak 'Unknown selector'  if !$selector_sub;
 
+            return $selector_sub->($field, $obj, %opt);
+        }
+
+        # unknown
         say STDERR Dump \@_;
         confess "Bad field type: $_";
     }
+}
 }
 
 
