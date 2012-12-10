@@ -443,13 +443,20 @@
       type: 0x2E07
       contacts: yes
 
-- id: shoes_shop
-  condition:
+- condition:
     - shop = shoes
   action:
     - action: write_poi
       type: 0x2E07
       contacts: yes
+      name:
+        selector: lang
+        ru:
+          - %label (обувь)
+          - Обувной
+        en:
+          - %label (shoes)
+          - Shoes
 
 - condition:
     - shop = doityourself|garden_centre|hardware|chemist
@@ -465,13 +472,20 @@
       type: 0x2E09
       contacts: yes
 
-- id: books_shop
-  condition:
+- condition:
     - shop = books
   action:
     - action: write_poi
       type: 0x2E0A
       contacts: yes
+      name:
+        selector: lang
+        ru:
+          - %label (книги)
+          - Книжный
+        en:
+          - %label (books)
+          - Books
 
 - condition:
     - shop = bicycle|electronics|electrogoods|electrotools|outdoor|stationery|sports|toys|kids
@@ -703,13 +717,44 @@
       type: 0x2F05
       contacts: yes
 
-- id: bank
-  condition:
-    - amenity = atm|bank
+- condition:
+    - amenity = bank
+    - atm != yes|1|true
+    - amenity != atm
   action:
     - action: write_poi
       type: 0x2F06
       contacts: yes
+
+- condition:
+    - amenity = bank
+    - or:
+        - atm = yes|1|true
+        - amenity = atm
+  action:
+    - action: write_poi
+      type: 0x2F06
+      contacts: yes
+      name:
+        selector: lang
+        ru: %label (+банкомат)
+        en: %label (+atm)
+
+- condition:
+    - amenity = atm
+    - amenity != bank
+  action:
+    - action: write_poi
+      type: 0x2F06
+      contacts: yes
+      name:
+        selector: lang
+        ru:
+          - %label (банкомат)
+          - Банкомат
+        en:
+          - %label (ATM)
+          - ATM
 
 - condition:
     - amenity = bureau_de_change
@@ -717,6 +762,14 @@
     - action: write_poi
       type: 0x2F06
       contacts: yes
+      name:
+        selector: lang
+        ru:
+          - %label (обменник)
+          - Обмен валюты
+        en:
+          - %label (exch)
+          - Currency exchange
 
 
 
