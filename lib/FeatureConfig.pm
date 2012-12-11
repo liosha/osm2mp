@@ -126,6 +126,7 @@ sub process {
 
     my $rules = $self->{rules}->{$section};
     for my $rule ( @$rules ) {
+        # !!! use check_condition
         next if notall { $_->($object) } @{ $rule->{$RULE_CONDITIONS_KEY} };
         for my $action ( @{ $rule->{$RULE_ACTIONS_KEY} } ) {
             my $action_code = $action->{action};
@@ -137,6 +138,26 @@ sub process {
     return;
 }
 
+
+
+=method check_condition
+
+    my $is_succeed = $ft_config->check_condition( $condition, $object );
+
+Checks condition.
+Precompiles and replaces if not CODE.
+
+=cut
+
+sub check_condition {
+    my ( $self, $condition, $object ) = @_;
+
+    if ( ref $condition ne 'CODE' ) {
+        $condition = $_[1] = $self->_precompile_condition($condition);
+    }
+
+    return $condition->($object);
+}
 
 1;
 

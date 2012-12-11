@@ -1955,6 +1955,23 @@ sub _get_field_by_template_string {
 }
 
 
+sub _get_field_by_condition {
+    my ($selector, $obj, %opt) = @_;
+
+    croak "No condition in 'if' selector"  if !$selector->{condition};
+    if ( $ft_config->check_condition($selector->{condition}, $obj) ) {
+        my $then = $selector->{then};
+        croak "No 'then' key in 'if' selector"  if !$then;
+        return _get_field_content($then, $obj, %opt);
+    }
+    elsif ( my $else = $selector->{else} ) {
+        return _get_field_content($else, $obj, %opt);
+    }
+
+    return undef;
+}
+
+
 sub _get_field_by_lang {
     my ($selector, $obj, %opt) = @_;
 
@@ -1971,6 +1988,7 @@ sub _get_field_by_lang {
 BEGIN {
     my %selector = (
         lang => \&_get_field_by_lang,
+        if   => \&_get_field_by_condition,
     );
 
 sub _get_field_content {
@@ -2021,9 +2039,7 @@ sub _get_result_object_params {
     my %info = %$action;
 
     # requred fields
-    # !!! temporarely disable type resolution
-    #for my $key ( qw/ name type / ) {
-    for my $key ( qw/ name / ) {
+    for my $key ( qw/ name type / ) {
         next if !defined $info{$key};
         $info{$key} = _get_field_content($info{$key}, $obj);
     }

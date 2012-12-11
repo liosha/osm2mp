@@ -442,6 +442,18 @@
     - action: write_poi
       type: 0x2E07
       contacts: yes
+      name:
+        selector: lang
+        ru:
+          selector: if
+          condition: name = (?ix: .* \b одежд .* )
+          then: %label
+          else:
+            - %label (одежда)
+            - Шмотки
+        en:
+          - %label (cloth)
+          - Cloth
 
 - condition:
     - shop = shoes
