@@ -134,6 +134,7 @@
         international: 0x2A06
         burger: 0x2A07
         kebab: 0x2A07
+        sandwich: 0x2A07
         italian: 0x2A08
         pasta: 0x2A08
         mexican: 0x2A09
@@ -175,13 +176,6 @@
 # Lodging
 
 - condition:
-    - tourism = guest_house
-  action:
-    - action: write_poi
-      type: 0x2B00
-      contacts: yes
-
-- condition:
     - tourism = hotel|motel
   action:
     - action: write_poi
@@ -189,40 +183,24 @@
       contacts: yes
 
 - condition:
-    - tourism = hostel
+    - tourism = guest_house|hostel
   action:
     - action: write_poi
       type: 0x2B02
       contacts: yes
 
 - condition:
-    - tourism = camp_site|caravan_site
+    - tourism = alpine_hut|camp_site|caravan_site
   action:
     - action: write_poi
       type: 0x2B03
       contacts: yes
 
-
-
-# Fuel
-
-- condition:
-    - amenity = fuel
-  action:
-    - action: write_poi
-      type: 0x2F01
-      contacts: yes
+# 0x2B04 - Resort
 
 
 
 # Attractions
-
-- condition:
-    - tourism = attraction|viewpoint
-  action:
-    - action: write_poi
-      type: 0x2C00
-      contacts: yes
 
 - condition:
     - or:
@@ -243,10 +221,26 @@
       contacts: yes
 
 - condition:
-    - historic = memorial|monument
+    - amenity = library
+  action:
+    - action: write_poi
+      type: 0x2C03
+      contacts: yes
+
+- condition:
+    - or:
+        - historic = memorial|monument
+        - tourism = attraction|viewpoint
   action:
     - action: write_poi
       type: 0x2C04
+      contacts: yes
+
+- condition:
+    - amenity = college|kindergarten|school|university
+  action:
+    - action: write_poi
+      type: 0x2C05
       contacts: yes
 
 - condition:
@@ -271,7 +265,44 @@
       type: 0x2C08
       contacts: yes
 
+# 0x2C09 - Hall
+# 0x2C0A - Winery
 
+- condition:
+    - amenity = place_of_worship
+  action:
+    - action: write_poi
+      type: 0x2C0B
+      contacts: yes
+      name:
+        selector: lang
+        en: %label
+        ru:
+          selector: tag
+          tag: religion
+          _default: %label
+          jewish:
+            - %label (и)
+            - Синагога
+          muslim:
+            - %label (м)
+            - Мечеть
+          christian:
+            selector: tag
+            tag: denomination
+            _default:
+              - %label
+              - Церковь
+            orthodox: &1
+              - %label
+              - Православная церковь
+            old_believers: *1
+            russian_orthodox: *1
+            greek_orthodox: *1
+            catholic: &2
+              - %label (к)
+              - Католическая церковь
+            roman_catholic: *2
 
 # Recreation
 
@@ -470,6 +501,17 @@
       contacts: yes
 
 
+# Fuel
+
+- condition:
+    - amenity = fuel
+  action:
+    - action: write_poi
+      type: 0x2F01
+      contacts: yes
+
+
+
 
 # Auto Services
 
@@ -587,52 +629,6 @@
 
 
 # Community
-
-- condition:
-    - amenity = library
-  action:
-    - action: write_poi
-      type: 0x2C03
-      contacts: yes
-
-- condition:
-    - amenity = college|kindergarten|school|university
-  action:
-    - action: write_poi
-      type: 0x2C05
-      contacts: yes
-
-- condition:
-    - amenity = place_of_worship
-    - religion != christian|muslim|jewish
-  action:
-    - action: write_poi
-      type: 0x2C0F
-      contacts: yes
-
-- condition:
-    - amenity = place_of_worship
-    - religion = christian
-  action:
-    - action: write_poi
-      type: 0x2C0E
-      contacts: yes
-
-- condition:
-    - amenity = place_of_worship
-    - religion = muslim
-  action:
-    - action: write_poi
-      type: 0x2C0D
-      contacts: yes
-
-- condition:
-    - amenity = place_of_worship
-    - religion = jewish
-  action:
-    - action: write_poi
-      type: 0x2C10
-      contacts: yes
 
 - condition:
     - amenity = police
