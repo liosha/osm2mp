@@ -530,7 +530,7 @@
 # all other shops
 - condition:
     - shop = *
-    - shop != bakery|car_wrecker|boat|beauty|hairdresser
+    - shop != car_wrecker|car_repair|tyres|car|car_parts|boat|beauty|hairdresser|bakery
     - shop != mall|hypermarket|pharmacy|chemist|clothes|shoes
     - shop != convenience|butcher|grocery|supermarket|general|greengrocer
     - shop != doityourself|garden_centre|hardware|electrogoods|electrotools|chemist|furniture|computer
