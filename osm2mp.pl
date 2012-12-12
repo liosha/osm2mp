@@ -1955,6 +1955,22 @@ sub _get_field_by_template_string {
 }
 
 
+sub _get_field_by_tag {
+    my ($selector, $obj, %opt) = @_;
+
+    my $tag = $selector->{tag};
+    croak "No tag defined in 'tag' selector"  if !$tag;
+    my $value = $obj->{tag}->{$tag};
+
+    my $selected = defined $value
+        ? $selector->{$value} // $selector->{_default}
+        : $selector->{_empty};
+
+    return undef  if !defined $selected;
+    return _get_field_content($selected, $obj, %opt);
+}
+
+
 sub _get_field_by_condition {
     my ($selector, $obj, %opt) = @_;
 
@@ -1989,6 +2005,7 @@ BEGIN {
     my %selector = (
         lang => \&_get_field_by_lang,
         if   => \&_get_field_by_condition,
+        tag  => \&_get_field_by_tag,
     );
 
 sub _get_field_content {
