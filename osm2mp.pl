@@ -1951,6 +1951,7 @@ sub _get_field_by_template_string {
     ]ge;
 
     return undef  if $failed && $opt{empty_failed};
+    return undef  if !defined $template || !length $template;
     return $template;
 }
 
@@ -1962,9 +1963,7 @@ sub _get_field_by_tag {
     croak "No tag defined in 'tag' selector"  if !$tag;
     my $value = $obj->{tag}->{$tag};
 
-    my $selected = defined $value
-        ? $selector->{$value} // $selector->{_default}
-        : $selector->{_empty};
+    my $selected = ( defined $value ? $selector->{$value} : $selector->{_empty} ) // $selector->{_default};
 
     return undef  if !defined $selected;
     return _get_field_content($selected, $obj, %opt);

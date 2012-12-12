@@ -94,6 +94,15 @@
       level_h: 2
       city: yes
 
+- condition:
+    - place = isolated_dwelling
+    - only_node
+  action:
+    - action: write_poi
+      type: 0x0D00
+      level_h: 2
+      city: yes
+
 
 
 
@@ -103,38 +112,45 @@
 # Food & Drink
 
 - condition:
-    - amenity = restaurant
-    - cuisine != asian|barbecue|chinese|italian|pizza|mexican|seafood|french|german
-  action:
+    - or:
+        - amenity = restaurant
+        - and:
+           - amenity = cafe
+           - cuisine = *
+  action: 
     - action: write_poi
-      type: 0x2A00
       contacts: yes
-- condition:
-    - amenity = restaurant
-    - cuisine = asian
-  action:
-    - action: write_poi
-      type: 0x2A02
-      contacts: yes
+      type:
+        selector: tag
+        tag: cuisine
+        _default: 0x2A00
+        american: 0x2A01
+        asian: 0x2A02
+        barbecue: 0x2A03
+        chinese: 0x2A04
+        cake: 0x2A05
+        coffee_shop: 0x2A05
+        pie: 0x2A05
+        international: 0x2A06
+        burger: 0x2A07
+        kebab: 0x2A07
+        italian: 0x2A08
+        pasta: 0x2A08
+        mexican: 0x2A09
+        spanish: 0x2A09
+        pizza: 0x2A0A
+        seafood: 0x2A0B
+        steak_house: 0x2A0C
+        bagel: 0x2A0D
+        doughnut: 0x2A0D
+        french: 0x2A0F
+        german: 0x2A10
+        british: 0x2A11
 
 - condition:
-    - amenity = restaurant
-    - cuisine = barbecue
-  action:
-    - action: write_poi
-      type: 0x2A03
-      contacts: yes
-
-- condition:
-    - amenity = restaurant
-    - cuisine = chinese
-  action:
-    - action: write_poi
-      type: 0x2A04
-      contacts: yes
-
-- condition:
-    - shop = bakery
+    - or:
+        - shop = bakery
+        - amenity = ice_cream
   action:
     - action: write_poi
       type: 0x2A05
@@ -148,61 +164,12 @@
       contacts: yes
 
 - condition:
-    - amenity = restaurant
-    - cuisine = italian
-  action:
-    - action: write_poi
-      type: 0x2A08
-      contacts: yes
-
-- condition:
-    - amenity = restaurant
-    - cuisine = mexican
-  action:
-    - action: write_poi
-      type: 0x2A09
-      contacts: yes
-
-- condition:
-    - amenity = restaurant
-    - cuisine = pizza
-  action:
-    - action: write_poi
-      type: 0x2A0A
-      contacts: yes
-
-- condition:
-    - amenity = restaurant
-    - cuisine = seafood
-  action:
-    - action: write_poi
-      type: 0x2A0B
-      contacts: yes
-
-- condition:
     - amenity = cafe
+    - cuisine != *
   action:
     - action: write_poi
       type: 0x2A0E
       contacts: yes
-
-- condition:
-    - amenity = restaurant
-    - cuisine = french
-  action:
-    - action: write_poi
-      type: 0x2A0F
-      contacts: yes
-
-- condition:
-    - amenity = restaurant
-    - cuisine = german
-  action:
-    - action: write_poi
-      type: 0x2A10
-      contacts: yes
-
-
 
 
 # Lodging
