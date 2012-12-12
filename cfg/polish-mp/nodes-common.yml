@@ -304,7 +304,38 @@
               - Католическая церковь
             roman_catholic: *2
 
-# Recreation
+
+
+
+# Entertainment & Recreation
+
+- condition:
+    - amenity = theatre
+  action:
+    - action: write_poi
+      type: 0x2D01
+      contacts: yes
+
+- condition:
+    - amenity = bar|biergarten|nightclub|pub
+  action:
+    - action: write_poi
+      type: 0x2D02
+      contacts: yes
+
+- condition:
+    - amenity = cinema
+  action:
+    - action: write_poi
+      type: 0x2D03
+      contacts: yes
+
+- condition:
+    - amenity = casino
+  action:
+    - action: write_poi
+      type: 0x2D04
+      contacts: yes
 
 - condition:
     - sport = golf
@@ -351,30 +382,7 @@
       type: 0x2D0A
       contacts: yes
 
-
-
-# Entertainment
-
-- condition:
-    - amenity = theatre
-  action:
-    - action: write_poi
-      type: 0x2D01
-      contacts: yes
-
-- condition:
-    - amenity = bar|biergarten|nightclub|pub
-  action:
-    - action: write_poi
-      type: 0x2D02
-      contacts: yes
-
-- condition:
-    - amenity = cinema
-  action:
-    - action: write_poi
-      type: 0x2D03
-      contacts: yes
+# 0x2D0B - Public Sports Airport
 
 
 
@@ -382,31 +390,28 @@
 
 - condition:
     - or:
-        - shop = dry_cleaning|laundry|beauty|hairdresser
+        - shop = department_store
         - and:
             - amenity = marketplace
             - named
-  action:
-    - action: write_poi
-      type: 0x2E00
-      contacts: yes
-
-- condition:
-    - shop = department_store
   action:
     - action: write_poi
       type: 0x2E01
       contacts: yes
 
 - condition:
-    - shop = convenience|kiosk|butcher|grocery|supermarket|alcohol
+    - shop = butcher|grocery|greengrocer
   action:
     - action: write_poi
       type: 0x2E02
       contacts: yes
-      name:
-        - %label
-        - Food store
+
+- condition:
+    - shop = general|convenience|supermarket
+  action:
+    - action: write_poi
+      type: 0x2E03
+      contacts: yes
 
 - condition:
     - shop = mall|hypermarket
@@ -418,47 +423,42 @@
 - condition:
     - or:
         - amenity = pharmacy
+        - shop = pharmacy|chemist
   action:
     - action: write_poi
       type: 0x2E05
       contacts: yes
 
+# 0x2E06 - Convenience store - bad behavior on garmin units, so don't use
+
 - condition:
-    - shop = clothes
+    - shop = clothes|shoes
   action:
     - action: write_poi
       type: 0x2E07
       contacts: yes
       name:
-        selector: lang
-        ru:
-          selector: if
-          condition: name = (?ix: .* \b одежд .* )
-          then: %label
-          else:
-            - %label (одежда)
+        selector: tag
+        tag: shop
+        _default:
+          selector: lang
+          ru:
+            - %label
             - Шмотки
-        en:
-          - %label (cloth)
-          - Cloth
+          en:
+            - %label
+            - Clothes
+        shoes:
+          selector: lang
+          ru:
+            - %label (обувь)
+            - Обувной
+          en:
+            - %label (shoes)
+            - Shoes
 
 - condition:
-    - shop = shoes
-  action:
-    - action: write_poi
-      type: 0x2E07
-      contacts: yes
-      name:
-        selector: lang
-        ru:
-          - %label (обувь)
-          - Обувной
-        en:
-          - %label (shoes)
-          - Shoes
-
-- condition:
-    - shop = doityourself|garden_centre|hardware|chemist
+    - shop = doityourself|garden_centre|hardware|electrogoods|electrotools
   action:
     - action: write_poi
       type: 0x2E08
@@ -471,27 +471,21 @@
       type: 0x2E09
       contacts: yes
 
+# all other non-specific shops
 - condition:
-    - shop = books
+    - shop = *
+    - shop != bakery|mall|hypermarket|pharmacy|chemist|clothes|shoes
+    - shop != convenience|butcher|grocery|supermarket|general|greengrocer
+    - shop != doityourself|garden_centre|hardware|electrogoods|electrotools|chemist|furniture|computer
   action:
     - action: write_poi
       type: 0x2E0A
       contacts: yes
       name:
-        selector: lang
-        ru:
-          - %label (книги)
-          - Книжный
-        en:
-          - %label (books)
-          - Books
-
-- condition:
-    - shop = bicycle|electronics|electrogoods|electrotools|outdoor|stationery|sports|toys|kids
-  action:
-    - action: write_poi
-      type: 0x2E0A
-      contacts: yes
+        - %label (%shop)
+        - selector: lang
+          en: Shop (%shop)
+          ru: Магазин (%shop)
 
 - condition:
     - shop = computer
@@ -501,7 +495,10 @@
       contacts: yes
 
 
-# Fuel
+
+
+
+# Auto Services
 
 - condition:
     - amenity = fuel
@@ -509,11 +506,6 @@
     - action: write_poi
       type: 0x2F01
       contacts: yes
-
-
-
-
-# Auto Services
 
 - condition:
     - amenity = car_rental|car_sharing
