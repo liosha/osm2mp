@@ -4,26 +4,6 @@
 --- nodes
 ---
 
-# Others
-
-- id:   toilets
-  condition:
-    - amenity = toilets
-  action:
-    - action: write_poi
-      type: 0x2F10
-      contacts: yes
-
-- id:   sauna
-  condition:
-    - amenity = sauna
-  action:
-    - action: write_poi
-      type: 0x2F10
-      contacts: yes
-
-
-
 # Manmade features
 
 - condition:
@@ -179,7 +159,11 @@
     - action: write_poi
       type: 0x6616
       level_h: 1
-      ele: yes
+      extra_fields:
+        Label:
+          - %ele~[0x1f]%label
+          - %ele
+          - %label
 
 
 

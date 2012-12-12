@@ -1452,9 +1452,6 @@ sub output_poi {
     }
 
 =disable
-    if ( $info->{ele} && $info->{tags}->{ele} ) {
-        $label .= '~[0x1f]' . $tag{'ele'};
-    }
 
     if ( $flags->{transport_stops} && exists $param{transport} ) {
         my @stops;
