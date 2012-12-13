@@ -40,6 +40,7 @@ sub new {
 
     if ( $opt{fh} ) {
         $self->load($opt{fh}, %opt);
+        $self->merge_multipolygons();
     }
 
     return $self;
