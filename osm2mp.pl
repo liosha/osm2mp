@@ -245,7 +245,6 @@ my $osm = OSM->new(
     skip_tags => [ keys %{$settings{skip_tags}} ],
     handlers => \%extra_handlers,
 );
-$osm->merge_multipolygons();
 
 close $in  if $infile ne q{-};
 
@@ -288,7 +287,7 @@ if ( $flags->{addressing} ) {
     say STDERR "\nLoading address areas...";
     while ( my ($id, $tags) = each %$waytag ) {
         $ft_config->process( address => {
-                type    => 'Way', # !!!
+                type    => 'Way',
                 id      => $id,
                 tag     => $tags,
                 outer   => ( $mpoly->{$id} ? $mpoly->{$id}->[0] : [ $chains->{$id} ] ),
@@ -527,6 +526,7 @@ printf STDERR "  %d coastlines loaded\n", scalar keys %{$coast->{lines}}    if $
 
 ####    Writing non-addressed POIs
 
+undef $poi_rtree;
 if ( %poi ) {
     say STDERR "\nWriting rest POIs...";
     my $count = keys %poi;
@@ -1988,7 +1988,7 @@ sub _get_field_by_lang {
     my ($selector, $obj, %opt) = @_;
 
     my $selected =
-        $selector->{ $values->{target_lang} }
+        $selector->{ $values->{target_lang} || 'en' }
         || $selector->{en}
         || first { $_ ne 'selector' && $selector->{$_} } keys %$selector;
     croak "Bad lang selector"  if !$selected;

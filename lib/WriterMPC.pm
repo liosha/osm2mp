@@ -59,9 +59,6 @@ sub new {
     ##  Encoding
     $self->_register_codepage( $opt{codepage} );
 
-    ##  Initialize filters
-    my $filter_chain = $self->{filter_chain} = TextFilter->new();
-
     return $self;
 }
 
@@ -72,32 +69,31 @@ sub new {
 
 =cut
 
-sub output {
-    my ( $self, $template, $data ) = @_;
+{
+my %writer = (
+    section => undef,
+    info    => undef,
 
-    my %writer = (
-        section => undef,
-        info    => undef,
-
-        point       => sub { $self->_write_point(@_) },
-        polygon     => sub { $self->_write_polygon(@_) },
-        polyline    => sub { $self->_write_polyline(@_) },,
-        # !!! todo
-        road => undef,
-        turn_restriction => undef,
-        destination_sign => undef,
-    );
-
-    if ( !exists $writer{$template} ) {
-        say Dump $template, $data;
-        exit;
-    }
-
-    my $writer = $writer{$template};
-    return if !$writer;
+    point       => \&_write_point,
+    polygon     => \&_write_polygon,
+    polyline    => \&_write_polyline,
     
-    $writer->($data);
+    # !!! todo
+    road => undef,
+    turn_restriction => undef,
+    destination_sign => undef,
+);
+
+sub output {
+    my ( $self, $base, $data ) = @_;
+
+    my $writer = $writer{$base};
+    return if !$writer;
+
+    $self->{_count}->{$base} ++;
+    $writer->($self, $data);
     return;
+}
 }
 
 
