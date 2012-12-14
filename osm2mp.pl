@@ -217,7 +217,7 @@ usage() unless (@ARGV);
 
 my $lang_select = LangSelect->new(
     target_lang => $values->{target_lang},
-    default_lang => $values->{default_lang},
+    default_lang => $values->{default_lang} // $values->{target_lang},
 );
 
 
