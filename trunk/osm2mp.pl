@@ -1473,7 +1473,7 @@ sub output_poi {
     }
     elsif ( $info->{name} && $info->{city} && !$info->{contacts} ) {
         # just region and country
-        $info->{address} = _get_address( $info, level => 'city' );
+        $info->{address} = _get_address( $info, level => 'city', point => $info->{coords} );
     }
 
     $writer->output( point => { data => $info } );
@@ -2408,15 +2408,6 @@ Options:
   * point
   * tag (if no 'tag' field in $obj)
   * street (main street name)
-
-Address base fields:
-  * country
-  * region
-  * city
-  * street
-  * housenumber
-
-Extra fields should be joined with main fields
 
 =cut
 
