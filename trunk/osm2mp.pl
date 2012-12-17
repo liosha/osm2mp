@@ -65,6 +65,7 @@ use FeatureConfig;
 use Boundary;
 use Coastlines;
 use TransportAccess;
+use RouteGraph;
 
 
 
@@ -298,6 +299,7 @@ if ( $flags->{addressing} ) {
 }
 
 
+my $rgraph = RouteGraph->new();
 
 my %road;
 my %trest;
@@ -951,7 +953,7 @@ if ( $flags->{routing} ) {
     while ( my ($roadid, $road) = each %road ) {
 
         my ($name, $rp) = ( $road->{name}, $road->{rp} );
-        my ($type, $llev, $hlev) = ( $road->{type}, $road->{level_l}, $road->{level_h} );
+        my ($type, $hlev) = ( $road->{type}, $road->{level_h} );
 
         $roadid{$roadid} = $roadcount++;
 
@@ -966,13 +968,12 @@ if ( $flags->{routing} ) {
                 routeparams => $rp,
             );
 
-        $objinfo{level_l}       = $llev       if $llev > 0;
-        $objinfo{level_h}       = $hlev       if $hlev > $llev;
+        $objinfo{level_h}       = $hlev       if $hlev > 0;
 
         $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
 
-        if ( $road->{address} ) {
-            _hash_merge( \%objinfo, $road->{address} );
+        if ( $road->{mp_address} ) {
+            _hash_merge( \%objinfo, $road->{mp_address} );
         }
 
         my @levelchain = ();
@@ -1660,53 +1661,70 @@ sub output_line {
 
 
 sub AddRoad {
+    my ($info) = @_;
 
-    my %param = %{$_[0]};
-    my %tag   = exists $param{tags} ? %{$param{tags}} : ();
+    my $tags = $info->{tags};
+    my %params = map {($_ => $info->{$_})} grep {exists $info->{$_}} (
+        qw/ id name type chain level_h /,
+        grep {/_*[A-Z]/} keys %$info,
+    );
 
-    return      unless  exists $param{chain};
-    return      unless  exists $param{type};
+    my ($orig_id) = $info->{id} =~ /^([^:]+)/;
+    $params{way_id} = $orig_id;
 
-    my ($orig_id) = $param{id} =~ /^([^:]+)/;
-
-    my $llev  =  exists $param{level_l} ? $param{level_l} : 0;
-    my $hlev  =  exists $param{level_h} ? $param{level_h} : 0;
+    # object comment (useless?)
+    $params{comment} = join qq{\n}, (
+        $info->{comment} // q{},
+        map {"$_ = $tags->{$_}"} grep {$settings{comment}->{$_}} sort keys %$tags,
+    );
 
     # determine city
-    my @smart_points =
-        map { $param{chain}->[$_] }
-        ( floor($#{$param{chain}}/3), ceil($#{$param{chain}}*2/3) );
-    my $city = FindCity( @smart_points );
+    my $chain_size = $#{ $info->{chain} };
+    my @smart_nodes =
+        map { $info->{chain}->[$_] } ( floor($chain_size/3), ceil($chain_size*2/3) );
+    my $city = FindCity( @smart_nodes );
+    $params{city} = $city  if $city;
+
+    # extend routeparams
+    my ($speed_class, $road_class, $is_oneway, $is_toll, @acc_flags) = split q{,}, $info->{routeparams};
 
     # calculate access restrictions
-    my @rp = split q{,}, $param{routeparams};
-    my @points = map { [ split q{,}, $nodes->{$_} // $_ ] } @smart_points;
-    my $acc = $calc_access->get_road_flags( \%tag, [ @rp[4..11] ], @points );
-    @rp[4..11] = @$acc;
+    my @points = map { [ split q{,}, $nodes->{$_} // $_ ] } @smart_nodes;
+    @acc_flags = @{ $calc_access->get_road_flags( $tags, \@acc_flags, @points ) };
 
-    my $mp_address;
-    if ( $param{name} ) {
+    if ( $info->{name} ) {
         my $address = _get_address( { type => 'way', id => $orig_id }, level => 'street',
-            points => \@smart_points, city => $city, tag => \%tag, street => $param{name},
+            points => \@smart_nodes, city => $city, tags => $tags, street => $info->{name},
         );
-        $mp_address = _get_mp_address($address);
-        $param{name} = $mp_address->{StreetDesc} || $param{name};
+        $params{address} = $address;
+
+        my $mp_address = $params{mp_address} = _get_mp_address($address);
+        $params{name} = $mp_address->{StreetDesc} if $mp_address->{StreetDesc};
     }
 
     # calculate speed class
-    my %speed_coef = (
-        maxspeed             => 0.9,
-        'maxspeed:practical' => 0.9,
-        avgspeed             => 1,
+    my @speed_tags = (
+        [ avgspeed             => 1.0 ],
+        [ 'maxspeed:practical' => 0.9 ],
+        [ maxspeed             => 0.9 ],
     );
-    for my $speed_key ( keys %speed_coef ) {
-        next unless $tag{$speed_key};
-        my $speed = extract_number( $tag{$speed_key} );
-        next unless $speed;
-        $speed *= 1.61   if  $tag{$speed_key} =~ /mph$/ixms;
-        $rp[0] = speed_code( $speed * $speed_coef{$speed_key} );
+    for my $tag_info ( @speed_tags ) {
+        my ($key, $coef) = @$tag_info;
+        my $val = $tags->{$key};
+        next if !$val;
+
+        my $speed = extract_number( $val );
+        next if !$speed;
+
+        $speed *= 1.61   if  $val =~ /mph$/ixms;
+
+        $params{speed} = $speed * $coef;
+        $speed_class = speed_code( $speed * $coef );
     }
 
+    $params{rp} = join q{,}, ($speed_class, $road_class, $is_oneway, $is_toll, @acc_flags);
+
+=disabled
     # navitel-style 3d interchanges
     if ( my $layer = $flags->{interchange_3d} && extract_number($waytag->{'layer'}) ) {
         $layer *= 2     if $layer > 0;
@@ -1717,7 +1735,9 @@ sub AddRoad {
         $hlevel{ $param{chain}->[0]  } = $layer;
         $hlevel{ $param{chain}->[-1] } = $layer;
     }
+=cut
 
+=disabled
     # road shield
     if ( $flags->{road_shields}  &&  !$city ) {
         my @ref =
@@ -1725,72 +1745,56 @@ sub AddRoad {
             grep {$_} ( @{ $road_ref{$orig_id} || [] }, @tag{'ref', 'int_ref'} );
         $param{name} = '~[0x06]' . join( q{ }, grep {$_} ( join(q{-}, uniq sort @ref), $param{name} ) )  if @ref;
     }
+=cut
 
     # load road
-    $road{$param{id}} = {
-        #comment =>  $param{comment},
-        type    =>  $param{type},
-        name    =>  $param{name},
-        chain   =>  $param{chain},
-        level_l =>  $llev,
-        level_h =>  $hlev,
-        city    =>  $city,
-        rp      =>  join( q{,}, @rp ),
-        ( $mp_address ? (address => $mp_address) : () ),
-    };
+#    $rgraph->add_road( \%params );
+    $road{$info->{id}} = \%params;
+    say Dump \%params;
 
-    # FIXME: buggy object comment
-    while ( my ( $key, $val ) = each %tag ) {
-        next if !$settings{comment}->{$key};
-        $road{$param{id}}->{comment} .= "\n$key = $tag{$key}";
-    }
 
-    # the rest object parameters (capitals!)
-    for my $key ( keys %param ) {
-        next unless $key =~ /^_*[A-Z]/;
-        $road{$param{id}}->{$key} = $param{$key};
-    }
+    my $chain = $info->{chain};
 
     # external nodes
     if ( $bound ) {
-        if ( !is_inside_bounds( $nodes->{ $param{chain}->[0] } ) ) {
-            $xnode{ $param{chain}->[0] } = 1;
-            $xnode{ $param{chain}->[1] } = 1;
+        if ( !is_inside_bounds( $nodes->{ $chain->[0] } ) ) {
+            $xnode{ $chain->[0] } = 1;
+            $xnode{ $chain->[1] } = 1;
         }
-        if ( !is_inside_bounds( $nodes->{ $param{chain}->[-1] } ) ) {
-            $xnode{ $param{chain}->[-1] } = 1;
-            $xnode{ $param{chain}->[-2] } = 1;
+        if ( !is_inside_bounds( $nodes->{ $chain->[-1] } ) ) {
+            $xnode{ $chain->[-1] } = 1;
+            $xnode{ $chain->[-2] } = 1;
         }
     }
 
     # process associated turn restrictions
     if ( $flags->{restrictions}  ||  $flags->{dest_signs} ) {
 
-        for my $relid ( @{$nodetr{$param{chain}->[0]}} ) {
+        for my $relid ( @{$nodetr{$chain->[0]}} ) {
             next unless exists $trest{$relid};
             if ( $trest{$relid}->{fr_way} eq $orig_id ) {
-                $trest{$relid}->{fr_way} = $param{id};
+                $trest{$relid}->{fr_way} = $info->{id};
                 $trest{$relid}->{fr_dir} = -1;
                 $trest{$relid}->{fr_pos} = 0;
             }
             if ( $trest{$relid}->{to_way} eq $orig_id ) {
-                $trest{$relid}->{to_way} = $param{id};
+                $trest{$relid}->{to_way} = $info->{id};
                 $trest{$relid}->{to_dir} = 1;
                 $trest{$relid}->{to_pos} = 0;
             }
         }
 
-        for my $relid ( @{$nodetr{$param{chain}->[-1]}} ) {
+        for my $relid ( @{$nodetr{$chain->[-1]}} ) {
             next unless exists $trest{$relid};
             if ( $trest{$relid}->{fr_way} eq $orig_id ) {
-                $trest{$relid}->{fr_way} = $param{id};
+                $trest{$relid}->{fr_way} = $info->{id};
                 $trest{$relid}->{fr_dir} = 1;
-                $trest{$relid}->{fr_pos} = $#{ $param{chain} };
+                $trest{$relid}->{fr_pos} = $#$chain;
             }
             if ( $trest{$relid}->{to_way} eq $orig_id ) {
-                $trest{$relid}->{to_way} = $param{id};
+                $trest{$relid}->{to_way} = $info->{id};
                 $trest{$relid}->{to_dir} = -1;
-                $trest{$relid}->{to_pos} = $#{ $param{chain} };
+                $trest{$relid}->{to_pos} = $#$chain;
             }
         }
     }
