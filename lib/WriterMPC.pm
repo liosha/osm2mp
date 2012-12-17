@@ -270,7 +270,7 @@ sub get_getopt {
 sub get_usage {
     my ($self) = @_;
     return (
-        [ 'o|output' => 'output file', 'stdout' ],
+        [ 'o|output' => 'output file' ],
         [ 'codepage <num>' => 'output character encoding', $self->{codepage} ],
     );
 }
