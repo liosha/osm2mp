@@ -10,6 +10,7 @@
       type: 0x01
       level_h: 4
       routeparams: '6,4,1,0,0,0,0,0,0,0,0,0'
+      road_ref: '~[0x04]'
 
 - condition:
     - highway = motorway_link
@@ -22,11 +23,13 @@
 
 - condition:
     - highway = trunk
+    - ~inside_city
   action:
     - action: load_road
       type: 0x01
       level_h: 4
       routeparams: '5,4,0,0,0,0,0,0,0,0,0,0'
+      road_ref: '~[0x04]'
 
 - condition:
     - highway = trunk
@@ -48,11 +51,13 @@
 
 - condition:
     - highway = primary
+    - ~inside_city
   action:
     - action: load_road
       type: 0x02
       level_h: 3
       routeparams: '4,3,0,0,0,0,0,0,0,0,0,0'
+      road_ref: '~[0x05]'
 
 - condition:
     - highway = primary
@@ -74,11 +79,13 @@
 
 - condition:
     - highway = secondary
+    - ~inside_city
   action:
     - action: load_road
       type: 0x02
       level_h: 2
       routeparams: '4,2,0,0,0,0,0,0,0,0,0,0'
+      road_ref: '~[0x06]'
 
 - condition:
     - highway = secondary
@@ -100,11 +107,13 @@
 
 - condition:
     - highway = tertiary
+    - ~inside_city
   action:
     - action: load_road
       type: 0x03
       level_h: 2
       routeparams: '4,1,0,0,0,0,0,0,0,0,0,0'
+      road_ref: '~[0x06]'
 
 - condition:
     - highway = tertiary
@@ -118,6 +127,7 @@
 
 - condition:
     - highway = unclassified
+    - ~inside_city
   action:
     - action: load_road
       type: 0x03

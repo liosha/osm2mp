@@ -612,15 +612,9 @@ if ( $flags->{routing} ) {
 
             my @list = ();
             for my $r2 ( keys %{$rstart{$p1->[-1]}} ) {
-                my @plist = qw{ type name city rp level_l level_h };
-                push @plist, grep { /^_*[A-Z]/ } ( keys %{$road{$r1}}, keys %{$road{$r2}} );
-
-                if ( $r1 ne $r2
-                  && ( all {
-                        ( !exists $road{$r1}->{$_} && !exists $road{$r2}->{$_} ) ||
-                        ( defined $road{$r1}->{$_} && defined $road{$r2}->{$_} && $road{$r1}->{$_} eq $road{$r2}->{$_} )
-                    } @plist )
-                  && lcos( $p1->[-2], $p1->[-1], $road{$r2}->{chain}->[1] ) > $values->{merge_cos} ) {
+                if ( $r1 ne $r2 && _are_roads_same( $road{$r1}, $road{$r2} )
+                    && lcos( $p1->[-2], $p1->[-1], $road{$r2}->{chain}->[1] ) > $values->{merge_cos} )
+                {
                     push @list, $r2;
                 }
             }
@@ -951,7 +945,6 @@ if ( $flags->{routing} ) {
     my $roadcount = $values->{first_road_id} || 1;
 
     while ( my ($roadid, $road) = each %road ) {
-
         my ($name, $rp) = ( $road->{name}, $road->{rp} );
         my ($type, $hlev) = ( $road->{type}, $road->{level_h} );
 
@@ -959,16 +952,19 @@ if ( $flags->{routing} ) {
 
         $rp =~ s/^(.,.),./$1,0/     unless $flags->{oneway};
 
+        my $ref_prefix = $road->{road_ref} && $road->{refs}
+            ? $road->{road_ref} . join( q{-}, @{$road->{refs}} ) . q{ }
+            : q{};
         my %objinfo = (
                 comment     => "WayID = $roadid" . ( $road->{comment} // q{} ),
                 type        => $type,
-                name        => $name,
+                name        => $ref_prefix . ( $name || q{} ),
                 chain       => [ @{$road->{chain}} ],
                 roadid      => $roadid{$roadid},
                 routeparams => $rp,
             );
 
-        $objinfo{level_h}       = $hlev       if $hlev > 0;
+        $objinfo{level_h}       = $hlev       if $hlev;
 
         $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
 
@@ -1155,6 +1151,29 @@ exit 0;
 
 
 ####    Functions
+
+sub _are_roads_same {
+    my ($r1, $r2) = @_;
+
+    my @plist = qw/ type name rp level_l road_ref refs mp_address /;
+    push @plist, uniq grep { /^_*[A-Z]/ } ( keys %$r1, keys %$r2 );
+
+    for my $param ( @plist ) {
+        my ($p1, $p2) = ( $r1->{$param}, $r2->{$param} );
+        next if !defined $p1 && !defined $p2;
+        return 0 if ref $p1 ne ref $p2;
+
+        if ( !ref $p1 || ref $p1 eq 'ARRAY' ) {
+            return 0 if !( $p1 ~~ $p2 );
+        }
+        elsif ( ref $p1 eq 'HASH' ) {
+            return 0 if !( [ sort keys %$p1 ] ~~ [ sort keys %$p2 ] );
+            return 0 if !all { $p1->{$_} ~~ $p2->{$_} } keys %$p1;
+        }
+    }
+    
+    return 1;
+}
 
 sub convert_string {
 
@@ -1665,7 +1684,7 @@ sub AddRoad {
 
     my $tags = $info->{tags};
     my %params = map {($_ => $info->{$_})} grep {exists $info->{$_}} (
-        qw/ id name type chain level_h /,
+        qw/ id name type chain level_h road_ref refs /,
         grep {/_*[A-Z]/} keys %$info,
     );
 
@@ -1737,21 +1756,9 @@ sub AddRoad {
     }
 =cut
 
-=disabled
-    # road shield
-    if ( $flags->{road_shields}  &&  !$city ) {
-        my @ref =
-            map { my $s = $_; $s =~ s/[\s\-]//gx; split /[,;]/, $s }
-            grep {$_} ( @{ $road_ref{$orig_id} || [] }, @tag{'ref', 'int_ref'} );
-        $param{name} = '~[0x06]' . join( q{ }, grep {$_} ( join(q{-}, uniq sort @ref), $param{name} ) )  if @ref;
-    }
-=cut
-
     # load road
 #    $rgraph->add_road( \%params );
     $road{$info->{id}} = \%params;
-    say Dump \%params;
-
 
     my $chain = $info->{chain};
 
@@ -2091,6 +2098,18 @@ sub _get_result_object_params {
 
     $info{tags} = $obj->{tag};
     $info{comment} = "$obj->{type}ID = $obj->{id}";
+
+    # road refs
+    if ( $flags->{road_shields} && $action->{road_ref} ) {
+        my @refs =
+            uniq sort
+            map { my $ref = $_; $ref =~ s/[\s\-]//gx; split /[,;]/, $ref }
+            grep { $_ } (
+                $obj->{tag}->{ref},
+                @{ $road_ref{ $obj->{id} } || [] }
+            );
+        $info{refs} = \@refs  if @refs;
+    }
 
     return \%info;
 }
