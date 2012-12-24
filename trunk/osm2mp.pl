@@ -1896,16 +1896,35 @@ sub output_area {
 sub cond_is_inside_city {
     my ($obj) = @_;
 
-    return FindCity($obj->{latlon})  if exists $obj->{latlon};
-    return FindCity($obj->{id})      if $obj->{type} eq 'Node';
+    state $cache = {};
+
+    if ( my $key = $obj->{latlon} ) {
+        return $cache->{$key} //= !!FindCity($obj->{latlon});
+    }
+    elsif ( $obj->{type} && $obj->{id} ) {
+        my $key = "$obj->{type}_$obj->{id}";
+        return $cache->{$key} //= !!_is_object_inside_city($obj);
+    }
+    
+    croak "Invalid object:\n".Dump $obj;
+    return;
+}
+
+
+sub _is_object_inside_city {
+    my ($obj) = @_;
+
+    my $id = $obj->{id};
+
+    return FindCity($id)  if $obj->{type} eq 'Node';
     
     if ( $obj->{type} eq 'Way' ) {
-        my $id = $obj->{id};
         my $chain = $mpoly->{$id} ? $mpoly->{$id}->[0]->[0] : $chains->{$id};
         return FindCity($chain->[ floor($#$chain/3) ]) && FindCity($chain->[ ceil($#$chain*2/3) ]);
     }
     return;
 }
+
 
 sub cond_is_named {
     my ($obj) = @_;
