@@ -18,7 +18,7 @@
       level_h: 3
 
 - condition:
-    - place = village|hamlet
+    - place = village|hamlet|allotments|isolated_dwelling
   action:
     - action: write_polygon
       type: 0x03
