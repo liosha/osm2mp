@@ -309,6 +309,7 @@
         - leisure = stadium
         - and:
             - leisure = pitch
+            - sport != skating
             - named
   action:
     - action: write_poi
@@ -531,7 +532,7 @@
 - condition:
     - shop = *
     - shop != car_wrecker|car_repair|tyres|car|car_parts|boat|beauty|hairdresser|bakery
-    - shop != mall|hypermarket|pharmacy|chemist|clothes|shoes
+    - shop != department_store|mall|hypermarket|pharmacy|chemist|clothes|shoes
     - shop != convenience|butcher|grocery|supermarket|general|greengrocer
     - shop != doityourself|garden_centre|hardware|electrogoods|electrotools|chemist|furniture|computer
   action:
