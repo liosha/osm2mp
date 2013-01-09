@@ -2087,6 +2087,9 @@ sub _get_result_object_params {
         $info{$key} = _get_field_content($info{$key}, $obj);
     }
 
+    # skip objects with undefined type
+    return if !defined $info{type} || !length $info{type};
+
     my $extra = $info{extra_fields} = {};
     
     # preset fields
@@ -2143,6 +2146,8 @@ sub action_write_line {
     return if !@parts;
 
     my $info = _get_result_object_params($obj, $action);
+    return if !$info;
+
     for my $part ( @parts ) {
         $info->{chain} = $part;
         output_line( $info );
@@ -2162,6 +2167,8 @@ sub action_load_road {
     return if !@parts;
 
     my $info = _get_result_object_params($obj, $action);
+    return if !$info;
+
     for my $part_no ( 0 .. $#parts ) {
         $info->{chain} = $parts[$part_no];
         $info->{id}    = "$id:$part_no";
@@ -2266,6 +2273,7 @@ sub action_write_polygon {
     my ($obj, $action) = @_;
 
     my $info = _get_result_object_params($obj, $action);
+    return if !$info;
 
     my $id = $obj->{id};
     if ( $mpoly->{$id} ) {
@@ -2329,6 +2337,7 @@ sub action_write_poi {
     my ($obj, $action) = @_;
 
     my $info = _get_result_object_params($obj, $action);
+    return if !$info;
 
     my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $nodes->{$obj->{id}} );
 
