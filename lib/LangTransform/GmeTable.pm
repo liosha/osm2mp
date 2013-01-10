@@ -12,6 +12,8 @@ use utf8;
 use Carp;
 use Encode;
 
+use Utils;
+
 our $PRIORITY = 2;
 
 
@@ -72,18 +74,7 @@ sub _make_gme_transformer {
     }
     close $in;
 
-    my $re_text;
-    eval {
-        require Regexp::Assemble;
-        $re_text = Regexp::Assemble->new()->add( map { quotemeta $_ } keys %table )->re();
-    }
-    or eval {
-        $re_text = join q{|}, map { quotemeta $_ } sort { length $b <=> length $a } keys %table;
-        require Regexp::Optimizer;
-        $re_text = Regexp::Optimizer->new()->optimize($re_text);
-    }; 
-    
-    my $re = qr/($re_text)/;
+    my $re = Utils::make_re_from_list( [keys %table], capture => 1 );
 
     my $tranformer = sub {
         my ($str) = @_;
