@@ -14,6 +14,7 @@ use List::Util qw/ first /;
 use List::MoreUtils qw/ none first_index /;
 
 use AreaTree;
+use Utils;
 
 
 our @NAME_TAGS = qw/ name place_name /;
@@ -22,7 +23,7 @@ our @NAME_TAGS = qw/ name place_name /;
 our @ADDRESS_PREFIXES = qw/ addr /;
 
 our @ADDRESS_ITEMS = (
-    [ office        => { aliases => [ qw/ flat appartment / ] } ],
+    [ office        => { aliases => [ qw/ flat apartment / ] } ],
     [ entrance      => {} ],
     [ housenumber   => { aliases => [ 'housename' ] } ],
     [ postcode      => {} ],
@@ -31,7 +32,7 @@ our @ADDRESS_ITEMS = (
     [ suburb        => {} ],
     [ city          => {} ],
     [ subdistrict   => {} ],
-    [ district      => {} ],
+    [ district      => { aliases => [ 'county' ] } ],
     [ region        => { aliases => [ 'state' ] } ],
     [ country       => {} ],
 );
@@ -63,7 +64,7 @@ sub new {
     bless $self, $class;
 
     # regexp for all addr tag names
-    my $name_tag_str = join q{|}, @{ $opt{name_tags} || \@NAME_TAGS };
+    my $name_tag_str = Utils::make_re_from_list( $opt{name_tags} || \@NAME_TAGS );
     $self->{name_tag_re} = qr/ ^ (?: $name_tag_str ) \b /xms;
 
     # taglist for addr levels
@@ -89,7 +90,8 @@ sub new {
         my $level = shift @addr_levels;
         $self->{addr_parents}->{$level} = [ @addr_levels ];
         
-        my $tag_str = join q{|}, map { @{ $addr_tags{$_} } } (($level ? $level : ()), @addr_levels);
+        my @tags = map { @{ $addr_tags{$_} } } (($level ? $level : ()), @addr_levels);
+        my $tag_str = Utils::make_re_from_list(\@tags);
         $self->{addr_tag_re}->{$level} = qr/ ^ (?: $tag_str ) \b /xms;
 
         next if !$level;

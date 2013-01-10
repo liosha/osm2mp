@@ -70,7 +70,7 @@ use RouteGraph;
 
 
 
-print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2012 liosha, xliosha\@gmail.com\n";
+print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2013 liosha, xliosha\@gmail.com\n";
 
 
 

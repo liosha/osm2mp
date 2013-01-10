@@ -11,6 +11,8 @@ use utf8;
 
 use Unicode::Normalize;
 
+use Utils;
+
 our $PRIORITY = 1;
 
 our %DATA = (
@@ -130,8 +132,9 @@ sub get_transformers {
                 : ()
             )
         );
-        my $re_text = join q{|}, map {quotemeta $_} sort { length $b <=> length $a } keys %table;
-        my $re = qr/($re_text)/xms; # TODO: optimize
+
+         
+        my $re = Utils::make_re_from_list( [keys %table], capture => 1 );
 
         push @result, {
             id => "subst_$id",
