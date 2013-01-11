@@ -107,9 +107,9 @@
 ##  Labels
 
 - condition:
+    - type = boundary|multipolygon
     - boundary = administrative
     - admin_level = 4
-    - only_rel
   action:
     - action: write_poi
       type: 0x1500
@@ -117,9 +117,9 @@
       level_h: 4
 
 - condition:
+    - type = boundary|multipolygon
     - boundary = administrative
     - admin_level = 6
-    - only_rel
   action:
     - action: write_poi
       type: 0x1500
