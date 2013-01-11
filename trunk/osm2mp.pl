@@ -240,7 +240,7 @@ my $osm = OSM->new(
 
 close $in  if $infile ne q{-};
 
-my ($nodes, $chains, $mpoly, $relations) = @$osm{ qw/ nodes chains mpoly relations / };
+my ($nodes, $relations) = @$osm{ qw/ nodes relations / };
 
 
 
@@ -1900,9 +1900,10 @@ sub _is_object_inside_city {
     return FindCity($id)  if $obj->{type} eq 'Node';
     
     if ( $obj->{type} eq 'Way' ) {
-        my $chain = $mpoly->{$id} ? $mpoly->{$id}->[0]->[0] : $chains->{$id};
+        my $chain = $obj->{chain};
         return FindCity($chain->[ floor($#$chain/3) ]) && FindCity($chain->[ ceil($#$chain*2/3) ]);
     }
+
     return;
 }
 
@@ -1912,9 +1913,11 @@ sub cond_is_named {
     return !!( name_from_list( label => $obj->{tag} ) );
 }
 
+
+# !!! to remove
 sub cond_is_multipolygon {
     my ($obj) = @_;
-    return exists $mpoly->{$obj->{id}};
+    return exists $osm->{mpoly}->{$obj->{id}};
 }
 
 
@@ -1934,11 +1937,9 @@ sub _get_line_parts_inside_bounds {
 sub action_load_coastline {
     my ($obj, $action) = @_;
     return if !$flags->{shorelines};
+    return if !$obj->{chain};
 
-    my $chain = $chains->{$obj->{id}};
-    return if !$chain;
-
-    my @parts = _get_line_parts_inside_bounds( $chain );
+    my @parts = _get_line_parts_inside_bounds( $obj->{chain} );
     for my $part ( @parts ) {
         $coast->add_coastline([ map {[ reverse split /,/x, $nodes->{$_} ]} @$part ]);
     }
@@ -2120,10 +2121,10 @@ sub _get_result_object_params {
 
 sub action_write_line {
     my ($obj, $action) = @_;
-    my $id = $obj->{id};
 
-    my @parts = map { _get_line_parts_inside_bounds($_) }
-        ( $mpoly->{$id} ? ( map {@$_} @{$mpoly->{$id}} ) : ( $chains->{$id} ) );
+    my @parts =
+        map { _get_line_parts_inside_bounds($_) }
+        ( $obj->{chain} || ( @{$obj->{outer}}, @{ $obj->{inner} || [] } ) );
     return if !@parts;
 
     my $info = _get_result_object_params($obj, $action);
@@ -2141,10 +2142,10 @@ sub action_load_road {
     return action_write_line(@_)  if !$flags->{routing};
 
     my ($obj, $action) = @_;
+    return if !$obj->{chain};
 
     my $id = $obj->{id};
-    my @parts = map { _get_line_parts_inside_bounds($_) }
-        ( $mpoly->{$id} ? ( map {@$_} @{$mpoly->{$id}} ) : ( $chains->{$id} ) );
+    my @parts = map { _get_line_parts_inside_bounds($_) } $obj->{chain};
     return if !@parts;
 
     my $info = _get_result_object_params($obj, $action);
@@ -2201,11 +2202,11 @@ sub action_modify_road {
 sub action_process_interpolation {
     my ($obj, $action) = @_;
     return if !$flags->{addr_interpolation};
+    return if !$obj->{chain};
 
     my $id = $obj->{id};
 
-    my @parts = map { _get_line_parts_inside_bounds($_) }
-        ( $mpoly->{$id} ? ( map {@$_} @{$mpoly->{$id}} ) : ( $chains->{$id} ) );
+    my @parts = map { _get_line_parts_inside_bounds($_) } $obj->{chain};
     return if !@parts;
 
     for my $part ( @parts ) {
@@ -2252,31 +2253,18 @@ sub action_process_interpolation {
 
 sub action_write_polygon {
     my ($obj, $action) = @_;
+    return if !$obj->{outer};
 
     my $info = _get_result_object_params($obj, $action);
     return if !$info;
 
-    my $id = $obj->{id};
-    if ( $mpoly->{$id} ) {
-        $info->{areas} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$mpoly->{$id}->[0]} ];
-        $info->{holes} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$mpoly->{$id}->[1]} ];
-        $info->{entrance} = [
-            map { [ $nodes->{$_}, $entrance{$_} ] }
-            grep { exists $entrance{$_} }
-            map { @$_ }
-            map { @$_ } @{$mpoly->{$id}}
-        ];
-    }
-    else {
-        return if $chains->{$id}->[0] ne $chains->{$id}->[-1];
-        
-        $info->{areas} = [ [ map {[ reverse split q{,}, $nodes->{$_} ]} @{$chains->{$id}} ] ];
-        $info->{entrance} = [
-            map { [ $nodes->{$_}, $entrance{$_} ] }
-            grep { exists $entrance{$_} }
-            @{$chains->{$id}}
-        ];
-    }
+    $info->{areas} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$obj->{outer}} ];
+    $info->{holes} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$obj->{inner} || []} ];
+    $info->{entrance} = [
+        map { [ $nodes->{$_}, $entrance{$_} ] }
+        grep { exists $entrance{$_} }
+        map { @$_ } map { @{ $_ || [] } } ( $obj->{outer}, $obj->{inner} )
+    ];
 
     output_area( $info, $obj );
     return;
@@ -2286,9 +2274,10 @@ sub action_write_polygon {
 sub action_address_poi {
     my ($obj, $action) = @_;
 
+    return if !$obj->{outer};
     return if !exists $poi_rtree->{root};
 
-    my $outer = $mpoly->{$obj->{id}} ? $mpoly->{$obj->{id}}->[0]->[0] : $chains->{$obj->{id}};
+    my $outer = $obj->{outer}->[0];
     my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $nodes->{$_} ]} @$outer );
 
     my @poilist;
@@ -2322,13 +2311,16 @@ sub action_write_poi {
 
     my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $nodes->{$obj->{id}} );
 
-    # for areas: place poi at main entrance if exists
     if ( !$latlon && $obj->{type} eq 'Way' ) {
-        my $outer = $mpoly->{$obj->{id}} ? $mpoly->{$obj->{id}}->[0]->[0] : $chains->{$obj->{id}};
-        my $entrance_node = first { exists $main_entrance{$_} } @$outer;
-        $latlon = $entrance_node
-            ? $nodes->{$entrance_node}
-            : join( q{,}, polygon_centroid( map {[ split /,/, $nodes->{$_} ]} @$outer ) );
+        # for areas: place poi at main entrance if exists
+        if ( $obj->{outer} ) {
+            my $entrance_node = first { exists $main_entrance{$_} } map {@$_} @{$obj->{outer}};
+            $latlon = $nodes->{$entrance_node}  if $entrance_node;
+        }
+
+        $latlon ||= join( q{,}, polygon_centroid(
+                map {[ split /,/, $nodes->{$_} ]} @{ $obj->{chain} || $obj->{outer}->[0] }
+            ) );
     }
 
     return  unless $latlon && is_inside_bounds( $latlon );
@@ -2356,8 +2348,9 @@ sub action_write_poi {
 
 sub action_load_access_area {
     my ($obj, $action) = @_;
+    return if !$obj->{outer};
 
-    my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
+    my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{$obj->{outer}};
     $calc_access->add_area( $obj->{tag}, @contours ); 
     
     return;
@@ -2366,13 +2359,10 @@ sub action_load_access_area {
 
 sub _load_area {
     my ($level, $obj, $action) = @_;
-
-    my $id = $obj->{id};
-    my $outer = ( $mpoly->{$id} ? $mpoly->{$id}->[0] : [ $chains->{$id} ] );
-    return if $outer->[0]->[0] ne $outer->[0]->[-1];
+    return if !$obj->{outer};
 
     my $address_tags = $addresser->get_address_tags($obj->{tag}, level => $level);
-    my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @$outer;
+    my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{$obj->{outer}};
 
     $addresser->load_area($level, $address_tags, @contours);
     return;

@@ -298,13 +298,24 @@ sub iterate_ways {
 
     # !!! taged ways and multipolygons
     while ( my ($id, $tags) = each %{ $self->{tags}->{way} } ) {
-        my $way_info = {
+        my %way_info = (
             type    => 'Way',
             id      => $id,
             tag     => $tags,
-        };
+        );
 
-        $sub->($way_info);
+        if ( my $mpoly = $self->{mpoly}->{$id} ) {
+            my ($outers, $inners) = @$mpoly;
+            $way_info{outer} = $outers;
+            $way_info{inner} = $inners;
+        }
+        else {
+            my $chain = $self->{chains}->{$id};
+            $way_info{chain} = $chain;
+            $way_info{outer} = [ $chain ]  if $chain->[0] ~~ $chain->[-1];
+        }
+
+        $sub->(\%way_info);
     }
 
     return;
