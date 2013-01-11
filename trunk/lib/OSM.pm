@@ -11,7 +11,6 @@ use warnings;
 use autodie;
 
 use Carp;
-use List::Util qw/ sum /;
 use List::MoreUtils qw/ all notall first_index /;
 
 use Geo::Openstreetmap::Parser;
@@ -88,7 +87,7 @@ sub load {
             },
         bound  => sub {
                 my $obj = shift;
-                $self->{bbox} = [ @{[ split /,/, $obj->{attr}->{box} ]}[1,0,3,2] ];
+                $self->{bbox} = [ @{[ split q{,}, $obj->{attr}->{box} ]}[1,0,3,2] ];
                 return;
             },
         bounds => sub {
@@ -123,9 +122,10 @@ sub _merge_multipolygon {
     for my $list_ref ( \@outer_ids, \@inner_ids ) {
         my @rings;
 
-        # skip incomplete objects
-        return if notall { $self->is_way_exists($_) } @$list_ref;
         my %chain = map {( $_ => $self->get_way_chain($_) )} @$list_ref;
+
+        # skip incomplete objects
+        return if notall {defined} values %chain;
 
         LIST:
         while ( @$list_ref ) {
@@ -202,13 +202,6 @@ sub add_node {
 }
 
 
-sub is_node_exists {
-    my ($self, $id) = @_;
-
-    return exists $self->{nodes}->{$id};
-}
-
-
 sub add_way {
     my ($self, $obj) = @_;
 
@@ -226,13 +219,6 @@ sub add_way {
     $self->{tags}->{way}->{$id} = $obj->{tag}  if $obj->{tag};
 
     return;
-}
-
-
-sub is_way_exists {
-    my ($self, $id) = @_;
-
-    return exists $self->{chains}->{$id};
 }
 
 
