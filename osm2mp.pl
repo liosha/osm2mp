@@ -239,7 +239,7 @@ my $osm = OSM->new(
 
 close $in  if $infile ne q{-};
 
-my ($nodes, $relations) = @$osm{ qw/ nodes relations / };
+my ($nodes) = @$osm{ qw/ nodes / };
 
 
 
@@ -302,28 +302,28 @@ my %trstop;
 say STDERR "\nProcessing relations...";
 
 if ( $flags->{routing}  &&  $flags->{restrictions} ) {
-    while ( my ($relation_id, $members) = each %{ $relations->{restriction} || {} } ) {
-        my $tags = $osm->get_tags(relation => $relation_id);
+    my $add_restr_sub = sub {
+        my ($relation_id, $members, $tags) = @_;
 
         my ($type) = ($tags->{restriction} // 'no') =~ /^(only | no)/xms;
-        next if !$type;
+        return if !$type;
 
         my $from_member = first { $_->{type} eq 'way' && $_->{role} eq 'from' } @$members;
-        next if !$from_member;
+        return if !$from_member;
 
         my $to_member = first { $_->{type} eq 'way' && $_->{role} eq 'to' } @$members;
         $to_member //= $from_member  if $tags->{restriction} ~~ 'no_u_turn';
-        next if !$to_member;
+        return if !$to_member;
 
         my $via_member = first { $_->{type} eq 'node' && $_->{role} eq 'via' } @$members;
-        next if !$via_member;
+        return if !$via_member;
 
         my %vtags = (
             foot => 'no',   # assume no foot restrictions
             ( $tags->{except} ? (map {( $_ => 'no' )} split /\s* [,;] \s*/x, $tags->{except}) : () ),
         );
         my $acc = $calc_access->get_tag_flags( \%vtags );
-        next if all {$_} @$acc;
+        return if all {$_} @$acc;
        
         my $node = $via_member->{ref};
         push @{$nodetr{$node}}, $relation_id;
@@ -338,27 +338,31 @@ if ( $flags->{routing}  &&  $flags->{restrictions} ) {
             to_pos  => -1,
         };
         $trest{$relation_id}->{param} = join q{,}, @$acc  if any {$_} @$acc;
-    }
+
+        return;
+    };
+
+    $osm->iterate_relations(restriction => $add_restr_sub);
+
     printf STDERR "  %d turn restrictions\n", scalar keys %trest;
 }
 
 
 if ( $flags->{routing} && $flags->{dest_signs} ) {
-    my $crossroads_cnt = scalar keys %trest;
-    while ( my ($relation_id, $members) = each %{ $relations->{destination_sign} || {} } ) {
-        my $tags = $osm->get_tags(relation => $relation_id);
+    my $add_sign_sub = sub {
+        my ($relation_id, $members, $tags) = @_;
 
         my $from_member = first { $_->{type} eq 'way' && $_->{role} eq 'from' } @$members;
-        next if !$from_member;
+        return if !$from_member;
 
         my $to_member = first { $_->{type} eq 'way' && $_->{role} eq 'to' } @$members;
-        next if !$to_member;
+        return if !$to_member;
 
         my $via_member = first { $_->{type} eq 'node' && $_->{role} ~~ [qw/ sign intersection /] } @$members;
-        next if !$via_member;
+        return if !$via_member;
 
         my $name = name_from_list( destination => $tags );
-        next if !$name;
+        return if !$name;
 
         my $node = $via_member->{ref};
         $trest{$relation_id} = {
@@ -373,100 +377,111 @@ if ( $flags->{routing} && $flags->{dest_signs} ) {
             to_pos  => -1,
         };
         push @{$nodetr{ $node }}, $relation_id;
-    }
+
+        return;
+    };
+
+    my $crossroads_cnt = scalar keys %trest;
+    $osm->iterate_relations(destination_sign => $add_sign_sub);
+
     printf STDERR "  %d destination signs\n", scalar(keys %trest) - $crossroads_cnt;
 }
 
 
 if ( $flags->{street_relations} ) {
     my $member_count = 0;
-    for my $type ( qw{ street associatedStreet } ) {
-        my $list = $relations->{$type};
-        next if !$list;
 
-        while ( my ($relation_id, $members) = each %$list ) {
-        
-            my $tags = $osm->get_tags(relation => $relation_id);
+    my $add_street_sub = sub {
+        my ($relation_id, $members, $tags) = @_;
 
-            # EXPERIMENTAL: resolve addr:* roles
-            for my $member ( @$members ) {
-                my ($type, $ref, $role) = @$member{ qw/ type ref role / };
-                next if $role !~ / ^ addr: /xms;
+        # EXPERIMENTAL: resolve addr:* roles
+        for my $member ( @$members ) {
+            my ($type, $ref, $role) = @$member{ qw/ type ref role / };
+            next if $role !~ / ^ addr: /xms;
 
-                my $tag_ref = $osm->get_tags($type => $ref);
-                next if !$tag_ref;
+            my $tag_ref = $osm->get_tags($type => $ref);
+            next if !$tag_ref;
 
-                for my $k ( reverse sort keys %$tag_ref ) {    # 'name' before 'addr:*'!
-                    (my $nk = $k) =~ s/^ name \b/$role/xms;
-                    next if $nk !~ m/ ^ $role \b /xms;
-                    $tags->{$nk} = $tag_ref->{$k}; # !!!
-                }
-            }
-
-            # house tags: addr:* and street's name* as addr:street*
-            my %house_tag;
-            for my $k ( reverse sort keys %$tags ) {    # 'name' before 'addr:*'!
-                (my $nk = $k) =~ s/^ name \b/addr:street/xms;
-                next if $nk !~ m/ ^ addr: /xms;
-                $house_tag{$nk} = $tags->{$k};
-            }
-
-            # street tags: all except 'type'
-            my %street_tag = %$tags;
-            delete $street_tag{type};
-
-            # add relation tags to members
-            for my $member ( @$members ) {
-                $member_count ++;
-                my ($type, $ref, $role) = @$member{ qw/ type ref role / };
-
-                my $tag_ref = $osm->get_tags($type => $ref);
-                next if !$tag_ref;
-
-                # !!!
-                if ( %house_tag && $role ~~ [ qw/ house address / ] ) {
-                    %$tag_ref = ( %$tag_ref, %house_tag );
-                }
-                elsif ( %street_tag && $role ~~ 'street' ) {
-                    %$tag_ref = ( %$tag_ref, %street_tag );
-                }
+            for my $k ( reverse sort keys %$tag_ref ) {    # 'name' before 'addr:*'!
+                (my $nk = $k) =~ s/^ name \b/$role/xms;
+                next if $nk !~ m/ ^ $role \b /xms;
+                $tags->{$nk} = $tag_ref->{$k}; # !!!
             }
         }
-    }
+
+        # house tags: addr:* and street's name* as addr:street*
+        my %house_tag;
+        for my $k ( reverse sort keys %$tags ) {    # 'name' before 'addr:*'!
+            (my $nk = $k) =~ s/^ name \b/addr:street/xms;
+            next if $nk !~ m/ ^ addr: /xms;
+            $house_tag{$nk} = $tags->{$k};
+        }
+
+        # street tags: all except 'type'
+        my %street_tag = %$tags;
+        delete $street_tag{type};
+
+        # add relation tags to members
+        for my $member ( @$members ) {
+            $member_count ++;
+            my ($type, $ref, $role) = @$member{ qw/ type ref role / };
+
+            my $tag_ref = $osm->get_tags($type => $ref);
+            next if !$tag_ref;
+
+            # !!!
+            if ( %house_tag && $role ~~ [ qw/ house address / ] ) {
+                %$tag_ref = ( %$tag_ref, %house_tag );
+            }
+            elsif ( %street_tag && $role ~~ 'street' ) {
+                %$tag_ref = ( %$tag_ref, %street_tag );
+            }
+        }
+    };
+
+    $osm->iterate_relations(street => $add_street_sub);
+    $osm->iterate_relations(associatedStreet => $add_street_sub);
+
     printf STDERR "  %d houses with associated street\n", $member_count;
 }
 
 if ( $flags->{road_shields} ) {
-    while ( my ($relation_id, $members) = each %{ $relations->{route} || {} } ) {
-        my $tags = $osm->get_tags(relation => $relation_id);
-        next if !( $tags->{route} ~~ 'road' );
+    my $add_shield_sub = sub {
+        my ($relation_id, $members, $tags) = @_;
+
+        return if !( $tags->{route} ~~ 'road' );
 
         my @ref = grep {$_} @$tags{'ref', 'int_ref'};
-        next if !@ref;
+        return if !@ref;
 
         for my $member ( @$members ) {
             next if $member->{type} ne 'way';
             push @{$road_ref{$member->{ref}}}, @ref;
         }
-    }
+    };
+    
+    $osm->iterate_relations(route => $add_shield_sub);
     printf STDERR "  %d road ways with ref\n", scalar keys %road_ref;
 }
 
 
 if ( $flags->{transport_stops} ) {
-    while ( my ($relation_id, $members) = each %{ $relations->{route} || {} } ) {
-        my $tags = $osm->get_tags(relation => $relation_id);
-        next if !( $tags->{route} ~~ [ qw/ bus / ] );
+    my $add_stop_sub = sub {
+        my ($relation_id, $members, $tags) = @_;
+
+        return if !( $tags->{route} ~~ [ qw/ bus / ] );
 
         my $ref = $tags->{ref};
-        next if !$ref;
+        return if !$ref;
 
         for my $member ( @$members ) {
             next if $member->{type} ne 'node';
             next if $member->{role} !~ /stop|platform/x;
             push @{ $trstop{$member->{ref}} }, $ref;
         }
-    }
+    };
+    
+    $osm->iterate_relations(route => $add_stop_sub);
     printf STDERR "  %d transport stops\n", scalar keys %trstop;
 }
 

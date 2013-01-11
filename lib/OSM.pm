@@ -321,5 +321,19 @@ sub iterate_ways {
     return;
 }
 
+
+sub iterate_relations {
+    my ($self, $type, $sub, %opt) = @_;
+
+    my $rels = $self->{relations}->{$type};
+    return if !$rels;
+
+    while ( my ($id, $members) = each %$rels ) {
+        $sub->($id, $members, $self->{tags}->{relation}->{$id});
+    }
+
+    return;
+}
+
 1;
 
