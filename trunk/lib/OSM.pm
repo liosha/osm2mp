@@ -30,8 +30,7 @@ Options:
 sub new {
     my ($class, %opt) = @_;
 
-    my $self = { data => OSM::Hash->new() };
-    bless $self, $class;
+    my $self = OSM::Hash->new();
 
     if ( $opt{fh} ) {
         $self->load($opt{fh}, %opt);
@@ -63,12 +62,12 @@ sub load {
         node => sub {
                 my $obj = shift;
                 delete $obj->{tag}  if $obj->{tag} && all { $skip_tag{$_} } keys %{$obj->{tag}};
-                return $self->{data}->add_node($obj);
+                return $self->add_node($obj);
             },
         way => sub {
                 my $obj = shift;
                 delete $obj->{tag}  if $obj->{tag} && all { $skip_tag{$_} } keys %{$obj->{tag}};
-                return $self->{data}->add_way($obj);
+                return $self->add_way($obj);
             },
         relation => sub {
                 my $obj = shift;
@@ -78,13 +77,13 @@ sub load {
                     my ($mpoly, $oldstyle_id) = $self->_merge_multipolygon($obj);
                     if ( $mpoly ) {
                         my $id = "r$obj->{attr}->{id}";
-                        $self->{data}->add_polygon($id, $mpoly, $obj->{tag});
-                        $self->{data}->add_polygon($oldstyle_id, $mpoly)  if $oldstyle_id;
+                        $self->add_polygon($id, $mpoly, $obj->{tag});
+                        $self->add_polygon($oldstyle_id, $mpoly)  if $oldstyle_id;
                     }
                     return;
                 }
 
-                $self->{data}->add_relation($obj);                
+                $self->add_relation($obj);                
                 return;
             },
         bound  => sub {
@@ -125,8 +124,8 @@ sub _merge_multipolygon {
         my @rings;
 
         # skip incomplete objects
-        return if notall { $self->{data}->is_way_exists($_) } @$list_ref;
-        my %chain = map {( $_ => $self->{data}->get_way_chain($_) )} @$list_ref;
+        return if notall { $self->is_way_exists($_) } @$list_ref;
+        my %chain = map {( $_ => $self->get_way_chain($_) )} @$list_ref;
 
         LIST:
         while ( @$list_ref ) {
@@ -174,6 +173,8 @@ sub _merge_multipolygon {
 
 # factoring out storing engine
 package OSM::Hash;
+
+use base 'OSM';
 
 sub new {
     my ($class, %opt) = @_;
