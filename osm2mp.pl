@@ -239,9 +239,6 @@ my $osm = OSM->new(
 
 close $in  if $infile ne q{-};
 
-my ($nodes) = @$osm{ qw/ nodes / };
-
-
 
 
 
@@ -620,8 +617,6 @@ if ( $flags->{routing} ) {
                 @list  =  sort {  lcos( $p1->[-2], $p1->[-1], $road{$b}->{chain}->[1] )
                               <=> lcos( $p1->[-2], $p1->[-1], $road{$a}->{chain}->[1] )  }  @list;
 
-                report( sprintf( "Road WayID=$r1 may be merged with %s at (%s)", join( q{, }, @list ), $nodes->{$p1->[-1]} ), 'FIX' );
-
                 my $r2 = $list[0];
 
                 # process associated restrictions
@@ -731,7 +726,6 @@ if ( $flags->{routing} ) {
                         my $bnode = $road->{chain}->[$break];
                         $nodid{ $bnode }  =  $nodcount++;
                         $nodeways{ $bnode } = [ $roadid ];
-                        report( sprintf( "Added NodID=%d for NodeID=%s at (%s)", $nodid{$bnode}, $bnode, $nodes->{$bnode} ), 'FIX' );
                     }
                     $rnod = 2;
                 }
@@ -878,7 +872,6 @@ if ( $flags->{routing} ) {
             for my $node ( grep { $_ ne $cnode && $nodid{$_} } @{$road->{chain}}[1..$#{$road->{chain}}] ) {
                 if ( fix_close_nodes( $cnode, $node ) ) {
                     $countclose ++;
-                    report( "Too close nodes $cnode and $node, WayID=$roadid near ($nodes->{$node})" );
                 }
                 $cnode = $node;
             }
@@ -1156,11 +1149,10 @@ sub name_from_list {
 
 
 sub fix_close_nodes {                # NodeID1, NodeID2
-
     my ($id0, $id1) = @_;
 
-    my ($lat1, $lon1) = split q{,}, $nodes->{$id0};
-    my ($lat2, $lon2) = split q{,}, $nodes->{$id1};
+    my ($lon1, $lat1) = @{ $osm->get_lonlat($id0) };
+    my ($lon2, $lat2) = @{ $osm->get_lonlat($id1) };
 
     my ($clat, $clon) = ( ($lat1+$lat2)/2, ($lon1+$lon2)/2 );
     my ($dlat, $dlon) = ( ($lat2-$lat1),   ($lon2-$lon1)   );
@@ -1173,16 +1165,16 @@ sub fix_close_nodes {                # NodeID1, NodeID2
     # fixing
     if ( $res ) {
         if ( $dlon == 0 ) {
-            $nodes->{$id0} = ($clat - $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) )) . q{,} . $clon;
-            $nodes->{$id1} = ($clat + $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) )) . q{,} . $clon;
+            $osm->set_lonlat( $id0, $clat - $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) ), $clon );
+            $osm->set_lonlat( $id1, $clat + $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) ), $clon );
         }
         else {
             my $azim  = $dlat / $dlon;
             my $ndlon = sqrt( $ldist**2 / ($klon**2 + $azim**2) ) / 2;
             my $ndlat = $ndlon * abs($azim);
 
-            $nodes->{$id0} = ($clat - $ndlat * ($dlat <=> 0)) . q{,} . ($clon - $ndlon * ($dlon <=> 0));
-            $nodes->{$id1} = ($clat + $ndlat * ($dlat <=> 0)) . q{,} . ($clon + $ndlon * ($dlon <=> 0));
+            $osm->set_lonlat( $id0, $clat - $ndlat * ($dlat <=> 0), $clon - $ndlon * ($dlon <=> 0) );
+            $osm->set_lonlat( $id1, $clat + $ndlat * ($dlat <=> 0), $clon + $ndlon * ($dlon <=> 0) );
         }
     }
     return $res;
@@ -1194,9 +1186,9 @@ sub lcos {                      # NodeID1, NodeID2, NodeID3
 
     my ($id0, $id1, $id2) = @_;
 
-    my ($lat1, $lon1) = split q{,}, $nodes->{$id0};
-    my ($lat2, $lon2) = split q{,}, $nodes->{$id1};
-    my ($lat3, $lon3) = split q{,}, $nodes->{$id2};
+    my ($lon1, $lat1) = @{ $osm->get_lonlat($id0) };
+    my ($lon2, $lat2) = @{ $osm->get_lonlat($id1) };
+    my ($lon3, $lat3) = @{ $osm->get_lonlat($id2) };
 
     my $klon = cos( ($lat1+$lat2+$lat3) / 3 * 3.14159 / 180 );
 
@@ -1223,9 +1215,10 @@ sub speed_code {
 
 
 sub is_inside_bounds {                  # $latlon
-    my ($node) = @_;
     return 1 if !$bound;
-    return $bound->contains( [ reverse split q{,}, $node ] );
+
+    my ($point) = @_;
+    return $bound->contains( ref $point ? $point : $osm->get_lonlat($point) );
 }
 
 
@@ -1408,7 +1401,8 @@ END_USAGE
 
 
 sub FindCity {
-    my @points = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ split q{,}, ( exists $nodes->{$_} ? $nodes->{$_} : $_ ) ] } @_;
+    my @points = map { ref $_ ? $_ : $osm->get_lonlat($_) } @_;
+#    my @points = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ reverse @{ $osm->get_lonlat($_) } ] } @_;
     return $addresser->find_area( city => @points );
 }
 
@@ -1589,7 +1583,7 @@ sub WriteLine {
         $comment .= "\n$key = $val";
     }
 
-    $opts{chain} = [ map { [ split /\s*,\s*/xms ] } @$nodes{ @{ $param{chain} } } ];
+    $opts{chain} = $osm->get_lonlat($param{chain});
 
     $opts{Label}       = convert_string( $param{name} )   if defined $param{name} && $param{name} ne q{};
     $opts{RoadID}      = $param{roadid}         if exists $param{roadid};
@@ -1623,7 +1617,7 @@ sub output_line {
         $param{comment} .= "\n$key = $val";
     }
 
-    $param{chain} = [ map {[ reverse split /\s*,\s*/xms, $nodes->{$_} ]} @{ $info->{chain} } ];
+    $param{chain} = $osm->get_lonlat( $info->{chain} );
 
     $writer->output( polyline => { data => \%param } );
     return;
@@ -1659,8 +1653,8 @@ sub AddRoad {
     my ($speed_class, $road_class, $is_oneway, $is_toll, @acc_flags) = split q{,}, $info->{routeparams};
 
     # calculate access restrictions
-    my @points = map { [ split q{,}, $nodes->{$_} // $_ ] } @smart_nodes;
-    @acc_flags = @{ $calc_access->get_road_flags( $tags, \@acc_flags, @points ) };
+    my $points = $osm->get_lonlat(\@smart_nodes);
+    @acc_flags = @{ $calc_access->get_road_flags( $tags, \@acc_flags, @$points ) };
 
     if ( $info->{name} ) {
         my $address = _get_address( { type => 'way', id => $orig_id }, level => 'street',
@@ -1715,11 +1709,11 @@ sub AddRoad {
 
     # external nodes
     if ( $bound ) {
-        if ( !is_inside_bounds( $nodes->{ $chain->[0] } ) ) {
+        if ( !is_inside_bounds($chain->[0]) ) {
             $xnode{ $chain->[0] } = 1;
             $xnode{ $chain->[1] } = 1;
         }
-        if ( !is_inside_bounds( $nodes->{ $chain->[-1] } ) ) {
+        if ( !is_inside_bounds($chain->[-1]) ) {
             $xnode{ $chain->[-1] } = 1;
             $xnode{ $chain->[-2] } = 1;
         }
@@ -1889,7 +1883,7 @@ sub _get_line_parts_inside_bounds {
     my ($chain) = @_;
     return $chain  if !$bound;
 
-    my @is_inside = map { is_inside_bounds($nodes->{$_}) } @$chain;
+    my @is_inside = map { is_inside_bounds($_) } @$chain;
     my @begin = grep { $is_inside[$_] && ( $_ == 0        || !$is_inside[$_-1] ) } ( 0 .. $#$chain );
     my @end   = grep { $is_inside[$_] && ( $_ == $#$chain || !$is_inside[$_+1] ) } ( 0 .. $#$chain );
     return map {[ @$chain[($begin[$_] == 0 ? 0 : $begin[$_]-1) .. ($end[$_] == $#$chain ? $end[$_] : $end[$_]+1)] ]} (0 .. $#end);
@@ -1903,7 +1897,7 @@ sub action_load_coastline {
 
     my @parts = _get_line_parts_inside_bounds( $obj->{chain} );
     for my $part ( @parts ) {
-        $coast->add_coastline([ map {[ reverse split /,/x, $nodes->{$_} ]} @$part ]);
+        $coast->add_coastline( $osm->get_lonlat($part) );
     }
     return;
 }
@@ -2187,8 +2181,8 @@ sub action_process_interpolation {
             my $step = ( $tag{'addr:interpolation'} eq 'all' ? 1 : 2 );
             $step *= -1  if $house1 > $house2;
 
-            my ($lat1, $lon1) = split q{,}, $nodes->{$node1};
-            my ($lat2, $lon2) = split q{,}, $nodes->{$node2};
+            my ($lon1, $lat1) = @{ $osm->get_lonlat($node1) };
+            my ($lon2, $lat2) = @{ $osm->get_lonlat($node2) };
             my $steplat = ($lat2-$lat1) / ($house2-$house1);
             my $steplon = ($lon2-$lon1) / ($house2-$house1);
 
@@ -2220,10 +2214,10 @@ sub action_write_polygon {
     my $info = _get_result_object_params($obj, $action);
     return if !$info;
 
-    $info->{areas} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$obj->{outer}} ];
-    $info->{holes} = [ map {[ map {[ reverse split q{,}, $nodes->{$_} ]} @$_ ]} @{$obj->{inner} || []} ];
+    $info->{areas} = [ map { $osm->get_lonlat($_) } @{$obj->{outer}} ];
+    $info->{holes} = [ map { $osm->get_lonlat($_) } @{$obj->{inner} || []} ];
     $info->{entrance} = [
-        map { [ $nodes->{$_}, $entrance{$_} ] }
+        map { [ $osm->get_lonlat($_), $entrance{$_} ] }
         grep { exists $entrance{$_} }
         map { @$_ } map { @{ $_ || [] } } ( $obj->{outer}, $obj->{inner} )
     ];
@@ -2239,18 +2233,16 @@ sub action_address_poi {
     return if !$obj->{outer};
     return if !exists $poi_rtree->{root};
 
-    my $outer = $obj->{outer}->[0];
-    my @bbox = Math::Polygon::Calc::polygon_bbox( map {[ reverse split q{,}, $nodes->{$_} ]} @$outer );
+    my $outer_chain = $obj->{outer}->[0];
+    my $outer = $osm->get_lonlat($outer_chain);
+    my @bbox = Math::Polygon::Calc::polygon_bbox( @$outer );
 
     my @poilist;
     $poi_rtree->query_completely_within_rect( @bbox, \@poilist );
 
     for my $id ( @poilist ) {
         next unless exists $poi{$id};
-        next unless Math::Polygon::Tree::polygon_contains_point(
-            [ reverse split q{,}, $nodes->{$id} ],
-            map {[ reverse split q{,}, $nodes->{$_} ]} @$outer
-        );
+        next unless Math::Polygon::Tree::polygon_contains_point( $osm->get_lonlat($id), @$outer );
 
         my $house_address = $addresser->get_address_tags($obj->{tag});
 
@@ -2271,23 +2263,37 @@ sub action_write_poi {
     my $info = _get_result_object_params($obj, $action);
     return if !$info;
 
-    my $latlon = $obj->{latlon} || ( $obj->{type} eq 'Node' && $nodes->{$obj->{id}} );
-
-    if ( !$latlon && $obj->{type} eq 'Way' ) {
-        # for areas: place poi at main entrance if exists
-        if ( $obj->{outer} ) {
-            my $entrance_node = first { exists $main_entrance{$_} } map {@$_} @{$obj->{outer}};
-            $latlon = $nodes->{$entrance_node}  if $entrance_node;
+    my $coords;
+    {
+        if ( $obj->{latlon} ) {
+            $coords = [ reverse split /,/xms, $obj->{latlon} ];
+            last;
         }
 
-        $latlon ||= join( q{,}, polygon_centroid(
-                map {[ split /,/, $nodes->{$_} ]} @{ $obj->{chain} || $obj->{outer}->[0] }
-            ) );
+        if ( $obj->{type} eq 'Node' ) {
+            $coords = $osm->get_lonlat($obj->{id});
+            last;
+        }
+
+        if ( $obj->{type} eq 'Way' ) {
+            # for areas: place poi at main entrance if exists
+            if ( $obj->{outer} ) {
+                my $entrance_node = first { exists $main_entrance{$_} } map {@$_} @{$obj->{outer}};
+                if ( $entrance_node ) {
+                    $coords = $osm->get_lonlat($entrance_node);
+                    last;
+                }
+            }
+
+            $coords = [ polygon_centroid( @{ $osm->get_lonlat( $obj->{chain} || $obj->{outer}->[0] ) } ) ];
+            last;
+        }
     }
 
-    return  unless $latlon && is_inside_bounds( $latlon );
+    return if !$coords;
+    return if !is_inside_bounds( $coords );
 
-    $info->{coords} = [ reverse split q{,}, $latlon ];
+    $info->{coords} = $coords;
 
     if ( $flags->{addr_from_poly}
         && $obj->{type} eq 'Node' # ???
@@ -2296,7 +2302,7 @@ sub action_write_poi {
     ) {
         # save poi for addressing
         my $id = $obj->{id};
-        my @bbox = ( (@{ $info->{coords} }) x 2 );
+        my @bbox = ( (@$coords) x 2 );
         push @{$poi{$id}}, $info;
         $poi_rtree->insert( $id, @bbox );
     }
@@ -2312,7 +2318,7 @@ sub action_load_access_area {
     my ($obj, $action) = @_;
     return if !$obj->{outer};
 
-    my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{$obj->{outer}};
+    my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
     $calc_access->add_area( $obj->{tag}, @contours ); 
     
     return;
@@ -2324,7 +2330,7 @@ sub _load_area {
     return if !$obj->{outer};
 
     my $address_tags = $addresser->get_address_tags($obj->{tag}, level => $level);
-    my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{$obj->{outer}};
+    my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
 
     $addresser->load_area($level, $address_tags, @contours);
     return;

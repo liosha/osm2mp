@@ -275,6 +275,31 @@ sub get_tags {
 }
 
 
+sub get_lonlat {
+    my ($self, $nodes) = @_;
+
+    my $is_single_node = ref $nodes ne 'ARRAY';
+    my $ids = $is_single_node ? [ $nodes ] : $nodes;
+
+    my @points =
+        map {[ reverse split /,/x, $_ ]}
+        map { $self->{nodes}->{$_} // $_ }
+        @$ids;
+
+    return $is_single_node ? shift @points : \@points;
+}
+
+
+sub set_lonlat {
+    my ($self, $id, $lon, $lat) = @_;
+
+    ($lon, $lat) = @$lon  if ref $lon eq 'ARRAY';
+
+    $self->{nodes}->{$id} = join q{,}, $lat, $lon;
+    return;
+}
+
+
 sub iterate_nodes {
     my ($self, $sub, %opt) = @_;
 
