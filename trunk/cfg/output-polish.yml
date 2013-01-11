@@ -134,9 +134,9 @@ polyline: |
 road: |
   [% INCLUDE comment  text = comment  IF comment -%]
   [POLYLINE]
-  Data[% opts.lzoom %]=([% opts.chain.0.0 %],[% opts.chain.0.1 %])
+  Data[% opts.lzoom %]=([% opts.chain.0.1 %],[% opts.chain.0.0 %])
   [%- temp = opts.chain.shift; FOREACH point IN opts.chain -%]
-  ,([% point.0 %],[% point.1 %])
+  ,([% point.1 %],[% point.0 %])
   [%- END %]
   [% IF opts.hzoom -%]
   EndLevel=[% opts.hzoom %]
