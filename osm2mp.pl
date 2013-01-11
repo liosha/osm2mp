@@ -241,7 +241,7 @@ my $osm = OSM->new(
 close $in  if $infile ne q{-};
 
 my ($nodes, $chains, $mpoly, $relations) = @$osm{ qw/ nodes chains mpoly relations / };
-my ($nodetag, $waytag, $reltag) = @{$osm->{tags}}{ qw/ node way relation / };
+my ($nodetag, $waytag) = @{$osm->{tags}}{ qw/ node way / };
 
 
 
@@ -310,7 +310,7 @@ say STDERR "\nProcessing relations...";
 
 if ( $flags->{routing}  &&  $flags->{restrictions} ) {
     while ( my ($relation_id, $members) = each %{ $relations->{restriction} || {} } ) {
-        my $tags = $reltag->{$relation_id};
+        my $tags = $osm->get_tags(relation => $relation_id);
 
         my ($type) = ($tags->{restriction} // 'no') =~ /^(only | no)/xms;
         next if !$type;
@@ -353,7 +353,7 @@ if ( $flags->{routing}  &&  $flags->{restrictions} ) {
 if ( $flags->{routing} && $flags->{dest_signs} ) {
     my $crossroads_cnt = scalar keys %trest;
     while ( my ($relation_id, $members) = each %{ $relations->{destination_sign} || {} } ) {
-        my $tags = $reltag->{$relation_id};
+        my $tags = $osm->get_tags(relation => $relation_id);
 
         my $from_member = first { $_->{type} eq 'way' && $_->{role} eq 'from' } @$members;
         next if !$from_member;
@@ -392,32 +392,34 @@ if ( $flags->{street_relations} ) {
         next if !$list;
 
         while ( my ($relation_id, $members) = each %$list ) {
+        
+            my $tags = $osm->get_tags(relation => $relation_id);
 
             # EXPERIMENTAL: resolve addr:* roles
             for my $member ( @$members ) {
                 my ($type, $ref, $role) = @$member{ qw/ type ref role / };
                 next if $role !~ / ^ addr: /xms;
 
-                my $tag_ref = $osm->{tags}->{$type}->{$ref};
+                my $tag_ref = $osm->get_tags($type => $ref);
                 next if !$tag_ref;
 
                 for my $k ( reverse sort keys %$tag_ref ) {    # 'name' before 'addr:*'!
                     (my $nk = $k) =~ s/^ name \b/$role/xms;
                     next if $nk !~ m/ ^ $role \b /xms;
-                    $reltag->{$relation_id}->{$nk} = $tag_ref->{$k};
+                    $tags->{$nk} = $tag_ref->{$k}; # !!!
                 }
             }
 
             # house tags: addr:* and street's name* as addr:street*
             my %house_tag;
-            for my $k ( reverse sort keys %{$reltag->{$relation_id}} ) {    # 'name' before 'addr:*'!
+            for my $k ( reverse sort keys %$tags ) {    # 'name' before 'addr:*'!
                 (my $nk = $k) =~ s/^ name \b/addr:street/xms;
                 next if $nk !~ m/ ^ addr: /xms;
-                $house_tag{$nk} = $reltag->{$relation_id}->{$k};
+                $house_tag{$nk} = $tags->{$k};
             }
 
             # street tags: all except 'type'
-            my %street_tag = %{$reltag->{$relation_id}};
+            my %street_tag = %$tags;
             delete $street_tag{type};
 
             # add relation tags to members
@@ -441,7 +443,7 @@ if ( $flags->{street_relations} ) {
 
 if ( $flags->{road_shields} ) {
     while ( my ($relation_id, $members) = each %{ $relations->{route} || {} } ) {
-        my $tags = $reltag->{$relation_id};
+        my $tags = $osm->get_tags(relation => $relation_id);
         next if !( $tags->{route} ~~ 'road' );
 
         my @ref = grep {$_} @$tags{'ref', 'int_ref'};
@@ -458,7 +460,7 @@ if ( $flags->{road_shields} ) {
 
 if ( $flags->{transport_stops} ) {
     while ( my ($relation_id, $members) = each %{ $relations->{route} || {} } ) {
-        my $tags = $reltag->{$relation_id};
+        my $tags = $osm->get_tags(relation => $relation_id);
         next if !( $tags->{route} ~~ [ qw/ bus / ] );
 
         my $ref = $tags->{ref};
@@ -2221,18 +2223,18 @@ sub action_process_interpolation {
     return if !@parts;
 
     for my $part ( @parts ) {
-        my @chain = grep { exists $nodetag->{$_}->{'addr:housenumber'} } @$part;
+        my @chain = grep { my $t = $osm->get_tags(node => $_); $t && exists $t->{'addr:housenumber'} } @$part;
         next if @chain < 2;
 
         my $new_action = { %$action, action => 'write_poi' };
         for my $i ( 0 .. $#chain-1 ) {
             my ( $node1, $node2 ) = @chain[ $i, $i+1 ];
             my ( $house1, $house2 ) =
-                map { my $x = $nodetag->{$_}->{'addr:housenumber'}; $x =~ s/^(\d+).*/$1/x; $x }
+                map { my $x = $osm->get_tags(node => $_)->{'addr:housenumber'}; $x =~ s/^(\d+).*/$1/x; $x }
                 ( $node1, $node2 );
             next if $house1 == $house2;
 
-            my %tag = ( %{$nodetag->{$node2}}, %{$nodetag->{$node1}}, %{$obj->{tag}} );
+            my %tag = ( %{$osm->get_tags(node => $node2)}, %{$osm->get_tags(node => $node1)}, %{$obj->{tag}} );
             my $step = ( $tag{'addr:interpolation'} eq 'all' ? 1 : 2 );
             $step *= -1  if $house1 > $house2;
 

@@ -176,6 +176,9 @@ package OSM::Hash;
 
 use base 'OSM';
 
+use Carp;
+
+
 sub new {
     my ($class, %opt) = @_;
 
@@ -262,6 +265,15 @@ sub add_relation {
     return;
 }
 
+
+sub get_tags {
+    my ($self, $type, $id) = @_;
+
+    my $tag_store = $self->{tags}->{$type};
+    croak "Invalid object type $type" if !$tag_store;
+
+    return $tag_store->{$id};
+}
 
 1;
 
