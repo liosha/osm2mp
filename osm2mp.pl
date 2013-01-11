@@ -34,7 +34,7 @@ use warnings;
 use utf8;
 use autodie;
 
-our $VERSION = '1.02' . do { my ($r) = '$Rev$' =~ /(\d+)/xms; $r ? "-$r" : q{} };
+our $VERSION = '1.03' . do { my ($r) = '$Rev$' =~ /(\d+)/xms; $r ? "-$r" : q{} };
 
 
 
@@ -127,7 +127,6 @@ my $ft_config = FeatureConfig->new(
     },
     conditions => {
         named       => \&cond_is_named,
-        only_rel    => \&cond_is_multipolygon,
         inside_city => \&cond_is_inside_city,
     },
 );
@@ -680,49 +679,6 @@ if ( $flags->{routing} ) {
     undef %rnode;
 
     printf STDERR "%d found\n", scalar keys %nodid;
-
-
-
-
-
-    ###    detecting duplicate road segments
-
-
-    if ( $flags->{detect_dupes} ) {
-
-        my %segway;
-
-        print STDERR "Detecting duplicates...   ";
-
-        while ( my ($roadid, $road) = each %road ) {
-            for my $i ( 0 .. $#{$road->{chain}} - 1 ) {
-                if (  $nodid{ $road->{chain}->[$i] }
-                  &&  $nodid{ $road->{chain}->[$i+1] } ) {
-                    my $seg = join q{:}, sort {$a cmp $b} ($road->{chain}->[$i], $road->{chain}->[$i+1]);
-                    push @{$segway{$seg}}, $roadid;
-                }
-            }
-        }
-
-        my $countdupsegs  = 0;
-
-        my %roadseg;
-        my %roadpos;
-
-        for my $seg ( grep { $#{$segway{$_}} > 0 }  keys %segway ) {
-            $countdupsegs ++;
-            my $roads    =  join q{, }, sort {$a cmp $b} @{$segway{$seg}};
-            my ($point)  =  split q{:}, $seg;
-            $roadseg{$roads} ++;
-            $roadpos{$roads} = $nodes->{$point};
-        }
-
-        for my $road ( keys %roadseg ) {
-            report( "Roads $road have $roadseg{$road} duplicate segments near ($roadpos{$road})" );
-        }
-
-        printf STDERR "$countdupsegs segments, %d roads\n", scalar keys %roadseg;
-    }
 
 
 
@@ -1312,7 +1268,6 @@ my @available_flags = (
     [ barriers          => 'create restrictions on barrier nodes' ],
     [ disable_u_turns   => 'disable u-turns on nodes with 2 links' ],
     [ dest_signs        => 'process destination signs' ],
-    [ detect_dupes      => 'report road duplicates' ],
     [ road_shields      => 'write shields with road numbers' ],
     [ transport_stops   => 'write route refs on bus stops' ],
     [ street_relations  => 'use street relations for addressing' ],
@@ -1912,14 +1867,6 @@ sub cond_is_named {
     my ($obj) = @_;
     return !!( name_from_list( label => $obj->{tag} ) );
 }
-
-
-# !!! to remove
-sub cond_is_multipolygon {
-    my ($obj) = @_;
-    return exists $osm->{mpoly}->{$obj->{id}};
-}
-
 
 
 
