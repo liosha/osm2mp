@@ -97,7 +97,7 @@ my $values = $settings{Values} // {};
 
 my $bbox;
 my $bpolyfile;
-my $osmbbox;
+my $use_osm_bbox;
 
 
 ####    Global vars
@@ -201,9 +201,9 @@ GetOptions (
     
 #    'transport=s'       => \$transport_mode,
 
-    'bbox=s'            => \$bbox,
+    'bbox=s'            => sub { $bbox = [ split q{,}, $_[1] ] },
     'bpoly=s'           => \$bpolyfile,
-    'osmbbox!'          => \$osmbbox,
+    'osmbbox!'          => \$use_osm_bbox,
 
     'namelist|taglist=s%' => sub { $taglist{$_[1]} = [ split /[ ,]+/, $_[2] ] },
 
@@ -233,29 +233,15 @@ my ($in, $stream_msg) = $infile ~~ '-'
 
 say STDERR "\nLoading OSM data from $stream_msg...";
 
-my %extra_handlers;
-if ($osmbbox) {
-    %extra_handlers = (
-        bound  => sub {  $bbox = join q{,}, @{[ split /,/, shift()->{attr}->{box} ]}[1,0,3,2]  },
-        bounds => sub {  $bbox = join q{,}, @{ shift()->{attr}}{qw/ minlon minlat maxlon maxlat / } },
-    );
-}
-
 my $osm = OSM->new(
     fh => $in,
     skip_tags => [ keys %{$settings{skip_tags}} ],
-    handlers => \%extra_handlers,
 );
 
 close $in  if $infile ne q{-};
 
 my ($nodes, $chains, $mpoly, $relations) = @{$osm->{data}}{ qw/ nodes chains mpoly relations / };
 my ($nodetag, $waytag, $reltag) = @{$osm->{data}->{tags}}{ qw/ node way relation / };
-
-printf STDERR "  Nodes: %s/%s\n", scalar keys %$nodes, scalar keys %$nodetag;
-printf STDERR "  Ways: %s/%s\n", scalar keys %$chains, scalar(keys %$waytag) - scalar(keys %$mpoly);
-printf STDERR "  Relations: %s\n", scalar keys %$reltag;
-printf STDERR "  Multipolygons: %s\n", scalar keys %$mpoly;
 
 
 
@@ -265,13 +251,20 @@ printf STDERR "  Multipolygons: %s\n", scalar keys %$mpoly;
 
 my $bound;
 
+$bbox = $osm->{bbox}  if $use_osm_bbox;
 if ($bbox || $bpolyfile) {
     my $bounds_msg = $bbox ? 'bbox' : "file $bpolyfile";
     say STDERR "\nInitialising bounds from $bounds_msg...";
 
     if ($bbox) {
-        my ($minlon, $minlat, $maxlon, $maxlat) = split q{,}, $bbox;
-        $bound = Boundary->new([ [$minlon,$minlat], [$maxlon,$minlat], [$maxlon,$maxlat], [$minlon,$maxlat], [$minlon,$minlat] ]);
+        my ($minlon, $minlat, $maxlon, $maxlat) = @$bbox;
+        $bound = Boundary->new([
+                [$minlon,$minlat],
+                [$maxlon,$minlat],
+                [$maxlon,$maxlat],
+                [$minlon,$maxlat],
+                [$minlon,$minlat],
+            ]);
     }
     elsif ($bpolyfile) {
         $bound = Boundary->new( $bpolyfile );
