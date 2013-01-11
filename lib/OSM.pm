@@ -171,7 +171,6 @@ sub _merge_multipolygon {
 
 
 
-# factoring out storing engine
 package OSM::Hash;
 
 use base 'OSM';
@@ -273,6 +272,42 @@ sub get_tags {
     croak "Invalid object type $type" if !$tag_store;
 
     return $tag_store->{$id};
+}
+
+
+sub iterate_nodes {
+    my ($self, $sub, %opt) = @_;
+
+    # !!! tagged nodes only
+    while ( my ($id, $tags) = each %{ $self->{tags}->{node} } ) {
+        my $node_info = {
+            type    => 'Node',
+            id      => $id,
+            tag     => $tags,
+        };
+
+        $sub->($node_info);
+    }
+
+    return;
+}
+
+
+sub iterate_ways {
+    my ($self, $sub, %opt) = @_;
+
+    # !!! taged ways and multipolygons
+    while ( my ($id, $tags) = each %{ $self->{tags}->{way} } ) {
+        my $way_info = {
+            type    => 'Way',
+            id      => $id,
+            tag     => $tags,
+        };
+
+        $sub->($way_info);
+    }
+
+    return;
 }
 
 1;

@@ -241,7 +241,6 @@ my $osm = OSM->new(
 close $in  if $infile ne q{-};
 
 my ($nodes, $chains, $mpoly, $relations) = @$osm{ qw/ nodes chains mpoly relations / };
-my ($nodetag, $waytag) = @{$osm->{tags}}{ qw/ node way / };
 
 
 
@@ -279,14 +278,9 @@ if ($bbox || $bpolyfile) {
 ##  Load address polygons
 if ( $flags->{addressing} ) {
     say STDERR "\nLoading address areas...";
-    while ( my ($id, $tags) = each %$waytag ) {
-        $ft_config->process( address => {
-                type    => 'Way',
-                id      => $id,
-                tag     => $tags,
-                outer   => ( $mpoly->{$id} ? $mpoly->{$id}->[0] : [ $chains->{$id} ] ),
-            } );
-    }
+
+    $osm->iterate_ways( sub { $ft_config->process( address => @_ ) } );
+
     printf STDERR "  %d cities\n", $addresser->{areas}->{city} && $addresser->{areas}->{city}->{_count} // 0;
     printf STDERR "  %d restricted areas\n", $calc_access->{areas}->{_count} // 0;
 }
@@ -427,8 +421,10 @@ if ( $flags->{street_relations} ) {
                 $member_count ++;
                 my ($type, $ref, $role) = @$member{ qw/ type ref role / };
 
-                my $tag_ref = $osm->{tags}->{$type}->{$ref} ||= {};
+                my $tag_ref = $osm->get_tags($type => $ref);
+                next if !$tag_ref;
 
+                # !!!
                 if ( %house_tag && $role ~~ [ qw/ house address / ] ) {
                     %$tag_ref = ( %$tag_ref, %house_tag );
                 }
@@ -486,13 +482,8 @@ my $coast = Coastlines->new( $bound ? $bound->get_points() : [] );
 say STDERR "\nProcessing nodes...";
 
 print_section( 'Simple objects' );
-while ( my ($id, $tags) = each %$nodetag ) {
-    $ft_config->process( nodes => {
-            type    => 'Node',
-            id      => $id,
-            tag     => $tags,
-        });
-}
+$osm->iterate_nodes( sub { $ft_config->process( nodes => @_ ) } );
+
 my $countpoi = $writer->{_count}->{point} // 0;
 printf STDERR "  %d POI written\n", $countpoi;
 printf STDERR "  %d POI loaded for addressing\n", scalar keys %poi      if $flags->{addr_from_poly};
@@ -504,16 +495,11 @@ printf STDERR "  %d main entrances loaded\n", scalar keys %main_entrance;
 
 say STDERR "\nProcessing ways...";
 
-while ( my ($id, $tags) = each %$waytag ) {
-    my $objinfo = {
-        type    => "Way",
-        id      => $id,
-        tag     => $tags,
-    };
+$osm->iterate_ways( sub {
+        $ft_config->process( ways => @_ );
+        $ft_config->process( nodes => @_ )  if $flags->{make_poi};
+    } );
 
-    $ft_config->process( ways  => $objinfo );
-    $ft_config->process( nodes => $objinfo )  if $flags->{make_poi};
-}
 printf STDERR "  %d POI written\n", ($writer->{_count}->{point} // 0) - $countpoi;
 printf STDERR "  %d lines written\n", $writer->{_count}->{polyline} // 0;
 printf STDERR "  %d polygons written\n", $writer->{_count}->{polygon} // 0;
@@ -2380,11 +2366,13 @@ sub action_load_access_area {
 
 sub _load_area {
     my ($level, $obj, $action) = @_;
-    
-    return if $obj->{outer}->[0]->[0] ne $obj->{outer}->[0]->[-1];
+
+    my $id = $obj->{id};
+    my $outer = ( $mpoly->{$id} ? $mpoly->{$id}->[0] : [ $chains->{$id} ] );
+    return if $outer->[0]->[0] ne $outer->[0]->[-1];
 
     my $address_tags = $addresser->get_address_tags($obj->{tag}, level => $level);
-    my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @{ $obj->{outer} };
+    my @contours = map { [ map { [ split q{,}, $nodes->{$_} ] } @$_ ] } @$outer;
 
     $addresser->load_area($level, $address_tags, @contours);
     return;
