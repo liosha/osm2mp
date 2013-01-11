@@ -87,6 +87,16 @@ sub load {
                 $self->{data}->add_relation($obj);                
                 return;
             },
+        bound  => sub {
+                my $obj = shift;
+                $self->{bbox} = [ @{[ split /,/, $obj->{attr}->{box} ]}[1,0,3,2] ];
+                return;
+            },
+        bounds => sub {
+                my $obj = shift;
+                $self->{bbox} = [ @{ $obj->{attr} }{ qw/ minlon minlat maxlon maxlat / } ];
+                return;
+            },
         %{ $opt{handlers} || {} },
     );
 
