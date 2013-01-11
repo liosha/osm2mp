@@ -240,8 +240,8 @@ my $osm = OSM->new(
 
 close $in  if $infile ne q{-};
 
-my ($nodes, $chains, $mpoly, $relations) = @{$osm->{data}}{ qw/ nodes chains mpoly relations / };
-my ($nodetag, $waytag, $reltag) = @{$osm->{data}->{tags}}{ qw/ node way relation / };
+my ($nodes, $chains, $mpoly, $relations) = @$osm{ qw/ nodes chains mpoly relations / };
+my ($nodetag, $waytag, $reltag) = @{$osm->{tags}}{ qw/ node way relation / };
 
 
 
@@ -398,7 +398,7 @@ if ( $flags->{street_relations} ) {
                 my ($type, $ref, $role) = @$member{ qw/ type ref role / };
                 next if $role !~ / ^ addr: /xms;
 
-                my $tag_ref = $osm->{data}->{tags}->{$type}->{$ref};
+                my $tag_ref = $osm->{tags}->{$type}->{$ref};
                 next if !$tag_ref;
 
                 for my $k ( reverse sort keys %$tag_ref ) {    # 'name' before 'addr:*'!
@@ -425,7 +425,7 @@ if ( $flags->{street_relations} ) {
                 $member_count ++;
                 my ($type, $ref, $role) = @$member{ qw/ type ref role / };
 
-                my $tag_ref = $osm->{data}->{tags}->{$type}->{$ref} ||= {};
+                my $tag_ref = $osm->{tags}->{$type}->{$ref} ||= {};
 
                 if ( %house_tag && $role ~~ [ qw/ house address / ] ) {
                     %$tag_ref = ( %$tag_ref, %house_tag );
