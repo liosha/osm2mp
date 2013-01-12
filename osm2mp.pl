@@ -1165,16 +1165,16 @@ sub fix_close_nodes {                # NodeID1, NodeID2
     # fixing
     if ( $res ) {
         if ( $dlon == 0 ) {
-            $osm->set_lonlat( $id0, $clat - $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) ), $clon );
-            $osm->set_lonlat( $id1, $clat + $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) ), $clon );
+            $osm->set_lonlat( $id0, $clon, $clat - $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) ) );
+            $osm->set_lonlat( $id1, $clon, $clat + $ldist/2 * ($dlat==0 ? 1 : ($dlat <=> 0) ) );
         }
         else {
             my $azim  = $dlat / $dlon;
             my $ndlon = sqrt( $ldist**2 / ($klon**2 + $azim**2) ) / 2;
             my $ndlat = $ndlon * abs($azim);
 
-            $osm->set_lonlat( $id0, $clat - $ndlat * ($dlat <=> 0), $clon - $ndlon * ($dlon <=> 0) );
-            $osm->set_lonlat( $id1, $clat + $ndlat * ($dlat <=> 0), $clon + $ndlon * ($dlon <=> 0) );
+            $osm->set_lonlat( $id0, $clon - $ndlon * ($dlon <=> 0), $clat - $ndlat * ($dlat <=> 0) );
+            $osm->set_lonlat( $id1, $clon + $ndlon * ($dlon <=> 0), $clat + $ndlat * ($dlat <=> 0) );
         }
     }
     return $res;
@@ -1864,7 +1864,7 @@ sub _is_object_inside_city {
     return FindCity($id)  if $obj->{type} eq 'Node';
     
     if ( $obj->{type} eq 'Way' ) {
-        my $chain = $obj->{chain};
+        my $chain = $obj->{chain} || $obj->{outer}->[0];
         return FindCity($chain->[ floor($#$chain/3) ]) && FindCity($chain->[ ceil($#$chain*2/3) ]);
     }
 
