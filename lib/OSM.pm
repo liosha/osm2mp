@@ -251,7 +251,7 @@ sub add_relation {
             my ($id, $t) = @$_{'ref', 'type'};
             $t ~~ 'node'     ? exists $self->{nodes}->{$id} :
             $t ~~ 'way'      ? exists $self->{chains}->{$id} :
-            $t ~~ 'relation' ? exists $self->{tags}->{relation}->{$id} :
+            $t ~~ 'relation' ? 1 : # exists $self->{tags}->{relation}->{$id} :
             0;
         }
         @{ $obj->{member} || [] };
