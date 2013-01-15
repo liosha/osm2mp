@@ -402,7 +402,7 @@ if ( $flags->{street_relations} ) {
             for my $k ( reverse sort keys %$tag_ref ) {    # 'name' before 'addr:*'!
                 (my $nk = $k) =~ s/^ name \b/$role/xms;
                 next if $nk !~ m/ ^ $role \b /xms;
-                $tags->{$nk} = $tag_ref->{$k}; # !!!
+                $tags->{$nk} = $tag_ref->{$k}; # !!! side effect?
             }
         }
 
@@ -427,12 +427,11 @@ if ( $flags->{street_relations} ) {
             my $tag_ref = $osm->get_tags($type => $ref);
             next if !$tag_ref;
 
-            # !!!
             if ( %house_tag && $role ~~ [ qw/ house address / ] ) {
-                %$tag_ref = ( %$tag_ref, %house_tag );
+                $osm->set_tags( $type, $ref, { %$tag_ref, %house_tag } );
             }
             elsif ( %street_tag && $role ~~ 'street' ) {
-                %$tag_ref = ( %$tag_ref, %street_tag );
+                $osm->set_tags( $type, $ref, { %$tag_ref, %street_tag } );
             }
         }
     };
