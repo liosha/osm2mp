@@ -422,6 +422,7 @@ if ( $flags->{street_relations} ) {
         for my $member ( @$members ) {
             $member_count ++;
             my ($type, $ref, $role) = @$member{ qw/ type ref role / };
+            ($type, $ref) = (way => "r$ref")  if $type eq 'relation';
 
             my $tag_ref = $osm->get_tags($type => $ref);
             next if !$tag_ref;
