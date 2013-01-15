@@ -75,8 +75,8 @@ sub load {
                 if ( $type ~~ [ qw/ multipolygon boundary / ] ) {
                     my ($mpoly, $oldstyle_id) = $self->_merge_multipolygon($obj);
                     if ( $mpoly ) {
-                        my $id = "r$obj->{attr}->{id}";
-                        $self->add_polygon($id, $mpoly, $obj->{tag});
+                        my $mpid = "r$obj->{attr}->{id}";
+                        $self->add_polygon($mpid, $mpoly, $obj->{tag});
                         $self->add_polygon($oldstyle_id, $mpoly)  if $oldstyle_id;
                     }
                     return;
@@ -171,12 +171,80 @@ sub _merge_multipolygon {
 
 
 
+sub add_node {
+    my ($self, $obj) = @_;
+
+    my $attr = $obj->{attr};
+    my $id = $attr->{id};
+    $self->set_lonlat($id => $attr->{lon}, $attr->{lat});
+    $self->set_tags('node', $id, $obj->{tag})  if $obj->{tag};
+
+    return;
+}
+
+
+sub add_way {
+    my ($self, $obj) = @_;
+
+    my $id = $obj->{attr}->{id};
+
+    # filter out dupes and non-existent nodes 
+    my $prev;
+    my @chain =
+        grep { my $is_dupe = $_ ~~ $prev; $prev = $_; !$is_dupe }
+        grep { $self->is_node_exists($_) }
+        @{ $obj->{nd} || [] };
+    
+    return if @chain < 2;
+
+    $self->set_way_chain( $id => \@chain );
+    $self->set_tags('way', $id, $obj->{tag})  if $obj->{tag};
+
+    return;
+}
+
+
+sub add_relation {
+    my ($self, $obj) = @_;
+
+    my $tags = $obj->{tag};
+    return if !$tags;
+
+    # filter out non-existent members
+    my @members =
+        grep {
+            my ($id, $t) = @$_{'ref', 'type'};
+            $t ~~ 'node'     ? $self->is_node_exists($id) :
+            $t ~~ 'way'      ? $self->is_way_exists($id) :
+            $t ~~ 'relation' ? 1 : # exists $self->{tags}->{relation}->{$id} :
+            0;
+        }
+        @{ $obj->{member} || [] };
+    return if !@members;
+
+    my $id = $obj->{attr}->{id};
+    $self->set_relation_members( $id, $tags->{type}, \@members );
+    $self->set_tags('relation', $id, $obj->{tag})  if $obj->{tag};
+                
+    return;
+}
+
+
+
+
+
+
+
 package OSM::Hash;
 
 use base 'OSM';
 
 use Carp;
 
+
+
+=head1 Constructor
+=cut
 
 sub new {
     my ($class, %opt) = @_;
@@ -192,86 +260,27 @@ sub new {
 }
 
 
-sub add_node {
-    my ($self, $obj) = @_;
-
-    my $attr = $obj->{attr};
-    my $id = $attr->{id};
-    $self->{nodes}->{$id} = "$attr->{lat},$attr->{lon}";
-    $self->{tags}->{node}->{$id} = $obj->{tag}  if $obj->{tag};
-
-    return;
-}
-
-
-sub add_way {
-    my ($self, $obj) = @_;
-
-    my $id = $obj->{attr}->{id};
-    
-    my $prev;
-    my @chain =
-        grep { my $is_dupe = $_ ~~ $prev; $prev = $_; !$is_dupe }
-        grep { exists $self->{nodes}->{$_} }
-        @{ $obj->{nd} || [] };
-    
-    return if @chain < 2;
-
-    $self->{chains}->{$id} = \@chain;
-    $self->{tags}->{way}->{$id} = $obj->{tag}  if $obj->{tag};
-
-    return;
-}
-
-
-sub get_way_chain {
-    my ($self, $id) = @_;
-
-    return $self->{chains}->{$id};
-}
-
-
 sub add_polygon {
-    my ($self, $id, $mpoly, $tags) = @_;
+    my ($self, $mpid, $mpoly, $tags) = @_;
     
-    $self->{mpoly}->{$id} = $mpoly;
-    $self->{tags}->{way}->{$id} = $tags  if $tags;
+    $self->{mpoly}->{$mpid} = $mpoly;
+    $self->set_tags('way', $mpid, { %$tags })  if $tags;
     return;
 }
 
 
-sub add_relation {
-    my ($self, $obj) = @_;
 
-    my $tags = $obj->{tag};
-    return if !$tags;
 
-    my @members =
-        grep {
-            my ($id, $t) = @$_{'ref', 'type'};
-            $t ~~ 'node'     ? exists $self->{nodes}->{$id} :
-            $t ~~ 'way'      ? exists $self->{chains}->{$id} :
-            $t ~~ 'relation' ? 1 : # exists $self->{tags}->{relation}->{$id} :
-            0;
-        }
-        @{ $obj->{member} || [] };
-    return if !@members;
+=head1 Accessors
+=cut
 
-    my $id = $obj->{attr}->{id};
-    $self->{tags}->{relation}->{$id} = $tags;
-    $self->{relations}->{$tags->{type}}->{$id} = \@members;
-                
+sub set_lonlat {
+    my ($self, $id, $lon, $lat) = @_;
+
+    ($lon, $lat) = @$lon  if ref $lon eq 'ARRAY';
+
+    $self->{nodes}->{$id} = join q{,}, $lat, $lon;
     return;
-}
-
-
-sub get_tags {
-    my ($self, $type, $id) = @_;
-
-    my $tag_store = $self->{tags}->{$type};
-    croak "Invalid object type $type" if !$tag_store;
-
-    return $tag_store->{$id};
 }
 
 
@@ -290,15 +299,75 @@ sub get_lonlat {
 }
 
 
-sub set_lonlat {
-    my ($self, $id, $lon, $lat) = @_;
+sub is_node_exists {
+    my ( $self, $id ) = @_;
 
-    ($lon, $lat) = @$lon  if ref $lon eq 'ARRAY';
+    return exists $self->{nodes}->{$id};
+}
 
-    $self->{nodes}->{$id} = join q{,}, $lat, $lon;
+
+sub set_way_chain {
+    my ($self, $id, $chain) = @_;
+
+    $self->{chains}->{$id} = $chain;
     return;
 }
 
+
+sub get_way_chain {
+    my ($self, $id) = @_;
+
+    return $self->{chains}->{$id};
+}
+
+
+sub is_way_exists {
+    my ( $self, $id ) = @_;
+
+    return exists $self->{chains}->{$id};
+}
+
+
+sub set_relation_members {
+    my ($self, $id, $type, $members) = @_;
+
+    $self->{relations}->{$type}->{$id} = $members;
+    return;
+}
+
+
+sub is_relation_exists {
+    my ( $self, $id ) = @_;
+
+    return exists $self->{tags}->{relation}->{$id};
+}
+
+
+sub set_tags {
+    my ($self, $type, $id, $tags) = @_;    
+
+    my $tag_store = $self->{tags}->{$type};
+    croak "Invalid object type $type" if !$tag_store;
+
+    $tag_store->{$id} = $tags;
+}
+
+
+sub get_tags {
+    my ($self, $type, $id) = @_;
+
+    my $tag_store = $self->{tags}->{$type};
+    croak "Invalid object type $type" if !$tag_store;
+
+    return $tag_store->{$id};
+}
+
+
+=head1 Iterators
+
+* to be improved
+
+=cut
 
 sub iterate_nodes {
     my ($self, $sub, %opt) = @_;
