@@ -18,5 +18,8 @@
   action:
     - action:       load_access_area
     
-    
+- condition:
+    - place = *
+  action:
+    - action:       load_cityside_area
 

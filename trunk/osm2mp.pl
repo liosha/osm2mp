@@ -66,6 +66,7 @@ use Boundary;
 use Coastlines;
 use TransportAccess;
 use RouteGraph;
+use AreaTree;
 
 
 
@@ -112,6 +113,7 @@ my $ft_config = FeatureConfig->new(
     actions => {
         load_city               => sub { _load_area( city => @_ ) },
         load_access_area        => \&action_load_access_area,
+        load_cityside_area      => \&action_load_cityside_area,
         load_barrier            => \&action_load_barrier,
         load_building_entrance  => \&action_load_building_entrance,
         write_poi               => \&action_write_poi,
@@ -166,6 +168,7 @@ my $addresser = OsmAddress->new(
 );
 
 my $calc_access = TransportAccess->new( %settings );
+my $cityside_area = AreaTree->new();
 
 
 
@@ -1214,7 +1217,7 @@ sub speed_code {
 
 
 
-sub is_inside_bounds {                  # $latlon
+sub is_inside_bounds {
     return 1 if !$bound;
 
     my ($point) = @_;
@@ -1843,8 +1846,8 @@ sub cond_is_inside_city {
 
     state $cache = {};
 
-    if ( my $key = $obj->{latlon} ) {
-        return $cache->{$key} //= !!FindCity($obj->{latlon});
+    if ( $obj->{coords} ) {
+        return !!$cityside_area->find_area($obj->{coords});
     }
     elsif ( $obj->{type} && $obj->{id} ) {
         my $key = "$obj->{type}_$obj->{id}";
@@ -1859,13 +1862,14 @@ sub cond_is_inside_city {
 sub _is_object_inside_city {
     my ($obj) = @_;
 
-    my $id = $obj->{id};
-
-    return FindCity($id)  if $obj->{type} eq 'Node';
+    return $cityside_area->find_area( $osm->get_lonlat($obj->{id}) )  if $obj->{type} eq 'Node';
     
     if ( $obj->{type} eq 'Way' ) {
         my $chain = $obj->{chain} || $obj->{outer}->[0];
-        return FindCity($chain->[ floor($#$chain/3) ]) && FindCity($chain->[ ceil($#$chain*2/3) ]);
+        my ($p1, $p2) =
+            map { $osm->get_lonlat($chain->[$_]) }
+            ( floor($#$chain/3), ceil($#$chain*2/3) );
+        return $cityside_area->find_area([ ($p1->[0]+$p2->[0])/2, ($p1->[1]+$p2->[1])/2 ]);
     }
 
     return;
@@ -2195,7 +2199,7 @@ sub action_process_interpolation {
                 my $new_obj = {
                     id      => $obj->{id},
                     type    => 'Way',
-                    latlon  => join( q{,}, $clat, $clon ),
+                    coords  => [ $clon, $clat ],
                     tag     => { %tag, 'addr:housenumber' => $chouse, },
                 };
 
@@ -2265,8 +2269,8 @@ sub action_write_poi {
 
     my $coords;
     {
-        if ( $obj->{latlon} ) {
-            $coords = [ reverse split /,/xms, $obj->{latlon} ];
+        if ( $obj->{coords} ) {
+            $coords = $obj->{coords};
             last;
         }
 
@@ -2320,6 +2324,17 @@ sub action_load_access_area {
 
     my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
     $calc_access->add_area( $obj->{tag}, @contours ); 
+    
+    return;
+}
+
+
+sub action_load_cityside_area {
+    my ($obj, $action) = @_;
+    return if !$obj->{outer};
+
+    my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
+    $cityside_area->add_area( 1, @contours ); 
     
     return;
 }
