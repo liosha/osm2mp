@@ -274,15 +274,16 @@ if ($bbox || $bpolyfile) {
 
 
 
-##  Load address polygons
-if ( $flags->{addressing} ) {
-    say STDERR "\nLoading address areas...";
+##  Preloading areas
+say STDERR "\nLoading address areas...";
 
-    $osm->iterate_ways( sub { $ft_config->process( address => @_ ) } );
+$osm->iterate_ways( sub { $ft_config->process( areas => @_ ) } );
 
-    printf STDERR "  %d cities\n", $addresser->{areas}->{city} && $addresser->{areas}->{city}->{_count} // 0;
-    printf STDERR "  %d restricted areas\n", $calc_access->{areas}->{_count} // 0;
-}
+#printf STDERR "  %d cities\n", $addresser->{areas}->{city} && $addresser->{areas}->{city}->{_count} // 0;
+printf STDERR "  %d restricted areas\n", $calc_access->{areas}->{_count} // 0;
+printf STDERR "  %d settlement areas\n", $cityside_area->{_count} // 0;
+
+
 
 
 my $rgraph = RouteGraph->new();
