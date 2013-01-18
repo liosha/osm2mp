@@ -163,10 +163,7 @@ for my $item ( @load_items ) {
     }
 }
 
-my $addresser = OsmAddress->new(
-    $settings{country_name} ? (rename_country => $settings{country_name}) : (),
-);
-
+my $addresser = OsmAddress->new( %settings );
 my $calc_access = TransportAccess->new( %settings );
 my $cityside_area = AreaTree->new();
 
@@ -2445,11 +2442,11 @@ sub _get_mp_address {
 
     my %mp_address;
 
-    if ( $address->{housenumber} ) {
-        $mp_address{HouseNumber} = convert_string( $address->{housenumber} );
+    if ( $address->{house} ) {
+        $mp_address{HouseNumber} = convert_string( $address->{house} );
     }
 
-    if ( $address->{housenumber} || $address->{street} ) {
+    if ( $address->{house} || $address->{street} ) {
         my @fields = grep {$_} map { $address->{$_} } qw/ street quarter suburb /;
         push @fields, $address->{city}  if !@fields && $address->{city} && $address->{city};
 

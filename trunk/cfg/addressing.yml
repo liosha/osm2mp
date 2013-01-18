@@ -2,7 +2,14 @@
 ##  Base addressing model
 ################################
 
---- address_levels
+
+--- addr_prefixes
+---
+- addr
+#- is_in
+
+
+--- addr_levels
 ---
 
 - level: country
@@ -23,8 +30,8 @@
 - level: subdistrict
   tags: [ subdistrict ]
 
-- level: settlement
-  tags: [ city ]
+- level: city
+  tags: [ city, town, hamlet ]
   area: place = city|town|village|hamlet|allotments|isolated_dwelling
 
 - level: suburb

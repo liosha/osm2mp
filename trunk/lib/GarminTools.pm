@@ -24,11 +24,11 @@ sub get_garmin_address {
 
     my %mp_address;
 
-    if ( $address->{housenumber} ) {
-        $mp_address{housenumber} = $address->{housenumber};
+    if ( $address->{house} ) {
+        $mp_address{house} = $address->{house};
     }
 
-    if ( $address->{housenumber} || $address->{street} ) {
+    if ( $address->{house} || $address->{street} ) {
         my @fields = grep {$_} map { $address->{$_} } qw/ street quarter suburb /;
         push @fields, $address->{city}  if !@fields && $address->{city} && $address->{city};
 

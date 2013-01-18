@@ -11,32 +11,13 @@ use warnings;
 
 use Carp;
 use List::Util qw/ first /;
-use List::MoreUtils qw/ none first_index /;
+use List::MoreUtils qw/ none first_index last_index /;
 
 use AreaTree;
 use Utils;
 
 
 our @NAME_TAGS = qw/ name place_name /;
-
-#our @ADDRESS_PREFIXES = qw/ addr is_in /;
-our @ADDRESS_PREFIXES = qw/ addr /;
-
-our @ADDRESS_ITEMS = (
-    [ office        => { aliases => [ qw/ flat apartment / ] } ],
-    [ entrance      => {} ],
-    [ housenumber   => { aliases => [ 'housename' ] } ],
-    [ postcode      => {} ],
-    [ quarter       => { aliases => [ qw/ neighbourhood / ] } ], # relation => [ 'quarter' ] } ],
-    [ street        => { relation => [ qw/ street associatedStreet / ] } ],
-    [ suburb        => {} ],
-    [ city          => {} ],
-    [ subdistrict   => {} ],
-    [ district      => { aliases => [ 'county' ] } ],
-    [ region        => { aliases => [ 'state' ] } ],
-    [ country       => {} ],
-);
-
 our $MIN_DEFAULT_LEVEL = 'city';
 
 
@@ -47,7 +28,7 @@ Constructor
     my $addresser = OsmAddress->new( %opts );
 
 Options:
-  * addr_items
+  * addr_levels
   * addr_prefixes
   * name_tags
   * rename_*
@@ -56,9 +37,10 @@ Options:
 
 sub new {
     my ($class, %opt) = @_;
+
     my $self = {
-        addr_items       => $opt{addr_items}    || \@ADDRESS_ITEMS,
-        addr_prefixes    => $opt{addr_prefixes} || \@ADDRESS_PREFIXES,
+        addr_prefixes    => $opt{addr_prefixes} || [ 'addr' ],
+        addr_levels      => $opt{addr_levels} || [],
         default_address  => {},
     };
     bless $self, $class;
@@ -71,21 +53,20 @@ sub new {
     # { city => [ 'addr:city', 'is_in:city' ], ... }
     my %addr_tags =
         map {
-            my ($id, $prop) = @$_;
-            my @taglist = 
-                map {  my $level = $_;  map {"$_:$level"} @{ $self->{addr_prefixes} }  }
-                ($id, @{ $prop->{aliases} || [] } );
-            ( $id => \@taglist )
+            my @taglist =
+                map { my $tag = $_;  map {"$_:$tag"} @{ $self->{addr_prefixes} } }
+                @{ $_->{tags} };
+            ( $_->{level} => \@taglist )
         }
-        @{ $self->{addr_items} };
-    $self->{addr_tags} = \%addr_tags;
+        @{ $self->{addr_levels} };
+    $self->{addr_tags} = \%addr_tags;    
 
     my %tag_level =
         map {  my $level = $_;  map {( $_ => $level )} @{ $addr_tags{$level} } }
         keys %addr_tags;
     $self->{tag_level} = \%tag_level;
 
-    my @addr_levels = ( q{}, map { $_->[0] } @{ $self->{addr_items} } );
+    my @addr_levels = ( q{}, map { $_->{level} } reverse @{ $self->{addr_levels} } );
     while ( @addr_levels ) {
         my $level = shift @addr_levels;
         $self->{addr_parents}->{$level} = [ @addr_levels ];
@@ -215,17 +196,17 @@ sub get_lang_address {
 sub get_getopt {
     my ($self) = @_;
 
-    my $first_idx = first_index { $_->[0] eq $MIN_DEFAULT_LEVEL } @{ $self->{addr_items} };
-
     my @opt_list = (
         'rename-table=s' => sub { $self->add_rename_table_yml($_[1]) },
     );
 
-    for my $i ( $first_idx .. $#{ $self->{addr_items} } ) {
-        my $level = $self->{addr_items}->[$i]->[0];
+    my $last_idx = last_index { $_->{level} eq $MIN_DEFAULT_LEVEL } @{ $self->{addr_levels} };
+    for my $i ( 0 .. $last_idx ) {
+        my $level = $self->{addr_levels}->[$i]->{level};
+        my $level_tag = $self->{addr_tags}->{$level}->[0];
         push @opt_list, ( "default-$level|default$level=s" => sub {
                 my ($lang, $name) = $_[1] =~ / (?: (\w{1,3}) : )? (.*) /xms;
-                my $vtag = $lang ? "addr:$level:$lang" : "addr:$level";
+                my $vtag = $lang ? "$level_tag:$lang" : $level_tag;
                 $self->{default_address}->{$vtag} = $_[1];
             } );
     }
@@ -240,14 +221,14 @@ sub get_getopt {
 
 sub get_usage {
     my ($self) = @_;
-    my $first_idx = first_index { $_->[0] eq $MIN_DEFAULT_LEVEL } @{ $self->{addr_items} };
     
     my @opt_list = (
         [ 'rename-table' => 'table for renaming, yaml-file' ],
     );
 
-    for my $i ( $first_idx .. $#{ $self->{addr_items} } ) {
-        my $level = $self->{addr_items}->[$i]->[0];
+    my $last_idx = last_index { $_->{level} eq $MIN_DEFAULT_LEVEL } @{ $self->{addr_levels} };
+    for my $i ( 0 .. $last_idx ) {
+        my $level = $self->{addr_levels}->[$i]->{level};
         push @opt_list, [ "default-$level" => "default $level" ];
     }
     

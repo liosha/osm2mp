@@ -87,7 +87,7 @@ internal
 =cut
 {
 my %mp_addr_field = (
-    housenumber => 'HouseNumber',
+    house       => 'HouseNumber',
     street      => 'StreetDesc',
     city        => 'CityName',
     region      => 'RegionName',

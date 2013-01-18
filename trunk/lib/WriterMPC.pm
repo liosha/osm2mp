@@ -116,7 +116,7 @@ sub _get_shp {
 
 {
 my %addr_field = (
-    STRT_ADDR   => [ q{, } => qw/ street housenumber / ],
+    STRT_ADDR   => [ q{, } => qw/ street house / ],
     CITY        => 'city',
     STATE       => 'region',
     COUNTRY     => 'country',
