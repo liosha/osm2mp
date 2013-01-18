@@ -1,9 +1,0 @@
---- ways
----
-
-- condition:
-    - landuse = construction|greenfield
-  action:
-    - action: write_polygon
-      type: 0x010f01
-      level_h: 1
