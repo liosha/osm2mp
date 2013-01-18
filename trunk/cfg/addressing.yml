@@ -1,0 +1,54 @@
+################################
+##  Base addressing model
+################################
+
+--- address_levels
+---
+
+- level: country
+  tags: [ country ]
+
+- level: region
+  tags: [ region, state ]
+
+- level: district
+  tags: [ district, county ]
+  area:
+      and:
+        - type = multipolygon|boundary
+        - boundary = administrative
+        - admin_level = 6
+        - name = (?x: .* \b район .* )
+
+- level: subdistrict
+  tags: [ subdistrict ]
+
+- level: settlement
+  tags: [ city ]
+  area: place = city|town|village|hamlet|allotments|isolated_dwelling
+
+- level: suburb
+  tags: [ suburb ]
+
+- level: street
+  tags: [ street ]
+# TODO relations: [ street, associatedStreet ]
+
+- level: quarter
+  tags: [ quarter, neighbourhood ]
+
+- level: postcode
+  tags: [ postcode ]
+
+- level: house
+  tags: [ housenumber, housename ]
+
+- level: building
+  tags: [ letter ]
+
+- level: entrance
+  tags: [ entrance ]
+
+- level: office
+  tags: [ office, apartment, flat ]
+
