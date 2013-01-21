@@ -111,7 +111,6 @@ my $poi_rtree = Tree::R->new();
 
 my $ft_config = FeatureConfig->new(
     actions => {
-        load_city               => sub { _load_area( city => @_ ) },
         load_access_area        => \&action_load_access_area,
         load_cityside_area      => \&action_load_cityside_area,
         load_barrier            => \&action_load_barrier,
@@ -272,14 +271,18 @@ if ($bbox || $bpolyfile) {
 
 
 ##  Preloading areas
-say STDERR "\nLoading address areas...";
+say STDERR "\nLoading search areas...";
+
+if ( $flags->{addressing} ) {
+    my $addr_area_config = $addresser->get_area_ftconfig($osm);
+    $ft_config->add_rules( areas => $addr_area_config );
+}
 
 $osm->iterate_ways( sub { $ft_config->process( areas => @_ ) } );
 
-#printf STDERR "  %d cities\n", $addresser->{areas}->{city} && $addresser->{areas}->{city}->{_count} // 0;
+printf STDERR "  %d cities\n", $addresser->{areas}->{city} && $addresser->{areas}->{city}->{_count} // 0;
 printf STDERR "  %d restricted areas\n", $calc_access->{areas}->{_count} // 0;
 printf STDERR "  %d settlement areas\n", $cityside_area->{_count} // 0;
-
 
 
 
@@ -2334,18 +2337,6 @@ sub action_load_cityside_area {
     my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
     $cityside_area->add_area( 1, @contours ); 
     
-    return;
-}
-
-
-sub _load_area {
-    my ($level, $obj, $action) = @_;
-    return if !$obj->{outer};
-
-    my $address_tags = $addresser->get_address_tags($obj->{tag}, level => $level);
-    my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
-
-    $addresser->load_area($level, $address_tags, @contours);
     return;
 }
 

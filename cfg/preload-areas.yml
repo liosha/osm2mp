@@ -6,13 +6,6 @@
 --- areas
 ---
 
-
-- condition:
-    - place = city|town|village|hamlet|allotments|isolated_dwelling
-  action:
-    - action:       load_city
-      name:         %place
-    
 - condition:
     - landuse = *
   action:
