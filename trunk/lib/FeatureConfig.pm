@@ -71,6 +71,8 @@ sub add_rules {
     return;
 }
 
+
+
 sub _precompile_condition {
     my ($self, $condition) = @_;
 
@@ -129,9 +131,17 @@ sub process {
         # !!! use check_condition
         next if notall { $_->($object) } @{ $rule->{$RULE_CONDITIONS_KEY} };
         for my $action ( @{ $rule->{$RULE_ACTIONS_KEY} } ) {
-            my $action_code = $action->{action};
-            croak "Unknown action: $action_code" if !exists $self->{actions}->{$action_code};
-            $self->{actions}->{$action_code}->($object, $action);
+            given ( ref $action ) {
+                when ('CODE') {
+                    $action->($object);
+                }
+                when ('HASH') {
+                    my $action_code = $action->{action};
+                    croak "Unknown action: $action_code" if !exists $self->{actions}->{$action_code};
+                    $self->{actions}->{$action_code}->($object, $action);
+                }
+                croak "Invalid action type: $_";
+            }
         }
     }
 

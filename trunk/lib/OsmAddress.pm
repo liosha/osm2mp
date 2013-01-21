@@ -106,11 +106,34 @@ sub add_rename_table_yml {
 }
 
 
+sub get_area_ftconfig {
+    my ($self, $osm) = @_;
+
+    my @rules;
+    for my $level_info ( @{ $self->{addr_levels} } ) {
+        my ($level, $condition) = @$level_info{ qw/ level area_condition / };
+        next if !$condition;
+        push @rules, {
+            condition => [ $condition ],
+            action => [ sub {
+                    my ($obj, $action) = @_;
+                    return if !$obj->{outer};
+
+                    my $address_tags = $self->get_address_tags($obj->{tag}, level => $level);
+                    return if none { /addr:$level\b/xms } keys %$address_tags;
+
+                    my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
+                    $self->load_area( $level, $address_tags, @contours );
+                } ],
+        };
+    }
+
+    return \@rules;
+}
+
 
 sub load_area {
     my ($self, $level, $info, @contours) = @_;
-
-    return if none { /addr:$level\b/xms } keys %$info;
 
     my $tree = $self->{areas}->{$level} ||= AreaTree->new();
     $tree->add_area( $info, @contours );

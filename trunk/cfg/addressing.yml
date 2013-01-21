@@ -20,19 +20,19 @@
 
 - level: district
   tags: [ district, county ]
-  area:
+  area_condition:
       and:
         - type = multipolygon|boundary
         - boundary = administrative
         - admin_level = 6
-        - name = (?x: .* \b район .* )
+        - 'name = (?x: .* \b район .* )'
 
 - level: subdistrict
   tags: [ subdistrict ]
 
 - level: city
   tags: [ city, town, hamlet ]
-  area: place = city|town|village|hamlet|allotments|isolated_dwelling
+  area_condition: place = city|town|village|hamlet|allotments|isolated_dwelling
 
 - level: suburb
   tags: [ suburb ]
