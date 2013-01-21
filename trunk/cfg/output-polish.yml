@@ -22,7 +22,8 @@ header: |
   [IMG ID]
   ID=[% opts.exists('ID') ? opts.ID : '88888888'; opts.delete('ID') %]
   Name=[% opts.exists('Name') ? opts.Name : 'OSM-based map' | mp_filter; opts.delete('Name') %]
-  Copyright=OpenStreetMap project contributors under CC-BY-SA
+  [% USE date -%]
+  Copyright=Data from OpenStreetMap project under ODbL|Converted with osm2mp [% version %] at [% date.format(format='%Y-%m-%d %H:%M:%S') %]
  
   LblCoding=9
   CodePage=[% opts.exists('CodePage') ? opts.CodePage : '65001'; opts.delete('CodePage') %]
@@ -56,11 +57,7 @@ header: |
 
   [END-IMG ID]
 
-  [% USE date -%]
-  [% INCLUDE comment
-    text = "###  Converted from OpenStreetMap data with osm2mp $version at " _ date.format(format='%Y-%m-%d %H:%M:%S')
-   %]
-  [% "\n" %]
+  [% %]
 
 
 
