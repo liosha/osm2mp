@@ -45,5 +45,19 @@ sub make_re_from_list {
 }
 
 
+=head2 hash_merge
+=cut
+
+sub hash_merge {
+    my $target = shift;
+    for my $hash_to_add ( @_ ) {
+        for my $key ( keys %$hash_to_add ) {
+            $target->{$key} = $hash_to_add->{$key};
+        }
+    }
+
+    return $target;
+}
+
 1;
 
