@@ -281,6 +281,7 @@ if ( $flags->{addressing} ) {
 $osm->iterate_ways( sub { $ft_config->process( areas => @_ ) } );
 
 printf STDERR "  %d cities\n", $addresser->{areas}->{city} && $addresser->{areas}->{city}->{_count} // 0;
+printf STDERR "  %d districts\n", $addresser->{areas}->{district} && $addresser->{areas}->{district}->{_count} // 0;
 printf STDERR "  %d restricted areas\n", $calc_access->{areas}->{_count} // 0;
 printf STDERR "  %d settlement areas\n", $cityside_area->{_count} // 0;
 
@@ -918,7 +919,7 @@ if ( $flags->{routing} ) {
         $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
 
         if ( $road->{mp_address} ) {
-            _hash_merge( \%objinfo, $road->{mp_address} );
+            Utils::hash_merge( \%objinfo, $road->{mp_address} );
         }
 
         my @levelchain = ();
@@ -1406,7 +1407,6 @@ END_USAGE
 
 sub FindCity {
     my @points = map { ref $_ ? $_ : $osm->get_lonlat($_) } @_;
-#    my @points = map { ref( $_ )  ?  [ reverse @$_ ]  :  [ reverse @{ $osm->get_lonlat($_) } ] } @_;
     return $addresser->find_area( city => @points );
 }
 
@@ -2252,7 +2252,7 @@ sub action_address_poi {
         my $house_address = $addresser->get_address_tags($obj->{tag});
 
         for my $poiobj ( @{ $poi{$id} } ) {
-            $poiobj->{tags} = _hash_merge( $house_address, $poiobj->{tags} );
+            $poiobj->{tags} = Utils::hash_merge( $house_address, $poiobj->{tags} );
             $poiobj->{comment} .= "\nAddressed by $obj->{type}ID = $obj->{id}";
             output_poi( $poiobj );
         }
@@ -2412,14 +2412,14 @@ sub _get_address {
     my ($obj, %opt) = @_;
 
     my $tags = $opt{tag} || $opt{tags} || $obj->{tag} || $obj->{tags} || {};
+    my @points =
+        map { ref $_ ? $_ : $osm->get_lonlat($_) }
+        grep { $_ }
+        ( $opt{point}, @{ $opt{points} || [] } );
 
-    # parent city
-    my @point = grep { $_ } ( $opt{point}, @{ $opt{points} || [] } );
-    my $city = $opt{city} || ( @point && FindCity(@point) );
-
-    my $address_tags = _hash_merge( {},
-        $addresser->get_address_tags($tags, level => $opt{level}),
-        ($city || {}),
+    my $address_tags = $addresser->get_address_tags( $tags,
+        level => $opt{level},
+        ( @points ? (points => \@points) : () ),
     );
 
     my $address = $addresser->get_lang_address($address_tags, $lang_select);
@@ -2469,13 +2469,3 @@ sub _get_mp_address {
 
 
 
-sub _hash_merge {
-    my $target = shift;
-    for my $hash_to_add ( @_ ) {
-        for my $key ( keys %$hash_to_add ) {
-            $target->{$key} = $hash_to_add->{$key};
-        }
-    }
-
-    return $target;
-}

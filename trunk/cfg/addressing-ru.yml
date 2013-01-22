@@ -20,6 +20,12 @@
 
 - level: district
   tags: [ district, county ]
+  area_condition:
+      and:
+        - type = multipolygon|boundary
+        - boundary = administrative
+        - admin_level = 6
+        - 'name = (?x: .* \b (?: район|улус|кожуун ) \b .* )'
 
 - level: subdistrict
   tags: [ subdistrict ]

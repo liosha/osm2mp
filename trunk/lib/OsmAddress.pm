@@ -49,31 +49,41 @@ sub new {
     my $name_tag_str = Utils::make_re_from_list( $opt{name_tags} || \@NAME_TAGS );
     $self->{name_tag_re} = qr/ ^ (?: $name_tag_str ) \b /xms;
 
-    # taglist for addr levels
-    # { city => [ 'addr:city', 'is_in:city' ], ... }
-    my %addr_tags =
-        map {
-            my @taglist =
-                map { my $tag = $_;  map {"$_:$tag"} @{ $self->{addr_prefixes} } }
-                @{ $_->{tags} };
-            ( $_->{level} => \@taglist )
+    for my $level_info ( @{ $self->{addr_levels} } ) {
+        my $level = $level_info->{level};
+        $self->{level_info}->{$level} = $level_info;
+
+        my @level_tags =
+            map { my $tag = $_;  map {"$_:$tag"} @{ $self->{addr_prefixes} } }
+            @{ $level_info->{tags} };
+        $self->{addr_tags}->{$level} = \@level_tags;
+
+        my $level_tag_str = Utils::make_re_from_list(\@level_tags);
+        $self->{addr_tag_re}->{$level} = qr/ ^ (?: $level_tag_str ) \b /xms;
+
+        for my $tag ( @level_tags ) {
+            $self->{tag_level}->{$tag} = $level;
         }
-        @{ $self->{addr_levels} };
-    $self->{addr_tags} = \%addr_tags;    
+    }
 
-    my %tag_level =
-        map {  my $level = $_;  map {( $_ => $level )} @{ $addr_tags{$level} } }
-        keys %addr_tags;
-    $self->{tag_level} = \%tag_level;
-
+    my $addr_tags = $self->{addr_tags};
     my @addr_levels = ( q{}, map { $_->{level} } reverse @{ $self->{addr_levels} } );
     while ( @addr_levels ) {
         my $level = shift @addr_levels;
         $self->{addr_parents}->{$level} = [ @addr_levels ];
+
+        my @parent_areas = grep { $self->{level_info}->{$_}->{area_condition} } @addr_levels;
+        $self->{parent_areas}->{$level} = \@parent_areas  if @parent_areas;
+
+        if ( $level ) {
+            my @level_tags = @{ $addr_tags->{$level} };
+            my $level_tag_str = Utils::make_re_from_list(\@level_tags);
+            $self->{addr_tag_re}->{$level} = qr/ ^ (?: $level_tag_str ) \b /xms;
+        }
         
-        my @tags = map { @{ $addr_tags{$_} } } (($level ? $level : ()), @addr_levels);
+        my @tags = map { @{ $addr_tags->{$_} } } (($level ? $level : ()), @addr_levels);
         my $tag_str = Utils::make_re_from_list(\@tags);
-        $self->{addr_tag_re}->{$level} = qr/ ^ (?: $tag_str ) \b /xms;
+        $self->{full_addr_tag_re}->{$level} = qr/ ^ (?: $tag_str ) \b /xms;
 
         next if !$level;
         my $table = $opt{"rename_$level"};
@@ -120,7 +130,7 @@ sub get_area_ftconfig {
                     return if !$obj->{outer};
 
                     my $address_tags = $self->get_address_tags($obj->{tag}, level => $level);
-                    return if none { /addr:$level\b/xms } keys %$address_tags;
+                    return if none { $_ =~ $self->{addr_tag_re}->{$level} } keys %$address_tags;
 
                     my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
                     $self->load_area( $level, $address_tags, @contours );
@@ -161,6 +171,7 @@ sub find_area {
         level - assume object has this level:
             * use it's name as addr:<level>
             * filter out all lower address levels
+        points
 
 =cut
 
@@ -169,22 +180,35 @@ sub get_address_tags {
     my ($self, $tags, %opt) = @_;
 
     my $level = $opt{level} // q{};
-    my $tag_re = $self->{addr_tag_re}->{$level};
+    my $tag_re = $self->{full_addr_tag_re}->{$level};
     croak "Unknown level: $level"  if !$tag_re;
 
     my %result;
 
+    # get 'name' tags if object itself
     if ( $level ) {
+        my $level_tag = $self->{addr_tags}->{$level}->[0];
         while ( my ($k, $v) = each %$tags ) {
             next if $k !~ $self->{name_tag_re};
-            $k =~ s/$self->{name_tag_re}/addr:$level/xms;
+
+            $k =~ s/$self->{name_tag_re}/$level_tag/xms;
             $result{$k} = $v;
         }
     }
 
+    # get addr:* tags
     while ( my ($k, $v) = each %$tags ) {
         next if $k !~ $tag_re;
         $result{$k} = $v;
+    }
+
+    # get parent areas if points defined
+    if ( $opt{points} && ( my $area_levels = $self->{parent_areas}->{$level} ) ) {
+        for my $area_level ( @$area_levels ) {
+            my $area_tags = $self->find_area( $area_level => @{$opt{points}} );
+            next if !$area_tags;
+            Utils::hash_merge \%result, $area_tags;
+        }
     }
 
     return \%result;
