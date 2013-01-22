@@ -1405,12 +1405,6 @@ END_USAGE
 
 
 
-sub FindCity {
-    my @points = map { ref $_ ? $_ : $osm->get_lonlat($_) } @_;
-    return $addresser->find_area( city => @points );
-}
-
-
 
 sub output_poi {
     my ($info) = @_;
@@ -1646,12 +1640,10 @@ sub AddRoad {
         map {"$_ = $tags->{$_}"} grep {$settings{comment}->{$_}} sort keys %$tags,
     );
 
-    # determine city
+    # points to determine address areas
     my $chain_size = $#{ $info->{chain} };
     my @smart_nodes =
         map { $info->{chain}->[$_] } ( floor($chain_size/3), ceil($chain_size*2/3) );
-    my $city = FindCity( @smart_nodes );
-    $params{city} = $city  if $city;
 
     # extend routeparams
     my ($speed_class, $road_class, $is_oneway, $is_toll, @acc_flags) = split q{,}, $info->{routeparams};
@@ -1662,7 +1654,7 @@ sub AddRoad {
 
     if ( $info->{name} ) {
         my $address = _get_address( { type => 'way', id => $orig_id }, level => 'street',
-            points => \@smart_nodes, city => $city, tags => $tags, street => $info->{name},
+            points => \@smart_nodes, tags => $tags, street => $info->{name},
         );
         $params{address} = $address;
 
