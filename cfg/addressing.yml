@@ -53,3 +53,41 @@
 - level: office
   tags: [ office, apartment, flat ]
 
+
+
+
+# Common MP address levels
+# (country - region - city - street - housenumber)
+
+--- result_address
+---
+
+country:
+    - %country
+
+region:
+    - %region %district
+    - %region
+    - %district
+
+city:
+    - %city (%subdistrict)
+    - %city
+
+street:
+    - %street, %quarter (%suburb)
+    - %street (%suburb)
+    - %street, %quarter
+    - %street
+    - %quarter (%suburb)
+    - %quarter
+    - %suburb
+    - %city
+
+house:
+    - %house "%building"
+    - %house
+    - %building
+
+postcode:
+    - %postcode
