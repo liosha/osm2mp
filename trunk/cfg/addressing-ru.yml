@@ -1,5 +1,5 @@
 ################################
-##  Base addressing model
+##  Russia-specific addressing model
 ################################
 
 
@@ -16,10 +16,10 @@
   tags: [ country ]
 
 - level: region
-  tags: [ region, state ]
+  tags: [ region ]
 
 - level: district
-  tags: [ district, county ]
+  tags: [ district ]
   area_condition:
       and:
         - type = multipolygon|boundary
@@ -42,7 +42,7 @@
 # TODO relations: [ street, associatedStreet ]
 
 - level: quarter
-  tags: [ quarter, neighbourhood ]
+  tags: [ quarter ]
 
 - level: postcode
   tags: [ postcode ]
