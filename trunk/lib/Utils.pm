@@ -20,13 +20,17 @@ Make regexp (optimized if possible) from plain list.
 Options:
 
     * capture
+    * quote
 
 =cut
 
 sub make_re_from_list {
     my ($list, %opt) = @_;
 
-    my @keywords = map { quotemeta $_ } sort { length $b <=> length $a } @$list;
+    my @keywords =
+        map { $opt{quote} ? quotemeta $_ : $_ }
+        sort { length $b <=> length $a }
+        @$list;
 
     my $re_text;
     eval {
