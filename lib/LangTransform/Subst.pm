@@ -16,6 +16,27 @@ use Utils;
 our $PRIORITY = 1;
 
 our %DATA = (
+    ru_uk => {
+        from  => 'ru',
+        to    => 'uk',
+        table => {
+            'е' => 'є',
+            'ё' => 'йо',
+            'и' => 'і',
+            'ъ' => q{'},
+            'ы' => 'и',
+            'э' => 'е',
+            'ния\b' => 'ння',
+            'ский\b' => 'ський',
+            'ская\b' => 'ська',
+            'ское\b' => 'ське',
+            'ские\b' => 'ські',
+            'ная\b' => 'на',
+            'ное\b' => 'не',
+            'ние\b' => 'ні',
+        },
+        same_upcase => 1,
+    },
     uk_ru => {
         from  => 'uk',
         to    => 'ru',
@@ -25,9 +46,10 @@ our %DATA = (
             'є' => 'е',
             'и' => 'ы',
             'і' => 'и',
-            'i' => 'и',
             'ї' => 'йи',
             'щ' => 'шч',
+            'ьо' => 'ё',
+            'ння\b' => 'ния\b',
         },
         same_upcase => 1,
     },
@@ -75,7 +97,7 @@ our %DATA = (
             ( map {( chr(hex $_) => 'и')}  qw/ 064A FEF1 FEF2 FEF4 FEF3 / ), # ﻱ
         
             'ﻻ' => 'ла',
-            'ال' => 'аль-',
+            '\bال' => 'аль-',
 
             'َا' => 'а',
             'ٰ' => 'а',
@@ -133,7 +155,12 @@ sub get_transformers {
             )
         );
 
-         
+        # hack: resolve \b metacharacter
+        my %xtable =
+            map { my $f = $_; $f =~ s/\\b//gxms; ($f => $table{$_}) }
+            grep { $_ =~ /\\b/xms }
+            keys %table;
+
         my $re = Utils::make_re_from_list( [keys %table], capture => 1 );
 
         push @result, {
@@ -144,7 +171,7 @@ sub get_transformers {
             transformer => sub {
                 my ($text) = @_;
                 $text = $data->{preprocess}->($text)  if $data->{preprocess};
-                $text =~ s/$re/$table{$1}/gexms;
+                $text =~ s# $re # $table{$1} // $xtable{$1} #gexms;
                 return $text
             },
         };
