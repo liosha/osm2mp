@@ -21,6 +21,7 @@ Options:
 
     * capture
     * quote
+    * get_rule_num
 
 =cut
 
@@ -28,21 +29,30 @@ sub make_re_from_list {
     my ($list, %opt) = @_;
 
     my @keywords =
-        map { $opt{quote} ? quotemeta $_ : $_ }
-        sort { length $b <=> length $a }
-        @$list;
+        map {
+            my $text = $opt{quote} ? quotemeta $list->[$_] : $list->[$_];
+            $text .= "(?{$_})"  if $opt{get_rule_num};
+            $text
+        }
+        sort { length $list->[$b] <=> length $list->[$a] }
+        ( 0 .. $#$list );
 
     my $re_text;
     eval {
         require Regexp::Assemble;
-        $re_text = Regexp::Assemble->new()->add( @keywords )->re();
+        my $flags = $opt{i} ? q{i} : q{};
+        $re_text = Regexp::Assemble->new( flags => $flags )->add( @keywords )->re();
     }
     or eval {
-        $re_text = join q{|}, @keywords;
+        $re_text =
+            ( $opt{i} ? '(?i)' : q{} ) .
+            join q{|}, @keywords;
+        die if $opt{get_rule_num};  # skip optimization attempt
         require Regexp::Optimizer;
         $re_text = Regexp::Optimizer->new()->optimize($re_text);
     };
- 
+
+    use re 'eval';
     my $re = $opt{capture} ? qr/($re_text)/ : qr/$re_text/;
 
     return $re;
