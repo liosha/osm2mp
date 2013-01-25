@@ -108,7 +108,7 @@ sub add_rename_table_yml {
 
     require YAML;
     my ($key, $table) = YAML::LoadFile( $file );
-    my ($level) = $key =~ /^ (\w+)_name $ /xms;
+    my ($level) = $key =~ /^ rename_(\w+) $ /xms;
     croak "Invalid rename table key: $key"  if !$level || !$self->{addr_tags}->{$level};
 
     $self->add_rename_table( $level => $table );
