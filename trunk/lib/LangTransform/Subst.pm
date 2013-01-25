@@ -2,7 +2,7 @@ package LangTransform::Subst;
 
 # $Id$
 
-# ABSTRACT: simple substitute transliterator, just proof-of-concept
+# ABSTRACT: substitute transliterator
 
 use 5.010;
 use strict;
@@ -21,7 +21,11 @@ our %DATA = (
         to    => 'uk',
         table => {
             'е' => 'є',
-            'ё' => 'йо',
+            '\bё' => 'йо',
+            '(?<=[аяэеоёуюыи])ё' => 'йо',
+            '(?<=[ьъ])ё' => 'о',
+            'ё' => 'ьо',
+            '(?<=[ьъаяэеоёуюыи])и' => 'ї',
             'и' => 'і',
             'ъ' => q{'},
             'ы' => 'и',
@@ -33,7 +37,7 @@ our %DATA = (
             'ские\b' => 'ські',
             'ная\b' => 'на',
             'ное\b' => 'не',
-            'ние\b' => 'ні',
+            'ные\b' => 'ні',
         },
         same_upcase => 1,
     },
@@ -49,7 +53,7 @@ our %DATA = (
             'ї' => 'йи',
             'щ' => 'шч',
             'ьо' => 'ё',
-            'ння\b' => 'ния\b',
+            'ння\b' => 'ния',
         },
         same_upcase => 1,
     },
@@ -147,21 +151,21 @@ sub get_transformers {
 
     my @result;
     while ( my ($id, $data) = each %DATA ) {
-        my %table = (
-            %{ $data->{table} },
-            ( $data->{same_upcase}
-                ? ( map {( uc($_) => ucfirst($data->{table}->{$_}) )} keys %{ $data->{table} } )
-                : ()
-            )
-        );
 
-        # hack: resolve \b metacharacter
-        my %xtable =
-            map { my $f = $_; $f =~ s/\\b//gxms; ($f => $table{$_}) }
-            grep { $_ =~ /\\b/xms }
-            keys %table;
+        my @rule_keys = keys %{ $data->{table} };
+        my $re = Utils::make_re_from_list( \@rule_keys, capture => 1, get_rule_num => 1, i => $data->{same_upcase} );
 
-        my $re = Utils::make_re_from_list( [keys %table], capture => 1 );
+        my $apply_rule = sub {
+            my ($in, $rule) = @_;
+            my $text = $data->{table}->{$rule // $in};
+            return $text  if !$data->{same_upcase};
+
+            my $upper_first = $in =~ / ^ \p{Uppercase_Letter} /xms;
+            return $text  if !$upper_first;
+
+            my $upper_last  = $in =~ / \p{Uppercase_Letter} $ /xms;
+            return $upper_last ? uc $text : ucfirst $text;
+        };
 
         push @result, {
             id => "subst_$id",
@@ -171,8 +175,8 @@ sub get_transformers {
             transformer => sub {
                 my ($text) = @_;
                 $text = $data->{preprocess}->($text)  if $data->{preprocess};
-                $text =~ s# $re # $table{$1} // $xtable{$1} #gexms;
-                return $text
+                $text =~ s# $re # $apply_rule->($1, $rule_keys[$^R]) #gexms;
+                return $text;
             },
         };
     }
