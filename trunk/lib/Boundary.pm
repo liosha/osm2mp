@@ -13,7 +13,7 @@ use autodie;
 use Carp;
 
 use Math::Polygon;
-use Math::Polygon::Tree;
+use Math::Polygon::Tree 0.05;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 
 
