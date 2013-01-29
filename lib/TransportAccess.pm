@@ -68,13 +68,13 @@ sub new {
 
 
 sub add_area {
-    my ($self, $tags, @contours) = @_;
-    return if !@contours;
+    my ($self, $tags, $outers, $inners) = @_;
+    return if !@$outers;
 
     my $acc = $self->get_tag_flags( $tags );
     return if none {$_} @$acc;
 
-    $self->{areas}->add_area( $acc, @contours );
+    $self->{areas}->add_area( $acc, $outers, $inners );
     return;
 }
 

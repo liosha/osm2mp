@@ -26,13 +26,18 @@ Add area to tree.
 =cut
 
 sub add_area {
-    my ($self, $object, @contours ) = @_;
+    my ($self, $object, $outers, $inners ) = @_;
 
-    my @bbox = Math::Polygon::Tree::polygon_bbox( map { @$_ } @contours );
+    my @bbox = Math::Polygon::Tree::polygon_bbox( map { @$_ } @$outers );
     my $area = {
         data  => $object,
-        bound => Math::Polygon::Tree->new( @contours ),
+        bound => Math::Polygon::Tree->new( @$outers ),
+        ( $inners && @$inners
+            ? ( inners => Math::Polygon::Tree->new( @$inners ) )
+            : ()
+        ),
     };
+
     $self->insert( $area, @bbox );
     $self->{_count} ++;
     return;
@@ -59,7 +64,12 @@ sub find_area {
     return if !$possible_areas;
     return if !@$possible_areas;
 
-    my $object = first { $_->{bound}->contains_points(@points) } @$possible_areas;
+    my $object = first {
+        $_->{bound}->contains_points(@points)
+        && ( !$_->{inners} || !$_->{inners}->contains_points(@points) )
+    }
+    @$possible_areas;
+
     return if !$object;
     return $object->{data};
 }

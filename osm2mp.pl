@@ -2315,8 +2315,9 @@ sub action_load_access_area {
     my ($obj, $action) = @_;
     return if !$obj->{outer};
 
-    my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
-    $calc_access->add_area( $obj->{tag}, @contours ); 
+    my @outers = map { $osm->get_lonlat($_) } @{$obj->{outer}};
+    my @inners = map { $osm->get_lonlat($_) } @{$obj->{inner}};
+    $calc_access->add_area( $obj->{tag}, \@outers, \@inners ); 
     
     return;
 }
@@ -2326,8 +2327,9 @@ sub action_load_cityside_area {
     my ($obj, $action) = @_;
     return if !$obj->{outer};
 
-    my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
-    $cityside_area->add_area( 1, @contours ); 
+    my @outers = map { $osm->get_lonlat($_) } @{$obj->{outer}};
+    my @inners = map { $osm->get_lonlat($_) } @{$obj->{inner}};
+    $cityside_area->add_area( 1, \@outers, \@inners ); 
     
     return;
 }
