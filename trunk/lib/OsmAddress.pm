@@ -132,8 +132,9 @@ sub get_area_ftconfig {
                     my $address_tags = $self->get_address_tags($obj->{tag}, level => $level);
                     return if none { $_ =~ $self->{addr_tag_re}->{$level} } keys %$address_tags;
 
-                    my @contours = map { $osm->get_lonlat($_) } @{$obj->{outer}};
-                    $self->load_area( $level, $address_tags, @contours );
+                    my @outers = map { $osm->get_lonlat($_) } @{$obj->{outer}};
+                    my @inners = map { $osm->get_lonlat($_) } @{$obj->{inner}};
+                    $self->load_area( $level, $address_tags, \@outers, \@inners );
                 } ],
         };
     }
@@ -143,10 +144,10 @@ sub get_area_ftconfig {
 
 
 sub load_area {
-    my ($self, $level, $info, @contours) = @_;
+    my ($self, $level, $info, $outers, $inners) = @_;
 
     my $tree = $self->{areas}->{$level} ||= AreaTree->new();
-    $tree->add_area( $info, @contours );
+    $tree->add_area( $info, $outers, $inners );
 
     return;
 }
