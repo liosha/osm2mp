@@ -55,7 +55,7 @@ use List::MoreUtils qw{ all notall none any first_index last_index uniq };
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
-use Math::Polygon::Tree  0.041  qw{ polygon_centroid };
+use Math::Polygon::Tree  0.05  qw{ polygon_centroid };
 use Tree::R;
 
 use OSM;
@@ -1705,14 +1705,13 @@ sub AddRoad {
 
     # external nodes
     if ( $bound ) {
-        if ( !is_inside_bounds($chain->[0]) ) {
-            $xnode{ $chain->[0] } = 1;
-            $xnode{ $chain->[1] } = 1;
-        }
-        if ( !is_inside_bounds($chain->[-1]) ) {
-            $xnode{ $chain->[-1] } = 1;
-            $xnode{ $chain->[-2] } = 1;
-        }
+        my $is_first_inside = is_inside_bounds($chain->[0]);
+        $xnode{$chain->[0]} = 1  if $is_first_inside < 1;
+        $xnode{$chain->[1]} = 1  if $is_first_inside == 0;
+        
+        my $is_last_inside = is_inside_bounds($chain->[-1]);
+        $xnode{$chain->[-1]} = 1  if $is_last_inside < 1;
+        $xnode{$chain->[-2]} = 1  if $is_last_inside == 0;
     }
 
     # process associated turn restrictions
@@ -1881,9 +1880,18 @@ sub _get_line_parts_inside_bounds {
     return $chain  if !$bound;
 
     my @is_inside = map { is_inside_bounds($_) } @$chain;
+
     my @begin = grep { $is_inside[$_] && ( $_ == 0        || !$is_inside[$_-1] ) } ( 0 .. $#$chain );
     my @end   = grep { $is_inside[$_] && ( $_ == $#$chain || !$is_inside[$_+1] ) } ( 0 .. $#$chain );
-    return map {[ @$chain[($begin[$_] == 0 ? 0 : $begin[$_]-1) .. ($end[$_] == $#$chain ? $end[$_] : $end[$_]+1)] ]} (0 .. $#end);
+
+    return
+        grep { @$_ > 1 }
+        map {[ @$chain[
+            ( $begin[$_] == 0      || $is_inside[$begin[$_]] < 0 ? $begin[$_] : $begin[$_]-1 )
+            ..
+            ( $end[$_] == $#$chain || $is_inside[$end[$_]] < 0   ? $end[$_]   : $end[$_]+1 )
+        ] ]}
+        (0 .. $#end);
 }
 
 
