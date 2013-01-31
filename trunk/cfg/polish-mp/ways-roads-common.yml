@@ -3,221 +3,216 @@
 
 # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
 
+
+## Main road network
+
 - condition:
-    - highway = motorway|trunk
+    - highway = motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|residential|living_street|pedestrian|service
+    - route != ferry
+    - area != *
   action:
     - action: load_road
-      type: 0x01
-      level_h: 4
+
+      type:
+        selector: if
+        condition: junction = roundabout
+        then: 0x0c
+        else:
+          selector: tag
+          tag: highway
+          motorway: 0x01
+          motorway_link: 0x09
+          trunk: 0x01
+          trunk_link: 0x09
+          primary:
+            selector: if
+            condition: inside_city
+            then: 0x04
+            else: 0x02
+          primary_link: 0x08
+          secondary:
+            selector: if
+            condition: inside_city
+            then: 0x05
+            else: 0x02
+          secondary_link: 0x08
+          tertiary:
+            selector: if
+            condition: inside_city
+            then: 0x05
+            else: 0x03
+          unclassified:
+            selector: if
+            condition: surface = unpaved|ground|earth|mud|grass|sand|dirt
+            then: 0x0a
+            else:
+              selector: if
+              condition: inside_city
+              then: 0x06
+              else: 0x03
+          residential: &1
+            selector: if
+            condition: surface = unpaved|ground|earth|mud|grass|sand|dirt
+            then: 0x0a
+            else: 0x06
+          living_street: *1
+          pedestrian: *1
+          service: 0x07
+
+      level_h:
+        selector: tag
+        tag: highway
+        motorway: 4
+        motorway_link: 2
+        trunk: 4
+        trunk_link: 2
+        primary: 3
+        primary_link: 1
+        secondary: 2
+        secondary_link: 1
+        tertiary:
+          selector: if
+          condition: inside_city
+          then: 1
+          else: 2
+        unclassified: 1
+        residential: 1
+        living_street: 1
+        pedestrian: 1
+        service: 0
+
       routeparams:
         selector: tag
         tag: highway
         motorway: '6,4,1,0,0,0,0,0,0,0,0,0'
+        motorway_link: '3,4,1,0,0,0,0,0,0,0,0,0'
         trunk:
           selector: if
           condition: inside_city
           then: '3,4,0,0,0,0,0,0,0,0,0,0'
           else: '5,4,0,0,0,0,0,0,0,0,0,0'
+        trunk_link: '3,4,0,0,0,0,0,0,0,0,0,0'
+        primary:
+          selector: if
+          condition: inside_city
+          then: '3,3,0,0,0,0,0,0,0,0,0,0'
+          else: '4,3,0,0,0,0,0,0,0,0,0,0'
+        primary_link: '2,3,0,0,0,0,0,0,0,0,0,0'
+        secondary:
+          selector: if
+          condition: inside_city
+          then: '3,2,0,0,0,0,0,0,0,0,0,0'
+          else: '4,2,0,0,0,0,0,0,0,0,0,0'
+        secondary_link: '2,2,0,0,0,0,0,0,0,0,0,0'
+        tertiary:
+          selector: if
+          condition: inside_city
+          then: '3,1,0,0,0,0,0,0,0,0,0,0'
+          else: '4,1,0,0,0,0,0,0,0,0,0,0'
+        unclassified:
+          selector: if
+          condition: inside_city
+          then: '2,1,0,0,0,0,0,0,0,0,0,0'
+          else: '3,1,0,0,0,0,0,0,0,0,0,0'
+        residential: '2,0,0,0,0,0,0,0,0,0,0,0'
+        living_street: '1,0,0,0,0,0,0,0,0,0,0,0'
+        pedestrian: '0,0,0,0,0,1,1,1,1,0,0,1'
+        service: '0,0,0,0,0,0,0,0,0,0,0,0'
+
       road_ref:
         selector: tag
         tag: highway
         motorway: '~[0x04]'
-        trunk:
+        _default:
           selector: if
-          condition: inside_city
-          then: ~
-          else: '~[0x04]'
-
-- condition:
-    - highway = motorway_link
-  action:
-    - action: load_road
-      type: 0x09
-      level_h: 2
-      routeparams: '3,4,1,0,0,0,0,0,0,0,0,0'
-
-- condition:
-    - highway = trunk_link
-  action:
-    - action: load_road
-      type: 0x09
-      level_h: 2
-      routeparams: '3,4,0,0,0,0,0,0,0,0,0,0'
-
-
-- condition:
-    - highway = primary
-    - ~inside_city
-  action:
-    - action: load_road
-      type: 0x02
-      level_h: 3
-      routeparams: '4,3,0,0,0,0,0,0,0,0,0,0'
-      road_ref: '~[0x05]'
-
-- condition:
-    - highway = primary
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x04
-      level_h: 3
-      routeparams: '3,3,0,0,0,0,0,0,0,0,0,0'
-
-- condition:
-    - highway = primary_link
-  action:
-    - action: load_road
-      type: 0x08
-      level_h: 1
-      routeparams: '2,3,0,0,0,0,0,0,0,0,0,0'
-
-
-- condition:
-    - highway = secondary
-    - ~inside_city
-  action:
-    - action: load_road
-      type: 0x02
-      level_h: 2
-      routeparams: '4,2,0,0,0,0,0,0,0,0,0,0'
-      road_ref: '~[0x06]'
-
-- condition:
-    - highway = secondary
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x05
-      level_h: 2
-      routeparams: '3,2,0,0,0,0,0,0,0,0,0,0'
-
-- condition:
-    - highway = secondary_link
-  action:
-    - action: load_road
-      type: 0x08
-      level_h: 1
-      routeparams: '2,2,0,0,0,0,0,0,0,0,0,0'
-
-
-- condition:
-    - highway = tertiary
-    - ~inside_city
-  action:
-    - action: load_road
-      type: 0x03
-      level_h: 2
-      routeparams: '4,1,0,0,0,0,0,0,0,0,0,0'
-      road_ref: '~[0x06]'
-
-- condition:
-    - highway = tertiary
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x05
-      level_h: 1
-      routeparams: '3,1,0,0,0,0,0,0,0,0,0,0'
-
-
-- condition:
-    - highway = unclassified
-    - ~inside_city
-  action:
-    - action: load_road
-      type: 0x03
-      level_h: 1
-      routeparams: '3,1,0,0,0,0,0,0,0,0,0,0'
-
-
-- condition:
-    - highway = unclassified
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x06
-      level_h: 1
-      routeparams: '2,1,0,0,0,0,0,0,0,0,0,0'
-
-
-- condition:
-    - highway = residential
-  action:
-    - action: load_road
-      type: 0x06
-      level_h: 1
-      routeparams: '2,0,0,0,0,0,0,0,0,0,0,0'
-
-
-- condition:
-    - highway = living_street
-  action:
-    - action: load_road
-      type: 0x06
-      level_h: 1
-      routeparams: '1,0,0,0,0,0,0,0,0,0,0,0'
-
-- condition:
-    - highway = pedestrian
-    - area != *
-  action:
-    - action: load_road
-      type: 0x06
-      level_h: 1
-      routeparams: '0,0,0,0,0,1,1,1,1,0,0,1'
-
-- condition:
-    - highway = service
-    - area != *
-  action:
-    - action: load_road
-      type: 0x07
-      level_h: 0
-      routeparams: '0,0,0,0,0,0,0,0,0,0,0,0'
-
+          condition: ~inside_city
+          then:
+            selector: tag
+            tag: highway
+            trunk: '~[0x04]'
+            primary: '~[0x05]'
+            secondary: '~[0x06]'
+            tertiary: '~[0x06]'
 
 
 ## Tracks
 
 - condition:
     - highway = track|road
+    - area != *
   action:
     - action: load_road
-      type: 0x0a
+      type:
+        selector: if
+        condition: tracktype = grade4|grade5
+        then: 0x16
+        else: 0x0a
       level_h: 1
       routeparams: '1,0,0,0,0,0,0,1,0,0,0,0'
 
-- condition:
-    - highway = track
-    - tracktype = grade4|grade5
-  action:
-    - action: modify_road
-      type: 0x16
+
+## Ferry lines
 
 - condition:
-    - highway = track
-    - tracktype = grade1|grade2
-    - ~inside_city
+    - route = ferry
+    - or:
+        - highway = trunk|primary|secondary|tertiary|unclassified
+        - ferry = trunk|primary|secondary|tertiary|unclassified
   action:
-    - action: modify_road
-      level_h: 2
+    - action: load_road
+      type: 0x1b
+      level_h:
+        selector: tag
+        tag: highway
+        trunk: 4
+        primary: 3
+        secondary: 2
+        tertiary: 1
+        unclassified: 1
+        _default:
+          selector: tag
+          tag: ferry
+          trunk: 4
+          primary: 3
+          secondary: 2
+          tertiary: 1
+          unclassified: 1
+
+      routeparams:
+        selector: tag
+        tag: highway
+        trunk: '1,4,0,0,0,0,0,0,0,0,0,0'
+        primary: '1,3,0,0,0,0,0,0,0,0,0,0'
+        secondary: '0,2,0,0,0,0,0,0,0,0,0,0'
+        tertiary: '0,1,0,0,0,0,0,0,0,0,0,0'
+        unclassified: '0,1,0,0,0,0,0,0,0,0,0,0'
+        _default:
+          selector: tag
+          tag: ferry
+          trunk: '1,4,0,0,0,0,0,0,0,0,0,0'
+          primary: '1,3,0,0,0,0,0,0,0,0,0,0'
+          secondary: '0,2,0,0,0,0,0,0,0,0,0,0'
+          tertiary: '0,1,0,0,0,0,0,0,0,0,0,0'
+          unclassified: '0,1,0,0,0,0,0,0,0,0,0,0'
+
+      road_ref:
+        selector: if
+        condition: ~inside_city
+        then:
+          selector: tag
+          tag: highway
+          trunk: '~[0x04]'
+          primary: '~[0x05]'
+          secondary: '~[0x06]'
 
 
 
 ## Modifiers
 
 - condition:
-    - route = ferry
-  action:
-    - action: modify_road
-      type: 0x1b
-
-- condition:
     - junction = roundabout
   action:
     - action: modify_road
-      type: 0x0c
       routeparams: '.,.,1,.,.,.,.,.,.,.,.,.'
 
 - condition:
@@ -245,14 +240,6 @@
     - action: modify_road
       routeparams: '.,.,.,1,.,.,.,.,.,.,.,.'
 
-
-# unpaved roads
-- condition:
-    - highway = unclassified|residential|road
-    - surface = unpaved|ground|earth|mud|grass|sand|dirt
-  action:
-    - action: modify_road
-      type: 0x0a
 
 # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
 
