@@ -86,7 +86,15 @@
   action:
     - action: write_polygon
       type: 0x4d
-      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+      level_h: &1
+        selector: thresholds
+        value: !!perl/code |
+          { _get_obj_area_size(shift) }
+        0:      0
+        0.016:  1
+        0.5:    2
+        2.5:    3
+        9:      4
 
 - condition:
     - landuse = allotments|orchard
@@ -100,26 +108,26 @@
   action:
     - action: write_polygon
       type: 0x4f
-      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+      level_h: *1
 
 - condition:
     - natural = wood
   action:
     - action: write_polygon
       type: 0x50
-      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+      level_h: *1
 
 - condition:
     - natural = marsh|wetland
   action:
     - action: write_polygon
       type: 0x51
-      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+      level_h: *1
 
 - condition:
     - natural = beach
   action:
     - action: write_polygon
       type: 0x53
-      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+      level_h: *1
 

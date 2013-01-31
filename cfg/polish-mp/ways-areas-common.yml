@@ -148,12 +148,20 @@
   action:
     - action: write_polygon
       type: 0x3f
-      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+      level_h: &1 
+        selector: thresholds
+        value: !!perl/code |
+          { _get_obj_area_size(shift) }
+        0:      0
+        0.016:  1
+        0.5:    2
+        2.5:    3
+        9:      4
 
 - condition:
     - waterway = riverbank
   action:
     - action: write_polygon
       type: 0x47
-      level_h: [ 0, 0.016, 0.5, 2.5, 9 ]
+      level_h: *1
 
