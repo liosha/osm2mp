@@ -119,6 +119,20 @@
         pedestrian: '0,0,0,0,0,1,1,1,1,0,0,1'
         service: '0,0,0,0,0,0,0,0,0,0,0,0'
 
+      oneway:
+        selector: if
+        condition: oneway = no|false|0
+        then: 0
+        else:
+          selector: if
+          condition:
+            or:
+                - oneway = yes|true|1|-1
+                - junction = roundabout
+                - highway = motorway|motorway_link
+          then: 1
+          else: 0
+
       road_ref:
         selector: tag
         tag: highway
@@ -210,28 +224,9 @@
 ## Modifiers
 
 - condition:
-    - junction = roundabout
-  action:
-    - action: modify_road
-      routeparams: '.,.,1,.,.,.,.,.,.,.,.,.'
-
-- condition:
-    - oneway = yes|true|1
-  action:
-    - action: modify_road
-      routeparams: '.,.,1,.,.,.,.,.,.,.,.,.'
-
-- condition:
-    - oneway = no|false|0
-  action:
-    - action: modify_road
-      routeparams: '.,.,0,.,.,.,.,.,.,.,.,.'
-
-- condition:
     - oneway = -1
   action:
     - action: modify_road
-      routeparams: '.,.,1,.,.,.,.,.,.,.,.,.'
       reverse: 1
 
 - condition:
