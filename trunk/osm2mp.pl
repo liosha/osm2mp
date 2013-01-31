@@ -120,7 +120,6 @@ my $ft_config = FeatureConfig->new(
         write_line              => \&action_write_line,
         address_poi             => \&action_address_poi,
         load_road               => \&action_load_road,
-        modify_road             => \&action_modify_road,
         load_coastline          => \&action_load_coastline,
         force_external_node     => \&action_force_external_node,
         load_main_entrance      => \&action_load_main_entrance,
@@ -2150,45 +2149,6 @@ sub action_load_road {
         $info->{chain} = $parts[$part_no];
         $info->{id}    = "$id:$part_no";
         AddRoad( $info );
-    }
-    return;
-}
-
-
-# !!! TODO: remove, it was bad idea
-sub action_modify_road {
-    my ($obj, $action) = @_;
-    return  if !$flags->{routing};
-
-    my $id = $obj->{id};
-    my $part_no = 0;
-    while (1) {
-        my $road_id = "$id:$part_no";
-        my $road = $road{$road_id};
-        last if !$road;
-        $part_no ++;
-
-        while ( my ($key, $val) = each %$action ) {
-            if ( $key eq 'reverse' ) {
-                $road->{chain} = [ reverse @{ $road->{chain} } ];
-            }
-            elsif ( $key eq 'routeparams' ) {
-                my @rp  = split q{,}, $road->{rp};
-                my @mrp = split q{,}, $val;
-                for my $p ( @rp ) {
-                    my $mp = shift @mrp;
-                    $p = $mp    if $mp =~ /^\d$/;
-                    $p = 1-$p   if $mp eq q{~};
-                    $p = $p+$1  if $p < 4 && $mp =~ /^\+(\d)$/;
-                    $p = $p-$1  if $p > 0 && $mp =~ /^\-(\d)$/;
-                }
-                $road->{rp} = join q{,}, @rp;
-            }
-            else {
-                $road->{$key} = _get_field_content($val, $obj);
-            }
-        }
-
     }
     return;
 }
