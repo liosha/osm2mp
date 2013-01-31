@@ -1969,8 +1969,9 @@ sub _get_field_by_condition {
 
     croak "No condition in 'if' selector"  if !$selector->{condition};
     if ( $ft_config->check_condition($selector->{condition}, $obj) ) {
+        croak "No 'then' key in 'if' selector"  if !exists $selector->{then};
         my $then = $selector->{then};
-        croak "No 'then' key in 'if' selector"  if !$then;
+        return $then if !$then;
         return _get_field_content($then, $obj, %opt);
     }
     elsif ( my $else = $selector->{else} ) {
@@ -2049,8 +2050,8 @@ sub _get_result_object_params {
 
     my %info = %$action;
 
-    # requred fields
-    for my $key ( qw/ name type level_h / ) {
+    state $fields = [ qw/ name type level_l level_h routeparams road_ref / ];
+    for my $key ( @$fields ) {
         next if !defined $info{$key};
         $info{$key} = _get_field_content($info{$key}, $obj);
     }
@@ -2090,7 +2091,7 @@ sub _get_result_object_params {
     $info{comment} = "$obj->{type}ID = $obj->{id}";
 
     # road refs
-    if ( $flags->{road_shields} && $action->{road_ref} ) {
+    if ( $flags->{road_shields} && $info{road_ref} ) {
         my @refs =
             uniq sort
             map { my $ref = $_; $ref =~ s/[\s\-]//gx; split /[,;]/, $ref }

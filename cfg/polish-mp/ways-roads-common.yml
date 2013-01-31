@@ -4,13 +4,29 @@
 # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
 
 - condition:
-    - highway = motorway
+    - highway = motorway|trunk
   action:
     - action: load_road
       type: 0x01
       level_h: 4
-      routeparams: '6,4,1,0,0,0,0,0,0,0,0,0'
-      road_ref: '~[0x04]'
+      routeparams:
+        selector: tag
+        tag: highway
+        motorway: '6,4,1,0,0,0,0,0,0,0,0,0'
+        trunk:
+          selector: if
+          condition: inside_city
+          then: '3,4,0,0,0,0,0,0,0,0,0,0'
+          else: '5,4,0,0,0,0,0,0,0,0,0,0'
+      road_ref:
+        selector: tag
+        tag: highway
+        motorway: '~[0x04]'
+        trunk:
+          selector: if
+          condition: inside_city
+          then: ~
+          else: '~[0x04]'
 
 - condition:
     - highway = motorway_link
@@ -19,26 +35,6 @@
       type: 0x09
       level_h: 2
       routeparams: '3,4,1,0,0,0,0,0,0,0,0,0'
-
-
-- condition:
-    - highway = trunk
-    - ~inside_city
-  action:
-    - action: load_road
-      type: 0x01
-      level_h: 4
-      routeparams: '5,4,0,0,0,0,0,0,0,0,0,0'
-      road_ref: '~[0x04]'
-
-- condition:
-    - highway = trunk
-    - inside_city
-  action:
-    - action: load_road
-      type: 0x01
-      level_h: 4
-      routeparams: '3,4,0,0,0,0,0,0,0,0,0,0'
 
 - condition:
     - highway = trunk_link
