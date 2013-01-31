@@ -7,7 +7,7 @@
 ## Main road network
 
 - condition:
-    - highway = motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|residential|living_street|pedestrian|service
+    - highway = motorway(?:_link)?|trunk(?:_link)?|primary(?:_link)?|secondary(?:_link)?|residential|living_street|pedestrian|service
     - route != ferry
     - area != *
   action:
@@ -119,7 +119,7 @@
         pedestrian: '0,0,0,0,0,1,1,1,1,0,0,1'
         service: '0,0,0,0,0,0,0,0,0,0,0,0'
 
-      oneway:
+      oneway: &2
         selector: if
         condition: oneway = no|false|0
         then: 0
@@ -133,11 +133,16 @@
           then: 1
           else: 0
 
-      toll:
+      toll: &3
         selector: if
         condition: toll = yes|true|1
         then: 1
         else: 0
+
+      reverted: &4
+        selector: if
+        condition: oneway = -1
+        then: 1
 
       road_ref:
         selector: tag
@@ -169,6 +174,9 @@
         else: 0x0a
       level_h: 1
       routeparams: '1,0,0,0,0,0,0,1,0,0,0,0'
+      oneway: *2
+      toll: *3
+      reverted: *4
 
 
 ## Ferry lines
@@ -215,6 +223,10 @@
           tertiary: '0,1,0,0,0,0,0,0,0,0,0,0'
           unclassified: '0,1,0,0,0,0,0,0,0,0,0,0'
 
+      oneway: *2
+      toll: *3
+      reverted: *4
+
       road_ref:
         selector: if
         condition: ~inside_city
@@ -225,14 +237,5 @@
           primary: '~[0x05]'
           secondary: '~[0x06]'
 
-
-
-## Modifiers
-
-- condition:
-    - oneway = -1
-  action:
-    - action: modify_road
-      reverse: 1
 
 
