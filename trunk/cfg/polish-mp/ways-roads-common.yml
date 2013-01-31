@@ -133,6 +133,12 @@
           then: 1
           else: 0
 
+      toll:
+        selector: if
+        condition: toll = yes|true|1
+        then: 1
+        else: 0
+
       road_ref:
         selector: tag
         tag: highway
@@ -228,14 +234,5 @@
   action:
     - action: modify_road
       reverse: 1
-
-- condition:
-    - toll = yes|true|1
-  action:
-    - action: modify_road
-      routeparams: '.,.,.,1,.,.,.,.,.,.,.,.'
-
-
-# RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
 
 
