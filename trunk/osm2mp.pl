@@ -1631,6 +1631,8 @@ sub AddRoad {
         grep {/_*[A-Z]/} keys %$info,
     );
 
+    $params{chain} = [ reverse @{$params{chain}} ]  if $info->{reverted};
+
     my ($orig_id) = $info->{id} =~ /^([^:]+)/;
     $params{way_id} = $orig_id;
 
@@ -2052,7 +2054,11 @@ sub _get_result_object_params {
 
     my %info = %$action;
 
-    state $fields = [ qw/ name type level_l level_h routeparams oneway toll road_ref / ];
+    state $fields = [ qw/
+        name type level_l level_h
+        routeparams road_ref
+        oneway toll reverted
+    / ];
     for my $key ( @$fields ) {
         next if !defined $info{$key};
         $info{$key} = _get_field_content($info{$key}, $obj);
