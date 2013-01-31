@@ -1647,6 +1647,7 @@ sub AddRoad {
 
     # extend routeparams
     my ($speed_class, $road_class, $is_oneway, $is_toll, @acc_flags) = split q{,}, $info->{routeparams};
+    $is_oneway = $info->{oneway}  if $info->{oneway};
 
     # calculate access restrictions
     my $points = $osm->get_lonlat(\@smart_nodes);
@@ -2050,7 +2051,7 @@ sub _get_result_object_params {
 
     my %info = %$action;
 
-    state $fields = [ qw/ name type level_l level_h routeparams road_ref / ];
+    state $fields = [ qw/ name type level_l level_h routeparams oneway road_ref / ];
     for my $key ( @$fields ) {
         next if !defined $info{$key};
         $info{$key} = _get_field_content($info{$key}, $obj);
