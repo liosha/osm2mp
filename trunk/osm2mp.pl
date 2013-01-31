@@ -51,7 +51,7 @@ use POSIX;
 use Encode;
 use Encode::Locale;
 use List::Util qw{ first reduce sum min max };
-use List::MoreUtils qw{ all notall none any first_index last_index uniq };
+use List::MoreUtils qw{ all notall none any first_index last_value uniq };
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
@@ -1759,20 +1759,6 @@ sub output_area {
         $param->{comment} .= "\n$key = $val";
     }
 
-    #   area-dependent zoomlevel
-    if ( ref $param->{level_h} )  {
-        my $square = sum map {
-                Math::Polygon::Calc::polygon_area( @$_ )
-                * cos( [polygon_centroid( @{$param->{areas}->[0]} )]->[1] / 180 * 3.14159 )
-                * (40000/360)**2
-            } @{$param->{areas}};
-        my $tholds = delete $param->{level_h};
-        my $level_h = ($param->{level_l} || 0) + last_index { $square >= $_ } @$tholds;
-        return if $level_h < ($param->{level_l} || 0);
-        $param->{level_h} = $level_h;
-        $param->{comment} .= "\narea: $square km2 -> $level_h";
-    }
-
     #   test if inside bounds
     my @inside = map { $bound ? $bound->{tree}->contains_polygon_rough( $_ ) : 1 } @{$param->{areas}};
     return      if all { defined && $_==0 } @inside;
@@ -1940,6 +1926,44 @@ sub _get_field_by_tag {
 }
 
 
+sub _get_field_by_threshold {
+    my ($selector, $obj, %opt) = @_;
+
+    croak "No value in 'threshold' selector"  if !$selector->{value};
+    my $value = _get_field_content($selector->{value}, $obj, %opt);
+
+    my @tholds =
+        sort { $a <=> $b }
+        grep {!( $_ ~~ [qw/ selector value /] )}
+        keys %$selector;
+    croak "No threshold values defined in 'threshold' selector" if !@tholds;
+
+    my $thold = last_value { $value >= $_ } @tholds;
+    return undef if !defined $thold;
+    
+    return $selector->{$thold};
+}
+
+
+sub _get_obj_area_size {
+    my ($obj) = @_;
+
+    return 0  if !$obj->{outer};
+
+    my $area_size =
+        sum
+        map {
+            Math::Polygon::Calc::polygon_area(@$_)
+            * cos( [polygon_centroid(@$_)]->[1] / 180 * 3.14159 )
+            * (40000/360)**2
+        }
+        map { $osm->get_lonlat($_) }
+        @{ $obj->{outer} };
+
+    return $area_size;
+}
+
+
 sub _get_field_by_condition {
     my ($selector, $obj, %opt) = @_;
 
@@ -1975,6 +1999,7 @@ BEGIN {
         lang => \&_get_field_by_lang,
         if   => \&_get_field_by_condition,
         tag  => \&_get_field_by_tag,
+        thresholds => \&_get_field_by_threshold,
     );
 
 sub _get_field_content {
@@ -2004,7 +2029,7 @@ sub _get_field_content {
             my $selector_key = $field->{selector};
             croak 'Undefined selector key'  if !$selector_key;
             my $selector_sub = $selector{$selector_key};
-            croak 'Unknown selector'  if !$selector_sub;
+            croak "Unknown selector '$selector_key'"  if !$selector_sub;
 
             return $selector_sub->($field, $obj, %opt);
         }
@@ -2025,7 +2050,7 @@ sub _get_result_object_params {
     my %info = %$action;
 
     # requred fields
-    for my $key ( qw/ name type / ) {
+    for my $key ( qw/ name type level_h / ) {
         next if !defined $info{$key};
         $info{$key} = _get_field_content($info{$key}, $obj);
     }
