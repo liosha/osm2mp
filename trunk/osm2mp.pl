@@ -302,7 +302,7 @@ my %trstop;
 
 say STDERR "\nProcessing relations...";
 
-if ( $flags->{routing}  &&  $flags->{restrictions} ) {
+if ( $flags->{routing} ) {
     my $add_restr_sub = sub {
         my ($relation_id, $members, $tags) = @_;
 
@@ -624,20 +624,18 @@ if ( $flags->{routing} ) {
                 my $r2 = $list[0];
 
                 # process associated restrictions
-                if ( $flags->{restrictions}  ||  $flags->{dest_signs} ) {
-                    while ( my ($relid, $tr) = each %trest )  {
-                        if ( $tr->{fr_way} eq $r2 )  {
-                            my $msg = "RelID=$relid FROM moved from WayID=$r2($tr->{fr_pos})";
-                            $tr->{fr_way}  = $r1;
-                            $tr->{fr_pos} += $#{$road{$r1}->{chain}};
-                            report( "$msg to WayID=$r1($tr->{fr_pos})", 'FIX' );
-                        }
-                        if ( $tr->{to_way} eq $r2 )  {
-                            my $msg = "RelID=$relid TO moved from WayID=$r2($tr->{to_pos})";
-                            $tr->{to_way}  = $r1;
-                            $tr->{to_pos} += $#{$road{$r1}->{chain}};
-                            report( "$msg to WayID=$r1($tr->{to_pos})", 'FIX' );
-                        }
+                while ( my ($relid, $tr) = each %trest )  {
+                    if ( $tr->{fr_way} eq $r2 )  {
+                        my $msg = "RelID=$relid FROM moved from WayID=$r2($tr->{fr_pos})";
+                        $tr->{fr_way}  = $r1;
+                        $tr->{fr_pos} += $#{$road{$r1}->{chain}};
+                        report( "$msg to WayID=$r1($tr->{fr_pos})", 'FIX' );
+                    }
+                    if ( $tr->{to_way} eq $r2 )  {
+                        my $msg = "RelID=$relid TO moved from WayID=$r2($tr->{to_pos})";
+                        $tr->{to_way}  = $r1;
+                        $tr->{to_pos} += $#{$road{$r1}->{chain}};
+                        report( "$msg to WayID=$r1($tr->{to_pos})", 'FIX' );
                     }
                 }
 
@@ -770,24 +768,24 @@ if ( $flags->{routing} ) {
                     }
 
                     #   move restrictions
-                    if ( $flags->{restrictions}  ||  $flags->{dest_signs} ) {
-                        while ( my ($relid, $tr) = each %trest )  {
-                            if (  $tr->{to_way} eq $roadid
-                              &&  $tr->{to_pos} >  $breaks[$i]   - (1 + $tr->{to_dir}) / 2
-                              &&  $tr->{to_pos} <= $breaks[$i+1] - (1 + $tr->{to_dir}) / 2 ) {
-                                my $msg = "Turn restriction RelID=$relid TO moved from $roadid($tr->{to_pos})";
-                                $tr->{to_way}  =  $id;
-                                $tr->{to_pos}  -= $breaks[$i];
-                                report( "$msg to $id($tr->{to_pos})", 'FIX' );
-                            }
-                            if (  $tr->{fr_way} eq $roadid
-                              &&  $tr->{fr_pos} >  $breaks[$i]   + ($tr->{fr_dir} - 1) / 2
-                              &&  $tr->{fr_pos} <= $breaks[$i+1] + ($tr->{fr_dir} - 1) / 2 ) {
-                                my $msg = "Turn restriction RelID=$relid FROM moved from $roadid($tr->{fr_pos})";
-                                $tr->{fr_way} =  $id;
-                                $tr->{fr_pos} -= $breaks[$i];
-                                report( "$msg to $id($tr->{fr_pos})", 'FIX' );
-                            }
+                    while ( my ($relid, $tr) = each %trest )  {
+                        if (  $tr->{to_way} eq $roadid
+                            &&  $tr->{to_pos} >  $breaks[$i]   - (1 + $tr->{to_dir}) / 2
+                            &&  $tr->{to_pos} <= $breaks[$i+1] - (1 + $tr->{to_dir}) / 2
+                        ) {
+                            my $msg = "Turn restriction RelID=$relid TO moved from $roadid($tr->{to_pos})";
+                            $tr->{to_way}  =  $id;
+                            $tr->{to_pos}  -= $breaks[$i];
+                            report( "$msg to $id($tr->{to_pos})", 'FIX' );
+                        }
+                        if (  $tr->{fr_way} eq $roadid
+                            &&  $tr->{fr_pos} >  $breaks[$i]   + ($tr->{fr_dir} - 1) / 2
+                            &&  $tr->{fr_pos} <= $breaks[$i+1] + ($tr->{fr_dir} - 1) / 2
+                        ) {
+                            my $msg = "Turn restriction RelID=$relid FROM moved from $roadid($tr->{fr_pos})";
+                            $tr->{fr_way} =  $id;
+                            $tr->{fr_pos} -= $breaks[$i];
+                            report( "$msg to $id($tr->{fr_pos})", 'FIX' );
                         }
                     }
                 }
@@ -956,7 +954,7 @@ if ( $bound && $flags->{background} && $settings{types}->{background} ) {
 ####    Writing turn restrictions
 
 
-if ( $flags->{routing} && ( $flags->{restrictions} || $flags->{dest_signs} || $flags->{barriers} ) ) {
+if ( $flags->{routing} ) {
 
     print STDERR "Writing crossroads...     ";
     print_section( 'Turn restrictions and signs' );
@@ -1243,7 +1241,6 @@ my @available_flags = (
     [ merge_roads       => 'merge same ways' ],
     [ split_roads       => 'split long and self-intersecting roads' ],
     [ fix_close_nodes   => 'enlarge distance between too close nodes' ],
-    [ restrictions      => 'process turn restrictions' ],
     [ barriers          => 'create restrictions on barrier nodes' ],
     [ disable_u_turns   => 'disable u-turns on nodes with 2 links' ],
     [ dest_signs        => 'process destination signs' ],
@@ -1651,36 +1648,34 @@ sub AddRoad {
     }
 
     # process associated turn restrictions
-    if ( $flags->{restrictions}  ||  $flags->{dest_signs} ) {
-
-        for my $relid ( @{$nodetr{$chain->[0]}} ) {
-            next unless exists $trest{$relid};
-            if ( $trest{$relid}->{fr_way} eq $orig_id ) {
-                $trest{$relid}->{fr_way} = $info->{id};
-                $trest{$relid}->{fr_dir} = -1;
-                $trest{$relid}->{fr_pos} = 0;
-            }
-            if ( $trest{$relid}->{to_way} eq $orig_id ) {
-                $trest{$relid}->{to_way} = $info->{id};
-                $trest{$relid}->{to_dir} = 1;
-                $trest{$relid}->{to_pos} = 0;
-            }
+    for my $relid ( @{$nodetr{$chain->[0]}} ) {
+        next unless exists $trest{$relid};
+        if ( $trest{$relid}->{fr_way} eq $orig_id ) {
+            $trest{$relid}->{fr_way} = $info->{id};
+            $trest{$relid}->{fr_dir} = -1;
+            $trest{$relid}->{fr_pos} = 0;
         }
-
-        for my $relid ( @{$nodetr{$chain->[-1]}} ) {
-            next unless exists $trest{$relid};
-            if ( $trest{$relid}->{fr_way} eq $orig_id ) {
-                $trest{$relid}->{fr_way} = $info->{id};
-                $trest{$relid}->{fr_dir} = 1;
-                $trest{$relid}->{fr_pos} = $#$chain;
-            }
-            if ( $trest{$relid}->{to_way} eq $orig_id ) {
-                $trest{$relid}->{to_way} = $info->{id};
-                $trest{$relid}->{to_dir} = -1;
-                $trest{$relid}->{to_pos} = $#$chain;
-            }
+        if ( $trest{$relid}->{to_way} eq $orig_id ) {
+            $trest{$relid}->{to_way} = $info->{id};
+            $trest{$relid}->{to_dir} = 1;
+            $trest{$relid}->{to_pos} = 0;
         }
     }
+
+    for my $relid ( @{$nodetr{$chain->[-1]}} ) {
+        next unless exists $trest{$relid};
+        if ( $trest{$relid}->{fr_way} eq $orig_id ) {
+            $trest{$relid}->{fr_way} = $info->{id};
+            $trest{$relid}->{fr_dir} = 1;
+            $trest{$relid}->{fr_pos} = $#$chain;
+        }
+        if ( $trest{$relid}->{to_way} eq $orig_id ) {
+            $trest{$relid}->{to_way} = $info->{id};
+            $trest{$relid}->{to_dir} = -1;
+            $trest{$relid}->{to_pos} = $#$chain;
+        }
+    }
+    
     return;
 }
 
