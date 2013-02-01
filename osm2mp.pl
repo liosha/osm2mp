@@ -1008,9 +1008,9 @@ if ( $flags->{routing} ) {
                     write_turn_restriction (\%newtr);
                 }
 
-                if (  $newtr{to_pos} > 0
+                if ( $newtr{to_pos} > 0
                   &&  !( $tr->{to_way} eq $roadid  &&  $tr->{to_dir} eq -1 )
-                  &&  $road{$roadid}->{rp} !~ /^.,.,1/ ) {
+                  &&  !$road{$roadid}->{oneway} ) {
                     $newtr{comment} = "$tr->{comment}\nSo restrict to $roadid backward";
                     $newtr{to_dir} = -1;
                     $counttrest ++;
@@ -1083,7 +1083,7 @@ exit 0;
 sub _are_roads_same {
     my ($r1, $r2) = @_;
 
-    my @plist = qw/ type name rp level_l road_ref refs address /;
+    my @plist = qw/ type name oneway toll road_class speed access_flags level_l road_ref refs address /;
     push @plist, uniq grep { /^_*[A-Z]/ } ( keys %$r1, keys %$r2 );
 
     for my $param ( @plist ) {
