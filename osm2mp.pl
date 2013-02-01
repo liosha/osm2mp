@@ -821,13 +821,13 @@ if ( $flags->{routing} ) {
         for my $node ( keys %nodid ) {
             next  if $barrier{$node};
 
-            # RouteParams=speed,class,oneway,toll,emergency,delivery,car,bus,taxi,foot,bike,truck
+            # emergency,delivery,car,bus,taxi,foot,bike,truck
             my @auto_links =
                 map { $node eq $road{$_}->{chain}->[0] || $node eq $road{$_}->{chain}->[-1]  ?  ($_)  :  ($_,$_) }
-                    grep { $road{$_}->{rp} =~ /^.,.,.,.,.,.,0/ } @{ $nodeways{$node} };
+                grep { $road{$_}->{access_flags} =~ /^.,.,0/ } @{ $nodeways{$node} };
 
             next  unless scalar @auto_links == 2;
-            next  unless scalar( grep { $road{$_}->{rp} =~ /^.,.,0/ } @auto_links ) == 2;
+            next  unless scalar( grep { !$road{$_}->{oneway} } @auto_links ) == 2;
 
             my $pos = first_index { $_ eq $node } @{ $road{$auto_links[0]}->{chain} };
             $trest{ 'ut'.$utcount++ } = {
@@ -887,40 +887,23 @@ if ( $flags->{routing} ) {
 
 
     ###    dumping roads
-
-
     print STDERR "Writing roads...          ";
 
     my $roadcount = $values->{first_road_id} || 1;
 
     while ( my ($roadid, $road) = each %road ) {
-        my ($name, $rp) = ( $road->{name}, $road->{rp} );
-        my ($type, $hlev) = ( $road->{type}, $road->{level_h} );
 
-        $roadid{$roadid} = $roadcount++;
+        my %road_info = %$road; 
+        $road_info{road_id} = $roadid{$roadid} = $roadcount++;
+        $road_info{comment} = "WayID = $roadid" . ( "\n$road->{comment}" // q{} );
 
-        $rp =~ s/^(.,.),./$1,0/     unless $flags->{oneway};
-
-        my $ref_prefix = $road->{road_ref} && $road->{refs}
-            ? $road->{road_ref} . join( q{-}, @{$road->{refs}} ) . q{ }
-            : q{};
-        my %objinfo = (
-                comment     => "WayID = $roadid" . ( $road->{comment} // q{} ),
-                type        => $type,
-                name        => $ref_prefix . ( $name || q{} ),
-                chain       => [ @{$road->{chain}} ],
-                roadid      => $roadid{$roadid},
-                routeparams => $rp,
-            );
-
-        $objinfo{level_h}       = $hlev       if $hlev;
-
-        $objinfo{DirIndicator}  = 1           if $rp =~ /^.,.,1/;
-
-        if ( $road->{mp_address} ) {
-            Utils::hash_merge( \%objinfo, $road->{mp_address} );
+        for my $i ( 0 .. $#{$road->{chain}} ) {
+            my $node = $road->{chain}->[$i];
+            next if !$nodid{$node};
+            push @{$road_info{nod}}, [ $i, $nodid{$node}, $xnode{$node} ];
         }
 
+=disable
         my @levelchain = ();
         my $prevlevel = 0;
         for my $i ( 0 .. $#{$road->{chain}} ) {
@@ -943,14 +926,14 @@ if ( $flags->{routing} ) {
         }
 
         $objinfo{HLevel0} = join( q{,}, map { "($_->[0],$_->[1])" } @levelchain)   if @levelchain;
+=cut 
 
-        # the rest object parameters (capitals!)
-        for my $key ( keys %$road ) {
-            next unless $key =~ /^_*[A-Z]/;
-            $objinfo{$key} = $road->{$key};
-        }
+        output_road( \%road_info );
 
-        WriteLine( \%objinfo );
+#        if ( $road->{address} ) {
+#            say Dump $road, \%road_info;
+#            exit;
+#        }
     }
 
     printf STDERR "%d written\n", $roadcount-1;
@@ -1104,7 +1087,7 @@ exit 0;
 sub _are_roads_same {
     my ($r1, $r2) = @_;
 
-    my @plist = qw/ type name rp level_l road_ref refs mp_address /;
+    my @plist = qw/ type name rp level_l road_ref refs address /;
     push @plist, uniq grep { /^_*[A-Z]/ } ( keys %$r1, keys %$r2 );
 
     for my $param ( @plist ) {
@@ -1200,20 +1183,6 @@ sub lcos {                      # NodeID1, NodeID2, NodeID3
 
     return -1   if ( $xx == 0);
     return (($lat2-$lat1)*($lat3-$lat2)+($lon2-$lon1)*($lon3-$lon2)*$klon**2) / sqrt($xx);
-}
-
-
-
-sub speed_code {
-    my ($spd) = @_;
-    return 7        if $spd > 120;  # no limit
-    return 6        if $spd > 100;  # 110
-    return 5        if $spd > 85;   # 90
-    return 4        if $spd > 70;   # 80
-    return 3        if $spd > 50;   # 60
-    return 2        if $spd > 30;   # 40
-    return 1        if $spd > 10;   # 20
-    return 0;                       # 5
 }
 
 
@@ -1536,7 +1505,6 @@ sub output_poi {
     $writer->output( point => { comment => $comment, opts => \%opts } );
 =cut
 
-#    say Dump $info;
 }
 
 
@@ -1559,48 +1527,16 @@ sub AddBarrier {
 
 
 
+sub output_road {
+    my ($info) = @_;
+    my %param = %$info;
 
-sub WriteLine {
-    my %param = %{$_[0]};
-    my %tag   = ref $param{tags} ? %{$param{tags}} : ();
+    return if !$info->{chain};
+    return if @{$info->{chain}} < 2;
 
-    return unless $param{chain};
+    $param{chain} = $osm->get_lonlat( $info->{chain} );
 
-    my %opts = (
-        lzoom   => $param{level_l} || '0',
-        hzoom   => $param{level_h} || '0',
-        Type    => $param{type},
-    );
-
-    my $comment = $param{comment} || q{};
-
-    while ( my ( $key, $val ) = each %tag ) {
-        
-    next if !$settings{comment}->{$key};
-        $comment .= "\n$key = $val";
-    }
-
-    $opts{chain} = $osm->get_lonlat($param{chain});
-
-    $opts{Label}       = convert_string( $param{name} )   if defined $param{name} && $param{name} ne q{};
-    $opts{RoadID}      = $param{roadid}         if exists $param{roadid};
-    $opts{RouteParams} = $param{routeparams}    if exists $param{routeparams};
-
-    for my $nod ( @{$param{nod}} ) {
-        push @{ $opts{nods} }, [ @$nod[0,1], $$nod[2] || '0' ];
-    }
-
-    for my $key ( keys %{ $param{extra_fields} } ) {
-        next if !defined $param{extra_fields}->{$key} || $param{extra_fields}->{$key} eq q{};
-        $opts{$key} = convert_string( $param{extra_fields}->{$key} );
-    }
-    for my $key ( sort keys %param ) {
-        next unless $key =~ / ^ _* [A-Z] /xms;
-        delete $opts{$key} and next if !defined $param{$key} || $param{$key} eq q{};
-        $opts{$key} = convert_string( $param{$key} );
-    }
-
-    $writer->output( road => { comment => $comment, opts => \%opts } );
+    $writer->output( road => { data => \%param } );
     return;
 }
 
@@ -1636,10 +1572,7 @@ sub AddRoad {
     $params{way_id} = $orig_id;
 
     # object comment (useless?)
-    $params{comment} = join qq{\n}, (
-        $info->{comment} // q{},
-        map {"$_ = $tags->{$_}"} grep {$settings{comment}->{$_}} sort keys %$tags,
-    );
+    $params{comment} = join qq{\n}, map {"$_ = $tags->{$_}"} grep {$settings{comment}->{$_}} sort keys %$tags;
 
     # points to determine address areas
     my $chain_size = $#{ $info->{chain} };
@@ -1647,31 +1580,23 @@ sub AddRoad {
         map { $info->{chain}->[$_] } ( floor($chain_size/3), ceil($chain_size*2/3) );
 
     # extend routeparams
-    my ($speed_class, $road_class, $is_oneway, $is_toll, @acc_flags) = split q{,}, $info->{routeparams};
-    $is_oneway = $info->{oneway}  if $info->{oneway};
-    $is_toll = $info->{toll}      if $info->{toll};
+    my ($rp_speed, $rp_class, $rp_oneway, $rp_toll, @acc_flags) = split q{,}, $info->{routeparams} || q{};
 
-    # calculate access restrictions
-    my $points = $osm->get_lonlat(\@smart_nodes);
-    @acc_flags = @{ $calc_access->get_road_flags( $tags, \@acc_flags, @$points ) };
+    $params{road_class} = $info->{road_class} // $rp_class || 0;
+    $params{oneway}     = $info->{oneway} // $rp_oneway     if $flags->{oneway};  # !!!
+    $params{toll}       = $info->{toll} // $rp_toll;
 
-    if ( $info->{name} ) {
-        my $address = _get_address( { type => 'way', id => $orig_id }, level => 'street',
-            points => \@smart_nodes, tags => $tags, street => $info->{name},
-        );
-        $params{address} = $address;
-
-        my $mp_address = $params{mp_address} = _get_mp_address($address);
-        $params{name} = $mp_address->{StreetDesc} if $mp_address->{StreetDesc};
-    }
-
-    # calculate speed class
-    my @speed_tags = (
+    # calculate speed
+    state $speed_tags = [
         [ avgspeed             => 1.0 ],
         [ 'maxspeed:practical' => 0.9 ],
         [ maxspeed             => 0.9 ],
-    );
-    for my $tag_info ( @speed_tags ) {
+    ];
+
+    # gme or garmin table: [8,20,40,56,72,93,108,128]
+    my $predicted_speed = $info->{speed} // [5,20,40,60,80,90,110,130]->[$rp_speed || 0];
+
+    for my $tag_info ( @$speed_tags ) {
         my ($key, $coef) = @$tag_info;
         my $val = $tags->{$key};
         next if !$val;
@@ -1680,12 +1605,22 @@ sub AddRoad {
         next if !$speed;
 
         $speed *= 1.61   if  $val =~ /mph$/ixms;
-
-        $params{speed} = $speed * $coef;
-        $speed_class = speed_code( $speed * $coef );
+        $predicted_speed = $speed * $coef;
+        last;
     }
 
-    $params{rp} = join q{,}, ($speed_class, $road_class, $is_oneway, $is_toll, @acc_flags);
+    $params{speed} = $predicted_speed;
+
+    # calculate access restrictions
+    my $points = $osm->get_lonlat(\@smart_nodes);
+    $params{access_flags} = join q{,}, @{ $calc_access->get_road_flags( $tags, \@acc_flags, @$points ) };
+
+    # resolve address
+    if ( $info->{name} ) {
+        $params{address} = _get_address( { type => 'way', id => $orig_id }, level => 'street',
+            points => \@smart_nodes, tags => $tags, street => $info->{name},
+        );
+    }
 
 =disabled
     # navitel-style 3d interchanges
@@ -1701,8 +1636,8 @@ sub AddRoad {
 =cut
 
     # load road
-#    $rgraph->add_road( \%params );
     $road{$info->{id}} = \%params;
+#    $rgraph->add_road( \%params );
 
     my $chain = $info->{chain};
 
@@ -2424,44 +2359,6 @@ sub _get_address {
 }
 
 
-sub _get_mp_address {
-    my ($address, %opt) = @_;
-
-    my %mp_address;
-
-    if ( $address->{house} ) {
-        $mp_address{HouseNumber} = convert_string( $address->{house} );
-    }
-
-    if ( $address->{house} || $address->{street} ) {
-        my @fields = grep {$_} map { $address->{$_} } qw/ street quarter suburb /;
-        push @fields, $address->{city}  if !@fields && $address->{city} && $address->{city};
-
-        if ( @fields && ( my $street = join q{ }, shift(@fields), map {"($_)"} @fields ) ) {
-            $mp_address{StreetDesc} = convert_string( $street );
-        }
-    }
-
-    if ( $address->{city} ) {
-        $mp_address{CityName} = convert_string( $address->{city} );
-    }
-
-    if ( $address->{region} ) {
-        my $region = join q{ }, grep {$_}
-            map { $address->{$_} && $address->{$_} } qw/ region district subdistrict /;
-        $mp_address{RegionName} = convert_string( $region );
-    }
-
-    if ( $address->{country} ) {
-        $mp_address{CountryName} = convert_string( $address->{country} );
-    }
-
-    if ( $address->{postcode} ) {
-        $mp_address{Zip} = convert_string( $address->{postcode} );
-    }
-
-    return \%mp_address;
-}
 
 
 

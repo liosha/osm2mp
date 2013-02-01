@@ -37,6 +37,9 @@ our %ATTRS = (
     ],
     areas => \@COMMON_ATTRS,
     lines => \@COMMON_ATTRS,
+    roads => [
+        @COMMON_ATTRS,
+    ],
 );
 
 
@@ -78,8 +81,10 @@ my %writer = (
     polygon     => \&_write_polygon,
     polyline    => \&_write_polyline,
     
-    # !!! todo
-    road => undef,
+    # !!! debug
+    road =>     => \&_write_road_polyline,
+    
+    # !!! to remove
     turn_restriction => undef,
     destination_sign => undef,
 );
@@ -158,6 +163,33 @@ sub _write_point {
 }
 
 
+sub _write_road_polyline {
+    my ($self, $vars) = @_;
+    my $data = $vars->{data} || {};
+
+#    use YAML; say Dump $vars; exit;
+
+    return;
+
+    return if !@{$data->{chain}};
+
+    my $shp = $self->_get_shp( roads => 'POLYLINE' );
+    my $type = $MP2SHP{3}->{lc $data->{type}} // $data->{type};
+    carp "Unknown routable type: $type"  if $type =~ /^0/;
+
+    my %record = (
+        NAME => $data->{name},
+        GRMN_TYPE => $type,
+        %{ $data->{extra_fields} || {} },
+    );
+
+    $shp->add_shape(
+        [ $data->{chain} ],
+        { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
+    );
+    return;
+}
+
 
 sub _write_polygon {
     my ($self, $vars) = @_;
@@ -191,7 +223,7 @@ sub _write_polyline {
 
     my $shp = $self->_get_shp( lines => 'POLYLINE' );
     my $type = $MP2SHP{3}->{lc $data->{type}} // $data->{type};
-    carp "Unknown area type: $type"  if $type =~ /^0/;
+    carp "Unknown line type: $type"  if $type =~ /^0/;
 
     my %record = (
         NAME => $data->{name},
