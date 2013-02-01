@@ -15,6 +15,7 @@ use autodie;
 use Carp;
 
 use Encode;
+use List::Util qw/ first /;
 use Template::Context;
 use YAML;
 
@@ -38,7 +39,11 @@ sub new {
     my ($class, %opt) = @_;
     
     my $self = bless { output => {}, version => $opt{version} }, $class;
-    my $ttc = $self->{tt_context} = Template::Context->new();
+    my $ttc = $self->{tt_context} = Template::Context->new(
+        VARIABLES => {
+            speed_code => \&_get_mp_speed_code,
+        },
+    );
 
     ##  Read options, preload templates
     my $cfg_file = $opt{templates_file} || $opt{config_file};
@@ -241,6 +246,17 @@ sub get_usage {
         [ 'ttable' => 'character conversion table' ],
     );
 }
+
+
+
+sub _get_mp_speed_code {
+    my ($speed) = @_;
+
+    state $tholds = [ 0, 10, 30, 50, 70, 85, 100, 120 ];
+    my $speed_code = first { $speed >= $tholds->[$_] } reverse (1 .. 7);
+    return $speed_code || 0;
+}
+
 
 
 1;
