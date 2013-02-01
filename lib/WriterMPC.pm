@@ -21,7 +21,7 @@ use YAML;
 
 
 our @COMMON_ATTRS = (
-    [ NAME => 'C', 250 ],
+    [ NAME => 'C', 120 ],
     [ GRMN_TYPE => 'C', 32 ],
 );
 
@@ -39,6 +39,13 @@ our %ATTRS = (
     lines => \@COMMON_ATTRS,
     roads => [
         @COMMON_ATTRS,
+        [ ROUTE_LVL   => 'N', 1 ],
+        [ SPD_LIMIT   => 'N', 3 ],
+        [ SPD_FORMAT  => 'N', 1 ],
+        [ ONE_WAY     => 'N', 1 ],
+        [ TOLL_ROAD   => 'N', 1 ],
+        [ LINK_ID     => 'N' ],
+        [ ACC_MASK    => 'C', 10 ],
     ],
 );
 
@@ -167,21 +174,30 @@ sub _write_road_polyline {
     my ($self, $vars) = @_;
     my $data = $vars->{data} || {};
 
-#    use YAML; say Dump $vars; exit;
-
-    return;
-
     return if !@{$data->{chain}};
 
     my $shp = $self->_get_shp( roads => 'POLYLINE' );
     my $type = $MP2SHP{3}->{lc $data->{type}} // $data->{type};
     carp "Unknown routable type: $type"  if $type =~ /^0/;
 
+    # !!! convert from  mp-compatible access mask
+    # emergency,delivery,car,bus,taxi,foot,bike,truck
+    my @acc_flags = map {$_ // 0} (split /,/x, $data->{access_flags})[2,3,4,9,5,6,7,9,1,0];
+
     my %record = (
         NAME => $data->{name},
-        GRMN_TYPE => $type,
-        %{ $data->{extra_fields} || {} },
+        GRMN_TYPE   => $type,
+        ROUTE_LVL   => ($data->{road_class} // -1) + 1,
+        SPD_LIMIT   => $data->{speed},
+        SPD_FORMAT  => 1, # km/h
+        ONE_WAY     => $data->{oneway},
+        TOLL_ROAD   => $data->{toll},
+        LINK_ID     => $data->{road_id},
+        ACC_MASK    => join( q{}, @acc_flags ),
+#        %{ $data->{extra_fields} || {} },
     );
+
+#    use YAML; say Dump $vars, \%record; exit;
 
     $shp->add_shape(
         [ $data->{chain} ],
