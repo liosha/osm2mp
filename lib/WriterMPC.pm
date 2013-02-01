@@ -16,6 +16,7 @@ use Encode;
 
 use Geo::Shapefile::Writer;
 use TextFilter;
+use GarminTools;
 
 use YAML;
 
@@ -46,6 +47,15 @@ our %ATTRS = (
         [ TOLL_ROAD   => 'N', 1 ],
         [ LINK_ID     => 'N' ],
         [ ACC_MASK    => 'C', 10 ],
+
+        [ L_CITY      => 'C', 64 ],
+        [ R_CITY      => 'C', 64 ],
+        [ L_STATE     => 'C', 64 ],
+        [ R_STATE     => 'C', 64 ],
+        [ L_COUNTRY   => 'C', 64 ],
+        [ R_COUNTRY   => 'C', 64 ],
+        [ L_COUNTRY   => 'C', 8 ],
+        [ R_COUNTRY   => 'C', 8 ],
     ],
 );
 
@@ -126,6 +136,7 @@ sub _get_shp {
 
 
 
+
 {
 my %addr_field = (
     STRT_ADDR   => [ q{, } => qw/ street house / ],
@@ -150,13 +161,14 @@ sub _write_point {
     );
 
     if ( my $addr = $data->{address} ) {
+        my $garmin_address = GarminTools::get_garmin_address($addr);
         while ( my ($field, $info) = each %addr_field ) {
             if ( ref $info ) {
                 my ($sep, @fields) = @$info;
-                $record{$field} = join $sep, grep {$_} map {$addr->{$_}} @fields;
+                $record{$field} = join $sep, grep {$_} map {$garmin_address->{$_}} @fields;
             }
             else {
-                $record{$field} = $addr->{$info};
+                $record{$field} = $garmin_address->{$info};
             }
         }
     }
@@ -169,6 +181,17 @@ sub _write_point {
 }
 }
 
+{
+my %addr_field = (
+    L_CITY      => 'city',
+    R_CITY      => 'city',
+    L_STATE     => 'region',
+    R_STATE     => 'region',
+    L_COUNTRY   => 'country',
+    R_COUNTRY   => 'country',
+    L_PCODE     => 'postcode',
+    R_PCODE     => 'postcode',
+);
 
 sub _write_road_polyline {
     my ($self, $vars) = @_;
@@ -197,6 +220,13 @@ sub _write_road_polyline {
 #        %{ $data->{extra_fields} || {} },
     );
 
+    if ( my $addr = $data->{address} ) {
+        my $garmin_address = GarminTools::get_garmin_address($addr);
+        while ( my ($field, $info) = each %addr_field ) {
+            $record{$field} = $garmin_address->{$info};
+        }
+    }
+
 #    use YAML; say Dump $vars, \%record; exit;
 
     $shp->add_shape(
@@ -204,6 +234,7 @@ sub _write_road_polyline {
         { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
     );
     return;
+}
 }
 
 
