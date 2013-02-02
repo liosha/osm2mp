@@ -7,7 +7,7 @@
 ## Main road network
 
 - condition:
-    - highway = motorway(?:_link)?|trunk(?:_link)?|primary(?:_link)?|secondary(?:_link)?|residential|living_street|pedestrian|service
+    - highway = (?:motorway|trunk|primary|secondary)(?:_link)?|tertiary|unclassified|residential|living_street|pedestrian|service
     - route != ferry
     - area != *
   action:
