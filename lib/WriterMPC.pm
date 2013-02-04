@@ -36,7 +36,11 @@ our %ATTRS = (
         [ PCODE => 'C', 64 ],
         [ PHONE => 'C', 64 ],
     ],
-    areas => \@COMMON_ATTRS,
+    areas => [
+        @COMMON_ATTRS,
+        [ HGT_DP_FMT => 'C', 3 ],
+        [ HGT_DP => 'N', 5 ],
+    ],
     lines => \@COMMON_ATTRS,
     roads => [
         @COMMON_ATTRS,
