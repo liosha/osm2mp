@@ -1557,7 +1557,7 @@ sub AddRoad {
 
     my $tags = $info->{tags};
     my %params = map {($_ => $info->{$_})} grep {exists $info->{$_}} (
-        qw/ id name type chain level_h maxspeed road_ref refs /,
+        qw/ id name type chain level_h maxspeed road_ref refs extra_fields /,
         grep {/_*[A-Z]/} keys %$info,
     );
 
@@ -1829,7 +1829,7 @@ sub action_load_coastline {
 
 sub _get_field_by_template_string {
     my ($template, $obj, %opt) = @_;
-    
+
     my $failed;
     $template =~ s[%(\w+)][
         my $r = name_from_list($1, $obj->{tag});
@@ -1902,10 +1902,10 @@ sub _get_field_by_condition {
     if ( $ft_config->check_condition($selector->{condition}, $obj) ) {
         croak "No 'then' key in 'if' selector"  if !exists $selector->{then};
         my $then = $selector->{then};
-        return $then if !$then;
+        return $then if !defined $then;
         return _get_field_content($then, $obj, %opt);
     }
-    elsif ( my $else = $selector->{else} ) {
+    elsif ( defined( my $else = $selector->{else} ) ) {
         return _get_field_content($else, $obj, %opt);
     }
 

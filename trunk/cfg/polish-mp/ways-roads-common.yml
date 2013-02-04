@@ -13,6 +13,8 @@
   action:
     - action: load_road
 
+      presets: [ road ]
+
       type:
         selector: if
         condition: junction = roundabout

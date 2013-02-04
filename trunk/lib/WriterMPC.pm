@@ -49,6 +49,7 @@ our %ATTRS = (
         [ TOLL_ROAD   => 'N', 1 ],
         [ LINK_ID     => 'N' ],
         [ ACC_MASK    => 'C', 10 ],
+        [ CNTRL_ACC   => 'N', 1 ],
 
         [ L_CITY      => 'C', 64 ],
         [ R_CITY      => 'C', 64 ],
@@ -221,7 +222,7 @@ sub _write_road_polyline {
         TOLL_ROAD   => $data->{toll},
         LINK_ID     => $data->{road_id},
         ACC_MASK    => join( q{}, @acc_flags ),
-#        %{ $data->{extra_fields} || {} },
+        %{ $data->{extra_fields} || {} },
     );
 
     if ( my $addr = $data->{address} ) {
