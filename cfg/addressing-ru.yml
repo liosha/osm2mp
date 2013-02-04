@@ -17,6 +17,11 @@
 
 - level: region
   tags: [ region ]
+  area_condition:
+      and:
+        - type = multipolygon|boundary
+        - boundary = administrative
+        - admin_level = 4
 
 - level: district
   tags: [ district ]
