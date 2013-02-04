@@ -50,6 +50,7 @@ our %ATTRS = (
         [ LINK_ID     => 'N' ],
         [ ACC_MASK    => 'C', 10 ],
         [ CNTRL_ACC   => 'N', 1 ],
+        [ IS_TUNNEL   => 'N', 1 ],
 
         [ L_CITY      => 'C', 64 ],
         [ R_CITY      => 'C', 64 ],
@@ -214,8 +215,6 @@ sub _write_road_polyline {
         NAME => $data->{name},
         GRMN_TYPE   => $type,
         ROUTE_LVL   => ($data->{road_class} // -1) + 1,
-        SPD_LIMIT   => $data->{maxspeed},
-        IS_LGL_SPD  => ($data->{maxspeed} ? 'Y' : 'N'),
         ROUTE_SPD   => $data->{speed},
         SPD_FORMAT  => 1, # km/h
         ONE_WAY     => $data->{oneway},

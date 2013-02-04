@@ -1083,7 +1083,7 @@ exit 0;
 sub _are_roads_same {
     my ($r1, $r2) = @_;
 
-    my @plist = qw/ type name oneway toll road_class speed maxspeed access_flags level_l road_ref refs address /;
+    my @plist = qw/ type name oneway toll road_class speed access_flags road_ref refs address extra_fields /;
     push @plist, uniq grep { /^_*[A-Z]/ } ( keys %$r1, keys %$r2 );
 
     for my $param ( @plist ) {
@@ -1557,7 +1557,7 @@ sub AddRoad {
 
     my $tags = $info->{tags};
     my %params = map {($_ => $info->{$_})} grep {exists $info->{$_}} (
-        qw/ id name type chain level_h maxspeed road_ref refs extra_fields /,
+        qw/ id name type chain level_h road_ref refs extra_fields /,
         grep {/_*[A-Z]/} keys %$info,
     );
 
@@ -1984,7 +1984,7 @@ sub _get_result_object_params {
     state $fields = [ qw/
         name type level_l level_h
         routeparams road_ref
-        oneway toll maxspeed reverted
+        oneway toll reverted
     / ];
     for my $key ( @$fields ) {
         next if !defined $info{$key};
