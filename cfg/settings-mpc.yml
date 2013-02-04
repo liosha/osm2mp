@@ -23,10 +23,19 @@ phone:          [ 'contact:phone', phone ]
 --- presets
 ---
 contacts:
-    PHONE: %phone
+  PHONE: %phone
 
 building:
-    NAME: %house
+  NAME: %house
+
+road:
+  CNTRL_ACC:
+    selector: if
+    condition:
+      or:
+          - highway = motorway
+          - motorroad = yes|1|true
+    then: 1
 
 
 ################################
