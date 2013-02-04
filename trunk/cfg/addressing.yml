@@ -14,9 +14,19 @@
 
 - level: country
   tags: [ country ]
+  area_condition:
+      and:
+        - type = multipolygon|boundary
+        - boundary = administrative
+        - admin_level = 2
 
 - level: region
   tags: [ region, state ]
+  area_condition:
+      and:
+        - type = multipolygon|boundary
+        - boundary = administrative
+        - admin_level = 4
 
 - level: district
   tags: [ district, county ]
