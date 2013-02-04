@@ -51,10 +51,10 @@ road:
     condition: tunnel = yes|1|true
     then: 1
 
-  IS_LGL_SPD: Y
+  IS_LGL_SPD: 1
   SPD_LIMIT:
     selector: if
-    condition: maxspeed = *
+    condition: maxspeed = \d.*
     then: %maxspeed
     else:
       selector: if

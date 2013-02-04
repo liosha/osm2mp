@@ -46,9 +46,9 @@ our %ATTRS = (
         @COMMON_ATTRS,
         [ ROUTE_LVL   => 'N', 1 ],
         [ SPD_LIMIT   => 'N', 3 ],
-        [ IS_LGL_SPD  => 'L' ],
-        [ ROUTE_SPD   => 'N', 3 ],
         [ SPD_FORMAT  => 'N', 1 ],
+        [ IS_LGL_SPD  => 'N', 1 ],
+        [ ROUTE_SPD   => 'N', 3 ],
         [ ONE_WAY     => 'N', 1 ],
         [ TOLL_ROAD   => 'N', 1 ],
         [ LINK_ID     => 'N' ],
@@ -227,6 +227,9 @@ sub _write_road_polyline {
         ACC_MASK    => join( q{}, @acc_flags ),
         %{ $data->{extra_fields} || {} },
     );
+
+    # old-style speed limit
+    $record{SPD_LIMIT} = delete $record{ROUTE_SPD}  if !( $record{IS_LGL_SPD} ~~ [qw/ 1 Y T /] );
 
     if ( my $addr = $data->{address} ) {
         my $garmin_address = GarminTools::get_garmin_address($addr);
