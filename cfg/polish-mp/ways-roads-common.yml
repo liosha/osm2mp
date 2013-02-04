@@ -119,6 +119,23 @@
         pedestrian: '0,0,0,0,0,1,1,1,1,0,0,1'
         service: '0,0,0,0,0,0,0,0,0,0,0,0'
 
+      maxspeed:
+        selector: if
+        condition: maxspeed = *
+        then: %maxspeed
+        else:
+          selector: if
+          condition:
+            or:
+                - highway = living_street
+                - liveng_street = yes|true|1
+          then: 20
+          else:
+            selector: if
+            condition: inside_city
+            then: 60
+            else: 90
+
       oneway: &2
         selector: if
         condition: oneway = no|false|0
