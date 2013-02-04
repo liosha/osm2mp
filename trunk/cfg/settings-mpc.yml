@@ -27,6 +27,15 @@ contacts:
 
 building:
   NAME: %house
+  HGT_DP_FMT: M
+  HGT_DP: !!perl/code |-
+    {
+      my $tags = shift()->{tag};
+      return int(extract_number($tags->{'height'}))  if $tags->{'height'};
+      return int(extract_number($tags->{'building:height'}))  if $tags->{'building:height'};
+      return int(extract_number($tags->{'building:levels'})*3)  if $tags->{'building:levels'};
+      return 2; # default
+    }
 
 road:
   CNTRL_ACC:
