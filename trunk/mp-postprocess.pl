@@ -9,10 +9,23 @@ use utf8;
 use Encode;
 use Encode::Locale;
 
+use Getopt::Long;
+
+
 
 Encode::Locale::decode_argv();
+GetOptions(
+    'e|encoding=s' => \my $encoding,
+);
+
+
 while ( my $file = encode locale_fs => shift @ARGV ) {
-    process_mp( $file, 'cp1251' );
+    if ( $file =~ /\.dbf$/ix ) {
+        process_dbf( $file, encoding => $encoding);
+    }
+    else {
+        process_mp( $file, encoding => $encoding || 'cp1251' );
+    }
 }
 
 
@@ -20,9 +33,41 @@ exit;
 
 
 
+sub process_dbf {
+    my ($file, %opt) = @_;
+    my $encoding = $opt{encoding} || 'utf8';
+
+    require XBase;
+    my $dbf = XBase->new($file)  or die XBase->errstr();
+
+    for my $n ( 0 .. $dbf->last_record() ) {
+        my $rec = $dbf->get_record_as_hash($n);
+        my %update;
+
+        for my $field ( qw/ NAME STATE L_STATE R_STATE / ) {
+            next if !$rec->{$field};
+            my $val = decode $encoding => ($update{$field} || $rec->{$field});
+            $update{$field} = encode $encoding => _clear_region($val);
+        }
+        
+        for my $field ( qw/ NAME / ) {
+            next if !$rec->{$field};
+            my $val = decode $encoding => ($update{$field} || $rec->{$field});
+            $update{$field} = encode $encoding => _clear_street($val);
+        }
+
+        next if !%update;
+        $dbf->update_record_hash($n, %update);
+    }
+
+    $dbf->close();
+
+    return;
+}
 
 sub process_mp {
-    my ($file, $encoding) = @_;
+    my ($file, %opt) = @_;
+    my $encoding = $opt{encoding} || 'utf8';
 
     rename $file, "$file.old";
 
@@ -61,7 +106,7 @@ sub process_mp {
     close $in;
     close $out;
 
-#    unlink "$file.old";
+    unlink "$file.old";
 
     return;
 }
@@ -124,7 +169,7 @@ sub _clear_street {
 
 sub _clear_region {
     my ($line) = @_;
-    
+
     $line =~ s/область/обл./;
     $line =~ s/район/р-н/;
     $line =~ s/Автономный округ - Югра автономный округ/АО (Югра)/;
