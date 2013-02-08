@@ -19,7 +19,7 @@ use Encode;
 use Geo::Parse::PolishFormat;
 use List::Util qw{ min max };
 use List::MoreUtils qw{ all any };
-use Math::Polygon::Tree  0.041  qw{ polygon_centroid };
+use Math::Polygon::Tree  0.06  qw{ polygon_centroid };
 
 use Data::Dump 'dd';
 
@@ -76,7 +76,7 @@ my $callback = sub {
     say 'Type=0x0D';
     say "Label=$number $obj->{attributes}->{StreetDesc}";
 
-    my ( $lat, $lon ) = polygon_centroid( @{ $obj->{attributes}->{Data0} } );
+    my ($lat, $lon) = @{ polygon_centroid($obj->{attributes}->{Data0}) };
     printf "Data0=(%f,%f),(%f,%f)\n", $lat-$FAKE_ROAD_LENGTH, $lon, $lat+$FAKE_ROAD_LENGTH, $lon;
 
     say 'RoadID=' . $roadid++;

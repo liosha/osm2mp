@@ -55,7 +55,7 @@ use List::MoreUtils qw{ all notall none any first_index last_value uniq };
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
-use Math::Polygon::Tree  0.05  qw{ polygon_centroid };
+use Math::Polygon::Tree  0.061  qw{ :all };
 use Tree::R;
 
 use OSM;
@@ -1691,7 +1691,7 @@ sub output_area {
     }
 
     #   test if inside bounds
-    my @inside = map { $bound ? $bound->{tree}->contains_polygon_rough( $_ ) : 1 } @{$param->{areas}};
+    my @inside = map { $bound ? $bound->{tree}->contains_polygon_rough($_) : 1 } @{$param->{areas}};
     return      if all { defined && $_==0 } @inside;
 
     if ( $bound  &&  $flags->{less_gpc}  &&  any { !defined } @inside ) {
@@ -1885,7 +1885,7 @@ sub _get_obj_area_size {
         sum
         map {
             Math::Polygon::Calc::polygon_area(@$_)
-            * cos( [polygon_centroid(@$_)]->[1] / 180 * 3.14159 )
+            * cos( polygon_centroid($_)->[1] / 180 * 3.14159 )
             * (40000/360)**2
         }
         map { $osm->get_lonlat($_) }
@@ -2162,14 +2162,14 @@ sub action_address_poi {
 
     my $outer_chain = $obj->{outer}->[0];
     my $outer = $osm->get_lonlat($outer_chain);
-    my @bbox = Math::Polygon::Calc::polygon_bbox( @$outer );
+    my $bbox = polygon_bbox($outer);
 
     my @poilist;
-    $poi_rtree->query_completely_within_rect( @bbox, \@poilist );
+    $poi_rtree->query_completely_within_rect( @$bbox, \@poilist );
 
     for my $id ( @poilist ) {
         next unless exists $poi{$id};
-        next unless Math::Polygon::Tree::polygon_contains_point( $osm->get_lonlat($id), @$outer );
+        next unless polygon_contains_point($osm->get_lonlat($id), $outer);
 
         my $house_address = $addresser->get_address_tags($obj->{tag});
 
@@ -2212,7 +2212,7 @@ sub action_write_poi {
                 }
             }
 
-            $coords = [ polygon_centroid( @{ $osm->get_lonlat( $obj->{chain} || $obj->{outer}->[0] ) } ) ];
+            $coords = polygon_centroid($osm->get_lonlat( $obj->{chain} || $obj->{outer}->[0] ));
             last;
         }
     }

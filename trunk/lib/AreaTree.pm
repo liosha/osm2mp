@@ -13,7 +13,7 @@ use Carp;
 use List::Util qw/ first reduce /;
 
 use base qw/ Tree::R /;
-use Math::Polygon::Tree;
+use Math::Polygon::Tree 0.06;
 
 
 
@@ -28,7 +28,7 @@ Add area to tree.
 sub add_area {
     my ($self, $object, $outers, $inners ) = @_;
 
-    my @bbox = Math::Polygon::Tree::polygon_bbox( map { @$_ } @$outers );
+    my $bbox = Math::Polygon::Tree::polygon_bbox([ map { @$_ } @$outers ]);
     my $area = {
         data  => $object,
         bound => Math::Polygon::Tree->new( @$outers ),
@@ -38,7 +38,7 @@ sub add_area {
         ),
     };
 
-    $self->insert( $area, @bbox );
+    $self->insert( $area, @$bbox );
     $self->{_count} ++;
     return;
 }
