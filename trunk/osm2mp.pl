@@ -55,7 +55,7 @@ use List::MoreUtils qw{ all notall none any first_index last_value uniq };
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
-use Math::Polygon::Tree  0.065  qw{ :all };
+use Math::Polygon::Tree  0.066  qw{ :all };
 use Tree::R;
 
 use OSM;
@@ -1690,39 +1690,42 @@ sub output_area {
         $param->{comment} .= "\n$key = $val";
     }
 
-    #   test if inside bounds
-    my @inside = map { $bound ? $bound->{tree}->contains_polygon_rough($_, inaccurate=>1) : 1 } @{$param->{areas}};
-    return      if all { defined && $_==0 } @inside;
+    if ( $bound ) {
+        # check if inside and clip if necessary
+        my $is_clipping = !$opt{no_clip} && $flags->{clip_areas};
+        my $need_to_clip;
+        my @inside_contours =
+            grep {
+                my $poly = $_;
+                my $is_inside = $bound->{tree}->contains_polygon_rough($poly, inaccurate=>1);
+                $is_inside = $bound->{tree}->contains_points($poly)
+                    if !defined $is_inside && $is_clipping && $flags->{less_gpc};
+                $need_to_clip = 1  if !defined $is_inside && $is_clipping;
+                !defined $is_inside || $is_inside;
+            }
+            @{$param->{areas}};
+        return  if !@inside_contours;
 
-    if ( $bound  &&  $flags->{less_gpc}  &&  any { !defined } @inside ) {
-        @inside = map { $bound->{tree}->contains_points( @$_ ) } @{$param->{areas}};
-        return  if all { defined && $_ == 0 } @inside;
+        if ( $need_to_clip ) {
+            my $gpc = new_gpc();
+            $gpc->add_polygon($_, 0)  for @{$param->{areas}};
+            $gpc->add_polygon($_, 1)  for @{$param->{holes} || []};
+
+            @inside_contours = $gpc->clip_to($bound->{gpc}, 'INTERSECT')->get_polygons();
+            return if !@inside_contours;
+        }
+            
+        $param->{contours} = [ sort { $#$b <=> $#$a } grep { @$_ >= 3 } @inside_contours ];
+    }
+    else {
+        $param->{contours} = [ @{$param->{areas}}, @{$param->{holes} || []} ];
     }
 
-
-    $param->{holes} = []      unless $param->{holes};
-    my @plist = grep { scalar @$_ > 3 } ( @{$param->{areas}}, @{$param->{holes}} );
-
-    #   clip
-    if ( $bound && $flags->{clip_areas} && !$opt{no_clip} && any { !defined } @inside ) {
-        my $gpc = new_gpc();
-
-        for my $area ( @{$param->{areas}} ) {
-            $gpc->add_polygon( $area, 0 );
-        }
-        for my $hole ( @{$param->{holes}} ) {
-            $gpc->add_polygon( $hole, 1 );
-        }
-
-        $gpc    =  $gpc->clip_to( $bound->{gpc}, 'INTERSECT' );
-        @plist  =  sort  { $#{$b} <=> $#{$a} }  $gpc->get_polygons();
-    }
-
-    return    unless @plist;
+    # todo: need rearrange contours!
 
     ## Navitel polygon addressing
     if ( $flags->{navitel} && $param->{tags}->{'addr:housenumber'} ) {
-        $param->{address} = _get_address($obj, point => $plist[0]->[0]);
+        $param->{address} = _get_address($obj, point => $param->{contours}->[0]->[0]);
     }
 
 =disable
@@ -1737,9 +1740,6 @@ sub output_area {
         }
     }
 =cut
-
-    # !!! need rearranging contours
-    $param->{contours} = [ grep { @$_ >= 3 } @plist ];
 
     $writer->output( polygon => { data => $param } );
     return;
