@@ -13,7 +13,7 @@ use autodie;
 use Carp;
 
 use Math::Polygon;
-use Math::Polygon::Tree 0.05;
+use Math::Polygon::Tree 0.065;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 
 
@@ -56,7 +56,7 @@ sub new {
 
     my $self = {
         chain => $boundary,
-        tree  => Math::Polygon::Tree->new($boundary),
+        tree  => Math::Polygon::Tree->new($boundary, {prepare_rough=>1}),
         gpc   => $gpc,
     };  
 

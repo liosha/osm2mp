@@ -55,7 +55,7 @@ use List::MoreUtils qw{ all notall none any first_index last_value uniq };
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
-use Math::Polygon::Tree  0.061  qw{ :all };
+use Math::Polygon::Tree  0.065  qw{ :all };
 use Tree::R;
 
 use OSM;
@@ -1691,7 +1691,7 @@ sub output_area {
     }
 
     #   test if inside bounds
-    my @inside = map { $bound ? $bound->{tree}->contains_polygon_rough($_) : 1 } @{$param->{areas}};
+    my @inside = map { $bound ? $bound->{tree}->contains_polygon_rough($_, inaccurate=>1) : 1 } @{$param->{areas}};
     return      if all { defined && $_==0 } @inside;
 
     if ( $bound  &&  $flags->{less_gpc}  &&  any { !defined } @inside ) {
