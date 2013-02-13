@@ -13,6 +13,7 @@ use autodie;
 use Carp;
 
 use Encode;
+use List::MoreUtils qw/ uniq /;
 
 use Geo::Shapefile::Writer;
 use TextFilter;
@@ -105,8 +106,6 @@ my %writer = (
     point       => \&_write_point,
     polygon     => \&_write_polygon,
     polyline    => \&_write_polyline,
-    
-    # !!! debug
     road =>     => \&_write_road_polyline,
     
     # !!! to remove
@@ -215,8 +214,13 @@ sub _write_road_polyline {
     # emergency,delivery,car,bus,taxi,foot,bike,truck
     my @acc_flags = map {$_ // 0} (split /,/x, $data->{access_flags})[2,3,4,9,5,6,7,9,1,0];
 
+    state $mp_ref = { '~[0x04]' => '{M', '~[0x05]' => '{P', '~[0x06]' => '{O' };
+    my $ref_prefix = $data->{road_ref} && $data->{refs}
+        ? ( $mp_ref->{$data->{road_ref}} // $data->{road_ref} ) . join q{-}, sort uniq @{$data->{refs}}
+        : undef;
+
     my %record = (
-        NAME => $data->{name},
+        NAME => join( q{ }, grep { defined && length } ( $ref_prefix, $data->{name} ) ),
         GRMN_TYPE   => $type,
         ROUTE_LVL   => ($data->{road_class} // -1) + 1,
         ROUTE_SPD   => $data->{speed},
