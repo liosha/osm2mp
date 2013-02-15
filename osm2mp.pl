@@ -55,7 +55,7 @@ use List::MoreUtils qw{ all notall none any first_index last_value uniq };
 
 use Math::Polygon;
 use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
-use Math::Polygon::Tree  0.066  qw{ :all };
+use Math::Polygon::Tree  0.068  qw{ :all };
 use Tree::R;
 
 use OSM;
@@ -1703,8 +1703,7 @@ sub output_area {
                 $need_to_clip = 1  if !defined $is_inside && $is_clipping;
                 !defined $is_inside || $is_inside;
             }
-            @{$param->{areas}};
-        return  if !@inside_contours;
+            ( @{$param->{areas}}, @{$param->{holes} || []} );
 
         if ( $need_to_clip ) {
             my $gpc = new_gpc();
@@ -1712,9 +1711,10 @@ sub output_area {
             $gpc->add_polygon($_, 1)  for @{$param->{holes} || []};
 
             @inside_contours = $gpc->clip_to($bound->{gpc}, 'INTERSECT')->get_polygons();
-            return if !@inside_contours;
         }
             
+        return  if !@inside_contours;
+
         $param->{contours} = [ sort { $#$b <=> $#$a } grep { @$_ >= 3 } @inside_contours ];
     }
     else {
