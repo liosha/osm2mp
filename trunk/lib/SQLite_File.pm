@@ -193,7 +193,7 @@ $SQLite_File::MAXPEND = 250;
 
 our $AUTOKEY = 0;
 # for providing DB_File seq functionality
-our $AUTOPK = 0;
+our $AUTOPK= 0;
 
 # statement tables
 our %STMT = (
@@ -360,7 +360,7 @@ END
 
     # restore PK counter
     my ($max_pk) = $self->dbh->selectrow_array("SELECT max(pk) FROM hash");
-    $AUTOPK = $max_pk || 0;
+    $self->{AUTOPK} = $max_pk || $AUTOPK;
 
     return $self;
 }
@@ -1700,7 +1700,7 @@ sub _wring_SEQIDX {
 sub _get_pk {
     my $self = shift;
     # do the primary key auditing for the cursor functions...
-    return ++$AUTOPK;
+    return ++$self->{AUTOPK};
 }
 
 # =head2 _last_pk
