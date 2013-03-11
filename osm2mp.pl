@@ -880,18 +880,20 @@ if ( $flags->{routing} ) {
     }
 
 
+    # numbering roads
+    my $roadcount = $values->{first_road_id} || 1;
+    while ( my ($roadid, $road) = each %road ) {
+        $road->{road_id} = $roadid{$roadid} = $roadcount++;
+        $road->{comment} = "WayID = $roadid" . ( "\n$road->{comment}" // q{} );
+    }
+
 
 
     ###    dumping roads
     print STDERR "Writing roads...          ";
 
-    my $roadcount = $values->{first_road_id} || 1;
-
     while ( my ($roadid, $road) = each %road ) {
-
         my %road_info = %$road; 
-        $road_info{road_id} = $roadid{$roadid} = $roadcount++;
-        $road_info{comment} = "WayID = $roadid" . ( "\n$road->{comment}" // q{} );
 
         for my $i ( 0 .. $#{$road->{chain}} ) {
             my $node = $road->{chain}->[$i];
@@ -924,12 +926,10 @@ if ( $flags->{routing} ) {
         $objinfo{HLevel0} = join( q{,}, map { "($_->[0],$_->[1])" } @levelchain)   if @levelchain;
 =cut 
 
+#        say Dump \%road_info; exit;
         output_road( \%road_info );
 
-#        if ( $road->{address} ) {
-#            say Dump $road, \%road_info;
-#            exit;
-#        }
+
     }
 
     printf STDERR "%d written\n", $roadcount-1;
