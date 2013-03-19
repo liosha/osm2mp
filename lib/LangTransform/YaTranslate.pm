@@ -27,6 +27,11 @@ sub init {
     for my $tr ( get_transformers() ) {
         $callback{register_transformer}->($tr);
     }
+
+    $callback{register_getopt}->([
+        'lt-yatr-cache-dir=s' => \$LangTransform::YaTranslate::Cache::CACHE_DIR,
+        'lt-yatr-cache-dir <dir>' => 'directory to store cache',
+    ]);
     
     return;
 }
@@ -93,12 +98,14 @@ package LangTransform::YaTranslate::Cache;
 
 use Encode;
 use Fcntl qw(O_CREAT O_RDWR);
+use FindBin;
 
 our @ENGINES = (
     [ SQLite_File   => 'sqlite' ],
     [ DB_File       => 'dbfile' ],
 );
 
+our $CACHE_DIR = $ENV{YATR_CACHE_DIR} // $FindBin::Bin // q{.};
 
 sub new {
     my $class = shift;
@@ -117,7 +124,7 @@ sub _get_cache {
 
         last if eval {
             require "$package.pm";
-            tie %cache, $package => "$self->{id}.$ext", O_CREAT | O_RDWR;
+            tie %cache, $package => "$CACHE_DIR/$self->{id}.$ext", O_CREAT | O_RDWR;
             1;
         }
     }
