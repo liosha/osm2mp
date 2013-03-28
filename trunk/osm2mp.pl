@@ -1861,7 +1861,7 @@ sub _get_field_by_threshold {
     my ($selector, $obj, %opt) = @_;
 
     croak "No value in 'threshold' selector"  if !$selector->{value};
-    my $value = _get_field_content($selector->{value}, $obj, %opt);
+    my $value = _get_field_content($selector->{value}, $obj, %opt) // 0;
 
     my @tholds =
         sort { $a <=> $b }
