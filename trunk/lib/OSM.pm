@@ -23,6 +23,7 @@ use Geo::Openstreetmap::Parser;
 Create new instance.
 Options:
     fh - file handler to load data
+    storage_engine - package to use as storage, default: OSM::Hash
 
 =cut
 
@@ -32,7 +33,7 @@ sub new {
     my $self = bless {}, $class;
     
     my $storage_engine = $opt{storage_engine} || 'OSM::Hash';
-    eval "require $storage_engine";
+    eval "require $storage_engine"  or croak $@;
 
     $self->{storage} = $storage_engine->new();
 
