@@ -15,10 +15,14 @@
 ##    * List::MoreUtils
 ##    * Math::Polygon
 ##    * Math::Polygon::Tree
-##    * Math::Geometry::Planar::GPC::Polygon
 ##    * Tree::R
 ##    * Geo::Openstreetmap::Parser
+##
+##  Optionally required: 
 ##    * Template
+##    * Geo::Shapefile::Writer
+##    * Math::Geometry::Planar::GPC::Polygon or Math::Geometry::Planar::GPC::PolygonXS
+##    * Text::Unidecode
 ##
 ##  See http://search.cpan.org/ or use PPM (Perl package manager) or CPAN module
 ##
@@ -54,7 +58,6 @@ use List::Util qw{ first reduce sum min max };
 use List::MoreUtils qw{ all notall none any first_index last_value uniq };
 
 use Math::Polygon;
-use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 use Math::Polygon::Tree  0.068  qw{ :all };
 use Tree::R;
 
@@ -67,6 +70,7 @@ use Coastlines;
 use TransportAccess;
 use RouteGraph;
 use AreaTree;
+use Clipper;
 
 
 
@@ -1706,7 +1710,7 @@ sub output_area {
             ( @{$param->{areas}}, @{$param->{holes} || []} );
 
         if ( $need_to_clip ) {
-            my $gpc = new_gpc();
+            my $gpc = Clipper->new();
             $gpc->add_polygon($_, 0)  for @{$param->{areas}};
             $gpc->add_polygon($_, 1)  for @{$param->{holes} || []};
 
