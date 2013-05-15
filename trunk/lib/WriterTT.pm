@@ -16,6 +16,8 @@ use Carp;
 
 use Encode;
 use List::Util qw/ first /;
+
+use Template;
 use Template::Context;
 use YAML;
 
