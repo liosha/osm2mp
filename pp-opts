@@ -1,0 +1,14 @@
+-I lib
+-M JSON
+-M LWP::Simple
+-M Math::Geometry::Planar::GPC::PolygonXS
+-M Geo::Openstreetmap::Parser
+
+-M Text::Unidecode
+-M Unicode::Normalize
+-M PerlIO::encoding
+-M Encode::Byte
+
+-M WriterTT
+-M WriterMPC
+-M OSM::Hash
