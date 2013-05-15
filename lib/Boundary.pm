@@ -14,8 +14,8 @@ use Carp;
 
 use Math::Polygon;
 use Math::Polygon::Tree 0.065;
-use Math::Geometry::Planar::GPC::Polygon 'new_gpc';
 
+use Clipper;
 
 
 
@@ -51,7 +51,7 @@ sub new {
         $boundary = \@bound;
     }
 
-    my $gpc = new_gpc();
+    my $gpc = Clipper->new();
     $gpc->add_polygon( $boundary, 0 );
 
     my $self = {
