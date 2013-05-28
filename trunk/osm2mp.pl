@@ -1782,7 +1782,7 @@ sub _is_object_inside_city {
         my ($p1, $p2) =
             map { $osm->get_lonlat($chain->[$_]) }
             ( floor($#$chain/3), ceil($#$chain*2/3) );
-        return $cityside_area->find_area([ ($p1->[0]+$p2->[0])/2, ($p1->[1]+$p2->[1])/2 ]);
+        return $cityside_area->find_area($p1) && $cityside_area->find_area($p2);
     }
 
     return;
