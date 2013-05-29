@@ -1719,7 +1719,13 @@ sub output_area {
             
         return  if !@inside_contours;
 
-        $param->{contours} = [ sort { $#$b <=> $#$a } grep { @$_ >= 3 } @inside_contours ];
+        my %area;
+        $param->{contours} = [
+            sort { $area{$b} <=> $area{$a} }
+            map { $area{$_} = Math::Polygon::Calc::polygon_area(@$_); $_ }  # caching
+            grep { @$_ >= 3 }
+            @inside_contours
+        ];
     }
     else {
         $param->{contours} = [ @{$param->{areas}}, @{$param->{holes} || []} ];
@@ -1865,7 +1871,7 @@ sub _get_field_by_threshold {
     my ($selector, $obj, %opt) = @_;
 
     croak "No value in 'threshold' selector"  if !$selector->{value};
-    my $value = _get_field_content($selector->{value}, $obj, %opt) // 0;
+    my $value = extract_number(_get_field_content($selector->{value}, $obj, %opt)) || 0;
 
     my @tholds =
         sort { $a <=> $b }
