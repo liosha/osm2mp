@@ -1694,11 +1694,14 @@ sub output_area {
         $param->{comment} .= "\n$key = $val";
     }
 
+    my @contours = ( @{$param->{areas}}, @{$param->{holes} || []} );
+
     if ( $bound ) {
-        # check if inside and clip if necessary
         my $is_clipping = !$opt{no_clip} && $flags->{clip_areas};
         my $need_to_clip;
-        my @inside_contours =
+
+        # check if inside
+        @contours =
             grep {
                 my $poly = $_;
                 my $is_inside = $bound->{tree}->contains_polygon_rough($poly, inaccurate=>1);
@@ -1707,35 +1710,49 @@ sub output_area {
                 $need_to_clip = 1  if !defined $is_inside && $is_clipping;
                 !defined $is_inside || $is_inside;
             }
-            ( @{$param->{areas}}, @{$param->{holes} || []} );
+            @contours;
 
+        # clip if necessary
         if ( $need_to_clip ) {
             my $gpc = Clipper->new();
             $gpc->add_polygon($_, 0)  for @{$param->{areas}};
             $gpc->add_polygon($_, 1)  for @{$param->{holes} || []};
 
-            @inside_contours = $gpc->clip_to($bound->{gpc}, 'INTERSECT')->get_polygons();
+            @contours = $gpc->clip_to($bound->{gpc}, 'INTERSECT')->get_polygons();
         }
-            
-        return  if !@inside_contours;
-
-        my %area;
-        $param->{contours} = [
-            sort { $area{$b} <=> $area{$a} }
-            map { $area{$_} = Math::Polygon::Calc::polygon_area(@$_); $_ }  # caching
-            grep { @$_ >= 3 }
-            @inside_contours
-        ];
-    }
-    else {
-        $param->{contours} = [ @{$param->{areas}}, @{$param->{holes} || []} ];
     }
 
-    # todo: need rearrange contours!
+    # sort contours by its area
+    my %area;
+    @contours =
+        sort {
+            my $aa = $area{$a} //= Math::Polygon::Calc::polygon_area(@$a);
+            my $bb = $area{$b} //= Math::Polygon::Calc::polygon_area(@$b);
+            $bb <=> $aa;
+        }
+        grep { @$_ >= 3 }
+        @contours;
 
+    return  if !@contours;
+    
     ## Navitel polygon addressing
     if ( $flags->{navitel} && $param->{tags}->{'addr:housenumber'} ) {
         $param->{address} = _get_address($obj, point => $param->{contours}->[0]->[0]);
+    }
+
+
+    # rearrange contours
+    my @polygons;
+    while ( @contours ) {
+        my @polygon = ( shift @contours );
+        @contours =
+            grep {
+                my $is_inner = Math::Polygon::Tree::polygon_contains_point( $_->[0], $polygon[0] );
+                push @polygon, $_  if $is_inner;
+                !$is_inner;
+            }
+            @contours;
+        push @polygons, \@polygon;
     }
 
 =disable
@@ -1751,7 +1768,11 @@ sub output_area {
     }
 =cut
 
-    $writer->output( polygon => { data => $param } );
+    for my $polygon ( @polygons ) {
+        $param->{contours} = $polygon;
+        $writer->output( polygon => { data => $param } );
+    }
+
     return;
 }
 
