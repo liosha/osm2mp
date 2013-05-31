@@ -1737,7 +1737,7 @@ sub output_area {
     
     ## Navitel polygon addressing
     if ( $flags->{navitel} && $param->{tags}->{'addr:housenumber'} ) {
-        $param->{address} = _get_address($obj, point => $param->{contours}->[0]->[0]);
+        $param->{address} = _get_address($obj, point => $contours[0]->[0]);
     }
 
 
