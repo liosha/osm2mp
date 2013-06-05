@@ -1731,10 +1731,11 @@ sub output_area {
             $bb <=> $aa;
         }
         grep { @$_ >= 3 }
+        map { push @$_, $_->[0] unless $_->[0] ~~ $_->[-1]; $_ } # closing contours
         @contours;
 
     return  if !@contours;
-    
+
     ## Navitel polygon addressing
     if ( $flags->{navitel} && $param->{tags}->{'addr:housenumber'} ) {
         $param->{address} = _get_address($obj, point => $contours[0]->[0]);
