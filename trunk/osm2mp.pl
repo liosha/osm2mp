@@ -2347,7 +2347,7 @@ sub print_section {
 sub extract_number {
     my $str = shift;
     return unless defined $str;
-    my ($number) = $str =~ /^ ( [-+]? \d+ ) /x;
+    my ($number) = $str =~ /^ ( [-+]? \d+ (?: \. \d*)? ) /x;
     return $number;
 }
 
