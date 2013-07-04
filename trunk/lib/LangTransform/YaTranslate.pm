@@ -2,7 +2,7 @@ package LangTransform::YaTranslate;
 
 # $Id$
 
-# ABSTRACT: translation using translate.yandex.ru api
+# ABSTRACT: translation using translate.yandex.ru api v1.5
 
 use 5.010;
 use strict;
@@ -11,23 +11,26 @@ use utf8;
 
 use Carp;
 
+use File::Slurp;
 use JSON;
 use LWP::Simple;
 use URI::Escape;
 
 
-our $PRIORITY = -1;  # don't use without explicit selection
-our $API_URL = 'http://translate.yandex.net/api/v1/tr.json';
+our $PRIORITY = 2;
+our $API_URL = 'https://translate.yandex.net/api/v1.5/tr.json';
+our $API_KEY;
 
 our $DEBUG;
 
 
 sub init {
     my (undef, %callback) = @_;
-    for my $tr ( get_transformers() ) {
-        $callback{register_transformer}->($tr);
-    }
 
+    $callback{register_getopt}->([
+        'lt-yatr-key=s' => sub { _set_api_key($_[1]); $callback{register_transformer}->($_) for get_transformers() },
+        'lt-yatr-key <key>' => 'api key or @keyfile',
+    ]);
     $callback{register_getopt}->([
         'lt-yatr-cache-dir=s' => \$LangTransform::YaTranslate::Cache::CACHE_DIR,
         'lt-yatr-cache-dir <dir>' => 'directory to store cache',
@@ -37,9 +40,33 @@ sub init {
 }
 
 
+sub _set_api_key {
+    my ($key) = @_;
+    if ( my ($file) = $key =~ / ^ \@ (.*) /xms ) {
+        $key = read_file $file;
+    }
+
+    $API_KEY = $key;
+    return;
+}
+
+
+sub _api_request {
+    my ($method, %arg) = @_;
+    return if !$API_KEY;
+
+    my $request = "$API_URL/$method?key=$API_KEY" . join( q{}, map { "&$_=" . uri_escape_utf8($arg{$_}) } keys %arg );
+    say STDERR $request  if $DEBUG;
+
+    my $response = get $request;
+    my $result = decode_json($response);
+    return $result;
+}
+
+
 sub _get_langs {
-    my $api_response = get "$API_URL/getLangs";
-    my $dirs = decode_json($api_response)->{dirs};
+    my $api_response = _api_request('getLangs');
+    my $dirs = $api_response->{dirs};
     croak "Bad api response"  if ref $dirs ne 'ARRAY';
 
     return map {[ split /-/x ]} @$dirs;
@@ -51,19 +78,16 @@ sub _make_transformer {
     my $base_url = "$API_URL/translate?lang=$from-$to&text=";
     my $cache = LangTransform::YaTranslate::Cache->new("yatr-$from-$to");
 
+    my $lang = "$from-$to";
     return sub {
         my ($text) = @_;
 
         my $cached_result = $cache->get($text);
         return $cached_result  if defined $cached_result;
 
-        my $url = $base_url . uri_escape_utf8($text);
-        say STDERR $url  if $DEBUG;
-        my $api_response = get $url;
-        my $response = eval { decode_json $api_response };
-
+        my $response = eval { _api_request( translate => ( lang => $lang, text => $text ) ) };
         if ( !defined $response ) {
-            warn "request: $url\nresponse: $response";
+            warn "yatr: failed request $lang for $text";
             return undef;
         }
 
