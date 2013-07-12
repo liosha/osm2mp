@@ -21,16 +21,18 @@ our $PRIORITY = 2;
 our $API_URL = 'https://translate.yandex.net/api/v1.5/tr.json';
 our $API_KEY;
 
-our $DEBUG;
+our $DEBUG = $ENV{YATR_DEBUG};
 
 
 sub init {
     my (undef, %callback) = @_;
 
+    my $init_cb = $callback{register_transformer};
     $callback{register_getopt}->([
-        'lt-yatr-key=s' => sub { _set_api_key($_[1]); $callback{register_transformer}->($_) for get_transformers() },
+        'lt-yatr-key=s' => sub { _set_api_key($_[1]); $init_cb->($_) for get_transformers() },
         'lt-yatr-key <key>' => 'api key or @keyfile',
     ]);
+
     $callback{register_getopt}->([
         'lt-yatr-cache-dir=s' => \$LangTransform::YaTranslate::Cache::CACHE_DIR,
         'lt-yatr-cache-dir <dir>' => 'directory to store cache',
@@ -56,16 +58,18 @@ sub _api_request {
     return if !$API_KEY;
 
     my $request = "$API_URL/$method?key=$API_KEY" . join( q{}, map { "&$_=" . uri_escape_utf8($arg{$_}) } keys %arg );
-    say STDERR $request  if $DEBUG;
+    say STDERR "request: $request"  if $DEBUG;
 
     my $response = get $request;
+    say STDERR "response: ${\( $response // q{} )}\n" if $DEBUG;
+
     my $result = decode_json($response);
     return $result;
 }
 
 
 sub _get_langs {
-    my $api_response = _api_request('getLangs');
+    my $api_response = _api_request( getLangs => ( ui => 'en' ) );
     my $dirs = $api_response->{dirs};
     croak "Bad api response"  if ref $dirs ne 'ARRAY';
 
@@ -75,19 +79,19 @@ sub _get_langs {
 
 sub _make_transformer {
     my ($from, $to) = @_;
-    my $base_url = "$API_URL/translate?lang=$from-$to&text=";
-    my $cache = LangTransform::YaTranslate::Cache->new("yatr-$from-$to");
+    
+    my $lang_pair = "$from-$to";
+    my $cache = LangTransform::YaTranslate::Cache->new("yatr-$lang_pair");
 
-    my $lang = "$from-$to";
     return sub {
         my ($text) = @_;
 
         my $cached_result = $cache->get($text);
         return $cached_result  if defined $cached_result;
 
-        my $response = eval { _api_request( translate => ( lang => $lang, text => $text ) ) };
+        my $response = eval { _api_request( translate => ( lang => $lang_pair, text => $text ) ) };
         if ( !defined $response ) {
-            warn "yatr: failed request $lang for $text";
+            warn "yatr: failed request $lang_pair for $text";
             return undef;
         }
 
