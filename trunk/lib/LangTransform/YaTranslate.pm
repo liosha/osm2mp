@@ -14,6 +14,7 @@ use Carp;
 use File::Slurp;
 use JSON;
 use LWP::Simple;
+use LWP::Protocol::https;
 use URI::Escape;
 
 
@@ -45,7 +46,8 @@ sub init {
 sub _set_api_key {
     my ($key) = @_;
     if ( my ($file) = $key =~ / ^ \@ (.*) /xms ) {
-        $key = read_file $file;
+        my $data = read_file $file;
+        ($key) = $data =~ /(\S+)/xms;
     }
 
     $API_KEY = $key;
