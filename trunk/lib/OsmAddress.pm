@@ -222,16 +222,21 @@ sub get_lang_address {
 
     my %address;
     while ( my ($level, $keys) = each %{ $self->{addr_tags} } ) {
-        my $value = first {defined} map { $lang_select->get_value($_, $tags) } @$keys;
+
+        my $value;
+        if ( my $table = $self->{rename}->{$level} ) {
+            my $def_value = first {defined} map {$tags->{$_}} @$keys;
+            $def_value //= first {defined} map {$self->{default_address}->{$_}} @$keys;
+            
+            my $vtags = $table->{uc $def_value};
+            $value = $lang_select->get_value(q{}, $vtags)  if $vtags;
+        }
+
+        $value //= first {defined} map { $lang_select->get_value($_, $tags) } @$keys;
         if ( !$value && %{ $self->{default_address} } ) {
             $value = first {defined} map { $lang_select->get_value($_, $self->{default_address}) } @$keys;
         }
         next if !$value;
-
-        if ( my $table = $self->{rename}->{$level} ) {
-            my $vtags = $table->{uc $value};
-            $value = $lang_select->get_value(q{}, $vtags) // $value  if $vtags;
-        }
 
         $address{$level} = $value;
     }
