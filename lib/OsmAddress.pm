@@ -227,9 +227,11 @@ sub get_lang_address {
         if ( my $table = $self->{rename}->{$level} ) {
             my $def_value = first {defined} map {$tags->{$_}} @$keys;
             $def_value //= first {defined} map {$self->{default_address}->{$_}} @$keys;
-            
-            my $vtags = $table->{uc $def_value};
-            $value = $lang_select->get_value(q{}, $vtags)  if $vtags;
+
+            if ( $def_value ) {
+                my $vtags = $table->{uc $def_value};
+                $value = $lang_select->get_value(q{}, $vtags)  if $vtags;
+            }
         }
 
         $value //= first {defined} map { $lang_select->get_value($_, $tags) } @$keys;
