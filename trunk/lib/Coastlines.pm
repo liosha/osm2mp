@@ -262,7 +262,8 @@ sub _segment_intersection {
     my $Ua = $Ca / $Z;
     my $Ub = $Cb / $Z;
 
-    return  if  $Ua < 0  ||  $Ua > 1  ||  $Ub < 0  ||  $Ub > 1;
+    # skip if intersection on $p12!
+    return  if  $Ua < 0  ||  $Ua > 1  ||  $Ub < 0  ||  $Ub >= 1;
 
     return [ $p11->[0] + ( $p12->[0] - $p11->[0] ) * $Ub,
              $p11->[1] + ( $p12->[1] - $p11->[1] ) * $Ub ];
