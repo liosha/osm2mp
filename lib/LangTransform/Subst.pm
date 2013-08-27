@@ -225,7 +225,102 @@ our %DATA = (
         },
         preprocess => sub { my $t = NFC shift(); $t =~ s/\x{200E}//gxms; return $t },
     },
+    ( map {("${_}_en_iso" => _get_iso_tr($_))} qw/ ru be uk bg mk / ),
 );
+
+
+BEGIN {
+my %ISO9B = (
+    'А' => 'a',
+    'Б' => 'b',
+    'В' => 'v',
+    'Г' => { ru => 'g', be => 'h', uk => 'h', bg => 'g', mk => 'g' },
+    'Ѓ' => { mk => 'g`' },
+    'Ґ' => { uk => 'g`' },
+    'Д' => 'd',
+    'Е' => 'e',
+    'Ё' => { ru => 'yo', be => 'yo' },
+    'Є' => { uk => 'ye' },
+    'Ж' => 'zh',
+    'З' => 'z',
+    'S' => { mk => 'z`' },
+    'И' => { ru => 'i', uk => 'y`', bg => 'i', mk => 'i' },
+    'Й' => { ru => 'j', be => 'j', uk => 'j', bg => 'j' },
+    'J' => { mk => 'j' },   
+    'I' => {
+        ru => { 'I(?=[^аеёиоуыэюяIѢѴ])' => 'i`', 'I' => 'i' },
+        be => 'i',
+        uk => 'i',
+        bg => { 'I(?=[^аеёиоуюяIЪѢѴѪ])' => 'i`', 'I' => 'i' } },
+    'Ї' => { uk => 'yi' },
+    'К' => 'k',
+    'Ќ' => { mk => 'k`' },
+    'Л' => 'l',
+    'Љ' => { mk => 'l`' },
+    'М' => 'm',
+    'Н' => 'n',
+    'Њ' => { mk => 'n`' },
+    'О' => 'o',
+    'П' => 'p',
+    'Р' => 'r',
+    'С' => 's',
+    'Т' => 't',
+    'У' => 'u',
+    'Ў' => { be => 'u`' },              
+    'Ф' => 'f',
+    'Х' => 'x',
+    'Ц' => { map {($_ => { 'Ц(?=[ЕЁЄИЙJIЇЫЭЮЯѢѴ])' => 'c', 'Ц' => 'cz' })} qw/ ru be uk bg mk / },
+    'Ч' => 'ch',
+    'Џ' => { mk => 'dh' },
+    'Ш' => 'sh',
+    'Щ' => { ru => 'shh', uk => 'shh', bg => 'sth' },
+    'Ъ' => { ru => '``', bg => 'a`' },
+    'Ы' => { ru => 'y`', be => 'y`' },              
+    'Ь' => { map {($_ => '`')} qw/ ru be uk bg / },
+    'Э' => { ru => 'e`', be => 'e`' },              
+    'Ю' => { map {($_ => 'yu')} qw/ ru be uk bg / },
+    'Я' => { map {($_ => 'ya')} qw/ ru be uk bg / },
+    '’' => q{'},
+    'Ѣ' => { ru => 'ye', bg => 'ye' },
+    'Ѳ' => { ru => 'fh', bg => 'fh' },
+    'Ѵ' => { ru => 'yh', bg => 'yh' },
+    'Ѫ' => { bg => 'о`' },
+    '№' => '#',
+);
+
+sub _get_iso_tr {
+    my ($lang) = @_;
+
+    my %table;
+    while ( my ($key, $rule) = each %ISO9B ) {
+        if ( !ref $rule ) {
+            $table{$key} = $rule;
+            next;
+        }
+
+        $rule = $rule->{$lang};
+        next if !$rule;
+
+        if ( !ref $rule ) {
+            $table{$key} = $rule;
+        }
+        else {
+            %table = (%table, %$rule);
+        }
+    }
+
+    return {
+        from  => $lang,
+        to    => 'en',
+        same_upcase => 1,
+        table => \%table,
+    };
+}
+}
+
+
+# http://ru.wikipedia.org/wiki/ISO_9
+
 
 sub init {
     my (undef, %callback) = @_;
