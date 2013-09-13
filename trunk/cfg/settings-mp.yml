@@ -42,7 +42,23 @@ building:
         return $levels || undef;
       }
 
-road: {}
+road:
+    TrafficLanes: !!perl/code |-
+      {
+        my $tags = shift()->{tag};
+        my $lt = extract_number($tags->{'lanes'}) // q{};
+        my $lf = extract_number($tags->{'lanes:forward'}) // q{};
+        my $lb = extract_number($tags->{'lanes:backward'}) // q{};
+
+        if ( $lt ) {
+            $lf = length $lb ? $lt-$lb : int($lt/2+0.5)  if !length $lf;
+            $lb = length $lf ? $lt-$lf : int($lt/2)      if !length $lb;
+        }
+
+        return undef  if !length $lf || !length $lb || $lt<0 || $lb<0;
+        return "$lf,0,0,$lb,0,0";
+      }
+
 
 ################################
 ##  Tags to skip
