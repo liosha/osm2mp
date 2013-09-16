@@ -14,6 +14,7 @@ use Carp;
 
 use Encode;
 use List::MoreUtils qw/ uniq /;
+use Math::Polygon;
 
 use Geo::Shapefile::Writer;
 use TextFilter;
@@ -269,8 +270,18 @@ sub _write_polygon {
         %{ $data->{extra_fields} || {} },
     );
 
+    # assume first contour is outer and all others are inners
+    # fix direction
+    my $is_outer = 1;
+    my @rings = map {
+            my $need_cw = $is_outer;
+            $is_outer = 0;
+            my $is_cw = Math::Polygon->new(@$_)->isClockwise();
+            $is_cw == $need_cw ? $_ : [ reverse @$_ ];
+        } @{$data->{contours}};
+
     $shp->add_shape(
-        $data->{contours},
+        \@rings,
         { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
     );
     return;
