@@ -17,12 +17,15 @@
   action:
     - action: force_external_node
 
-#- condition:
-#    - only_node
-#    - building = entrance
-#  action:
-#    - action: load_building_entrance
-#      name: %entrance
+- condition:
+    - only_node
+    - or:
+        - building = entrance
+        - entrance = *
+    - ref = *
+  action:
+    - action: load_building_entrance
+      name: %entrance
 
 - condition:
     - only_node

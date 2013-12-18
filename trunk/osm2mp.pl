@@ -1756,19 +1756,6 @@ sub output_area {
         push @polygons, \@polygon;
     }
 
-=disable
-    ## Navitel entrances
-    if ( $flags->{navitel} ) {
-        for my $entr ( @{ $param->{entrance} } ) {
-            next  if !is_inside_bounds( $entr->[0] );
-            push @{$opts{EntryPoint}}, {
-                coords => [ split /\s*,\s*/xms, $entr->[0] ],
-                name => convert_string( $entr->[1] )
-            };
-        }
-    }
-=cut
-
     for my $polygon ( @polygons ) {
         $param->{contours} = $polygon;
         $writer->output( polygon => { data => $param } );
