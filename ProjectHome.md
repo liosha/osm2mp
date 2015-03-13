@@ -1,0 +1,1 @@
+Converts OpenStreetMap data into Polish map format (MP).
