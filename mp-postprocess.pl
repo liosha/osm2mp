@@ -8,6 +8,7 @@ use utf8;
 
 use Encode;
 use Encode::Locale;
+use match::smart;
 
 use Getopt::Long;
 
@@ -85,17 +86,17 @@ sub process_mp {
 
         my ($tag, $val) = $line =~ / ^ \s* (\w+) \s* = \s* (.*\S) \s* $ /xms;
 
-        if ( $tag ~~ [ qw/ Label StreetDesc CityName RegionName / ] ) {
+        if ( $tag |M| [ qw/ Label StreetDesc CityName RegionName / ] ) {
             $val = _clear_bad_symbols($val);
         }
 
         #   region name
-        if ( $tag ~~ [ qw/DefaultRegionCountry RegionName/ ] ) {
+        if ( $tag |M| [ qw/DefaultRegionCountry RegionName/ ] ) {
             $val = _clear_region($val);
         }
 
         #   street names
-        if ( ($object eq 'POLYLINE' && $tag ~~ 'Label') || $tag ~~ 'StreetDesc' ) {
+        if ( ($object eq 'POLYLINE' && $tag |M| 'Label') || $tag |M| 'StreetDesc' ) {
             $val = _clear_street($val);
         }
 

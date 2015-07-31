@@ -11,6 +11,7 @@ use warnings;
 
 use Carp;
 use List::MoreUtils qw/ any all notall first_index /;
+use match::simple;
 
 
 our $RULE_CONDITIONS_KEY = 'condition';
@@ -61,7 +62,7 @@ sub add_rules {
             $condition = $self->_precompile_condition($condition);
         }
 
-        if ( $rule->{id} && (my $index = first_index { $_->{id} ~~ $rule->{id} } @$rules) >= 0 ) {
+        if ( $rule->{id} && (my $index = first_index { $_->{id} && $_->{id} eq $rule->{id} } @$rules) >= 0 ) {
             $rules->[$index] = $rule;
         }
         else {
@@ -107,8 +108,8 @@ sub _precompile_condition {
     # id codes
     if ( my ($neg, $cond_id) = $condition =~ / (\~?) \s* (\w+) /xms ) {
         return sub { !!$neg xor &{$self->{conditions}->{$cond_id}} }  if exists $self->{conditions}->{$cond_id};
-        return sub { !!$neg xor shift()->{type} ~~ 'Node' }     if $cond_id ~~ 'only_node';
-        return sub { !!$neg xor !(shift()->{type} ~~ 'Node') }  if $cond_id ~~ [ 'only_way', 'no_node' ];    
+        return sub { !!$neg xor shift()->{type} |M| 'Node' }     if $cond_id |M| 'only_node';
+        return sub { !!$neg xor !(shift()->{type} |M| 'Node') }  if $cond_id |M| [ 'only_way', 'no_node' ];    
     }
 
     croak "Unknown condition: $condition";
@@ -131,16 +132,17 @@ sub process {
         # !!! use check_condition
         next if notall { $_->($object) } @{ $rule->{$RULE_CONDITIONS_KEY} };
         for my $action ( @{ $rule->{$RULE_ACTIONS_KEY} } ) {
-            given ( ref $action ) {
-                when ('CODE') {
-                    $action->($object);
-                }
-                when ('HASH') {
-                    my $action_code = $action->{action};
-                    croak "Unknown action: $action_code" if !exists $self->{actions}->{$action_code};
-                    $self->{actions}->{$action_code}->($object, $action);
-                }
-                croak "Invalid action type: $_";
+            my $type = ref $action;
+            if ($type eq 'CODE') {
+                $action->($object);
+            }
+            elsif ($type eq 'HASH') {
+                my $action_code = $action->{action};
+                croak "Unknown action: $action_code" if !exists $self->{actions}->{$action_code};
+                $self->{actions}->{$action_code}->($object, $action);
+            }
+            else {
+                croak "Invalid action type: $type";
             }
         }
     }

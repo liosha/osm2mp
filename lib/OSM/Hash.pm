@@ -9,6 +9,7 @@ use strict;
 use warnings;
 
 use Carp;
+use match::smart;
 
 
 
@@ -175,7 +176,7 @@ sub iterate_ways {
         else {
             my $chain = $self->{chains}->{$id};
             $way_info{chain} = $chain;
-            $way_info{outer} = [ $chain ]  if $chain->[0] ~~ $chain->[-1];
+            $way_info{outer} = [ $chain ]  if $chain->[0] |M| $chain->[-1];
         }
 
         $sub->(\%way_info);

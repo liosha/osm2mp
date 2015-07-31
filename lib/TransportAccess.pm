@@ -51,7 +51,7 @@ sub new {
     for my $tag_info ( @$access_tags ) {
         my $tag = $tag_info->{key} || $tag_info->{tag}
             or croak "No tag name";
-        my $mode = $tag_info->{mode} ~~ -1 ? 0 : 1;
+        my $mode = ($tag_info->{mode} || 0) == -1 ? 0 : 1;
         my $flags = _parse_flag_string( $tag_info->{val} );
 
         push @{ $self->{tags} }, [ $tag, $mode, $flags ];

@@ -14,6 +14,7 @@ use Carp;
 
 use Encode;
 use List::MoreUtils qw/ uniq /;
+use match::simple;
 use Math::Polygon;
 
 use Geo::Shapefile::Writer;
@@ -234,7 +235,7 @@ sub _write_road_polyline {
     );
 
     # old-style speed limit
-    $record{SPD_LIMIT} = delete $record{ROUTE_SPD}  if !( $record{IS_LGL_SPD} ~~ [qw/ 1 Y T /] );
+    $record{SPD_LIMIT} = delete $record{ROUTE_SPD}  if !( ($record{IS_LGL_SPD} || 0) |M| [qw/ 1 Y T /] );
 
     if ( my $addr = $data->{address} ) {
         my $garmin_address = GarminTools::get_garmin_address($addr);

@@ -19,6 +19,7 @@ use Encode;
 use Geo::Parse::PolishFormat;
 use List::Util qw{ min max };
 use List::MoreUtils qw{ all any };
+use match::simple;
 use Math::Polygon::Tree  0.06  qw{ polygon_centroid };
 
 use Data::Dump 'dd';
@@ -62,7 +63,7 @@ my $callback = sub {
 
     return
         unless $obj->{name} eq 'POLYGON' && $obj->{attributes}->{Type} eq '0x13'
-            || $obj->{name} eq 'POI'     && $obj->{attributes}->{Type} ~~ [ '0x2800', '0x6100' ];
+            || $obj->{name} eq 'POI'     && $obj->{attributes}->{Type} |M| [ '0x2800', '0x6100' ];
 
     return
         unless all { exists $obj->{attributes}->{$_} } qw{ HouseNumber StreetDesc CityName };

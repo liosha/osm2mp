@@ -12,6 +12,7 @@ use autodie;
 
 use Carp;
 use List::MoreUtils qw/ all notall first_index /;
+use match::simple;
 
 use Geo::Openstreetmap::Parser;
 
@@ -92,7 +93,7 @@ sub load {
                 my $obj = shift;
                 my $type = $obj->{tag}->{type}  or return;
 
-                if ( $type ~~ [ qw/ multipolygon boundary / ] ) {
+                if ( $type eq 'multipolygon' || $type eq 'boundary' ) {
                     my ($mpoly, $oldstyle_id) = $self->_merge_multipolygon($obj);
                     if ( $mpoly ) {
                         my $mpid = "r$obj->{attr}->{id}";
@@ -129,12 +130,12 @@ sub load {
 sub _merge_multipolygon {
     my ($self, $obj) = @_;
 
-    my @members = grep { $_->{type} ~~ 'way' } @{ $obj->{member} };
+    my @members = grep { $_->{type} eq 'way' } @{ $obj->{member} };
 
-    my @outer_ids = map { $_->{ref} }  grep { $_->{role} ~~ [ q{}, 'outer', 'exclave' ] }  @members;
+    my @outer_ids = map { $_->{ref} }  grep { $_->{role} |M| [ q{}, 'outer', 'exclave' ] }  @members;
     return if !@outer_ids;
 
-    my @inner_ids = map { $_->{ref} }  grep { $_->{role} ~~ [ 'inner', 'enclave' ] }  @members;
+    my @inner_ids = map { $_->{ref} }  grep { $_->{role} |M| [ 'inner', 'enclave' ] }  @members;
 
     my ($oldstyle_id) = (@outer_ids == 1 && @inner_ids) ? @outer_ids : ();
 
@@ -211,7 +212,7 @@ sub add_way {
     # filter out dupes and non-existent nodes 
     my $prev;
     my @chain =
-        grep { my $is_dupe = $_ ~~ $prev; $prev = $_; !$is_dupe }
+        grep { my $is_dupe = $prev && $_ eq $prev; $prev = $_; !$is_dupe }
         grep { $self->is_node_exists($_) }
         @{ $obj->{nd} || [] };
     
@@ -234,9 +235,9 @@ sub add_relation {
     my @members =
         grep {
             my ($id, $t) = @$_{'ref', 'type'};
-            $t ~~ 'node'     ? $self->is_node_exists($id) :
-            $t ~~ 'way'      ? $self->is_way_exists($id) :
-            $t ~~ 'relation' ? 1 : # exists $self->{tags}->{relation}->{$id} :
+            $t eq 'node'     ? $self->is_node_exists($id) :
+            $t eq 'way'      ? $self->is_way_exists($id) :
+            $t eq 'relation' ? 1 : # exists $self->{tags}->{relation}->{$id} :
             0;
         }
         @{ $obj->{member} || [] };

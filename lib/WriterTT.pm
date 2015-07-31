@@ -16,6 +16,7 @@ use Carp;
 
 use Encode;
 use List::Util qw/ first /;
+use match::simple;
 
 use Template;
 use Template::Context;
@@ -215,7 +216,7 @@ sub _register_codepage {
 sub get_getopt {
     my ($self) = @_;
     return (
-        'o|output=s'            => sub { $self->{output_base} = $_[1] ~~ '-' ? q{} : $_[1] // q{} },
+        'o|output=s'            => sub { $self->{output_base} = $_[1] |M| '-' ? q{} : $_[1] // q{} },
         'multiout=s'            => \$self->{multiout},
         'header|mp-header=s%'   => sub { $self->{header_opts}->{$_[1]} = $_[2] },
         'mapid=s'               => sub { $self->{header_opts}->{ID} = $_[1] },

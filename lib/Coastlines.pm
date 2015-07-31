@@ -120,8 +120,8 @@ sub generate_polygons {
                 my $ipoint = _segment_intersection( $bound->[$i], $bound->[$i+1], $p1, $p2 );
 
                 if ( $ipoint ) {
-                    if ( any { $_->{type} eq 'end'  &&  $_->{point} ~~ $ipoint } @tbound ) {
-                        @tbound = grep { !( $_->{type} eq 'end'  &&  $_->{point} ~~ $ipoint ) } @tbound;
+                    if ( any { $_->{type} eq 'end'  &&  _is_point_eq($_->{point}, $ipoint) } @tbound ) {
+                        @tbound = grep { !( $_->{type} eq 'end'  &&  _is_point_eq($_->{point}, $ipoint) ) } @tbound;
                     }
                     else {
                         $boundcross ++;
@@ -140,8 +140,8 @@ sub generate_polygons {
                 $ipoint  = _segment_intersection( $bound->[$i], $bound->[$i+1], $p1, $p2 );
 
                 if ( $ipoint ) {
-                    if ( any { $_->{type} eq 'start'  &&  $_->{point} ~~ $ipoint } @tbound ) {
-                        @tbound = grep { !( $_->{type} eq 'start'  &&  $_->{point} ~~ $ipoint ) } @tbound;
+                    if ( any { $_->{type} eq 'start'  &&  _is_point_eq($_->{point}, $ipoint) } @tbound ) {
+                        @tbound = grep { !( $_->{type} eq 'start'  &&  _is_point_eq($_->{point}, $ipoint) ) } @tbound;
                     }
                     else {
                         $boundcross ++;
@@ -200,7 +200,7 @@ sub generate_polygons {
     my %island;
 
     while ( my ($key, $chain) = each %$coast ) {
-        next if !($chain->[0] ~~ $chain->[-1]);
+        next if !_is_point_eq($chain->[0], $chain->[-1]);
 
         # filter huge polygons to avoid cgpsmapper's crash
         #if ( $hugesea && scalar @$chain_ref > $hugesea ) {
@@ -242,10 +242,15 @@ sub generate_polygons {
 }
 
 
+sub _is_point_eq {
+    my ($p1, $p2) = @_;
+    return $p1->[0] == $p2->[0] && $p1->[1] == $p2->[1];
+}
+
 
 
 sub _segment_length {
-  my ($p1,$p2) = @_;
+  my ($p1, $p2) = @_;
   return sqrt( ($p2->[0] - $p1->[0])**2 + ($p2->[1] - $p1->[1])**2 );
 }
 

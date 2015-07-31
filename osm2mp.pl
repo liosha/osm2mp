@@ -56,6 +56,7 @@ use Encode;
 use Encode::Locale;
 use List::Util qw{ first reduce sum min max };
 use List::MoreUtils qw{ all notall none any first_index last_value uniq };
+use match::smart;
 
 use Math::Polygon;
 use Math::Polygon::Tree  0.068  qw{ :all };
@@ -160,8 +161,8 @@ for my $item ( @load_items ) {
         YAML::LoadFile $file;
     };
     while ( my ( $key, $data ) = each %cfgpart ) {
-        $ft_config->add_rules( $key => $data )      if $type ~~ 'features';
-        $settings{$key} = $data                     if $type ~~ 'settings';
+        $ft_config->add_rules( $key => $data )      if $type eq 'features';
+        $settings{$key} = $data                     if $type eq 'settings';
     }
 }
 
@@ -228,7 +229,7 @@ my $lang_select = LangSelect->new(
 ####    Loading OSM data
 
 my $infile = shift @ARGV;
-my ($in, $stream_msg) = $infile ~~ '-'
+my ($in, $stream_msg) = $infile eq '-'
     ? ( *STDIN, 'STDIN' )
     : ( do{ open( my $fh, '<', $infile ); $fh }, "file $infile" );
 
@@ -317,7 +318,7 @@ if ( $flags->{routing} ) {
         return if !$from_member;
 
         my $to_member = first { $_->{type} eq 'way' && $_->{role} eq 'to' } @$members;
-        $to_member //= $from_member  if $tags->{restriction} ~~ 'no_u_turn';
+        $to_member //= $from_member  if ($tags->{restriction} || 0) eq 'no_u_turn';
         return if !$to_member;
 
         my $via_member = first { $_->{type} eq 'node' && $_->{role} eq 'via' } @$members;
@@ -363,7 +364,7 @@ if ( $flags->{routing} && $flags->{dest_signs} ) {
         my $to_member = first { $_->{type} eq 'way' && $_->{role} eq 'to' } @$members;
         return if !$to_member;
 
-        my $via_member = first { $_->{type} eq 'node' && $_->{role} ~~ [qw/ sign intersection /] } @$members;
+        my $via_member = first { $_->{type} eq 'node' && $_->{role} |M| [qw/ sign intersection /] } @$members;
         return if !$via_member;
 
         my $name = name_from_list( destination => $tags );
@@ -435,10 +436,10 @@ if ( $flags->{street_relations} ) {
             my $tag_ref = $osm->get_tags($type => $ref);
             next if !$tag_ref;
 
-            if ( %house_tag && $role ~~ [ qw/ house address / ] ) {
+            if ( %house_tag && $role |M| [ qw/ house address / ] ) {
                 $osm->set_tags( $type, $ref, { %$tag_ref, %house_tag } );
             }
-            elsif ( %street_tag && $role ~~ 'street' ) {
+            elsif ( %street_tag && $role |M| 'street' ) {
                 $osm->set_tags( $type, $ref, { %$tag_ref, %street_tag } );
             }
         }
@@ -454,7 +455,7 @@ if ( $flags->{road_shields} ) {
     my $add_shield_sub = sub {
         my ($relation_id, $members, $tags) = @_;
 
-        return if !( $tags->{route} ~~ 'road' );
+        return if !( $tags->{route} |M| 'road' );
 
         my @ref = grep {$_} @$tags{'ref', 'int_ref'};
         return if !@ref;
@@ -474,7 +475,7 @@ if ( $flags->{transport_stops} ) {
     my $add_stop_sub = sub {
         my ($relation_id, $members, $tags) = @_;
 
-        return if !( $tags->{route} ~~ [ qw/ bus / ] );
+        return if !( $tags->{route} |M| [ qw/ bus / ] );
 
         my $ref = $tags->{ref};
         return if !$ref;
@@ -709,7 +710,11 @@ if ( $flags->{routing} ) {
         my $countlong = 0;
         my $countrest = 0;
 
-        while ( my ($roadid, $road) = each %road ) {
+        my @roadids = keys %road;
+        my $road_i = -1;
+        while ( ++$road_i < scalar @roadids ) {
+            my $roadid = $roadids[$road_i];
+            my $road = $road{$roadid};
             my $break   = 0;
             my @breaks  = ();
             my $rnod    = 1;
@@ -763,6 +768,7 @@ if ( $flags->{routing} ) {
                     my $id = $roadid.'/'.($i+1);
                     report( sprintf( "Added road %s, nodes from %d to %d\n", $id, $breaks[$i], $breaks[$i+1] ), 'FIX' );
 
+                    push @roadids, $id;
                     $road{$id} = { %{$road{$roadid}} };
                     $road{$id}->{chain} = [ @{$road->{chain}}[$breaks[$i] .. $breaks[$i+1]] ];
 
@@ -1096,11 +1102,11 @@ sub _are_roads_same {
         return 0 if ref $p1 ne ref $p2;
 
         if ( !ref $p1 || ref $p1 eq 'ARRAY' ) {
-            return 0 if !( $p1 ~~ $p2 );
+            return 0 if !( $p1 |M| $p2 );
         }
         elsif ( ref $p1 eq 'HASH' ) {
-            return 0 if !( [ sort keys %$p1 ] ~~ [ sort keys %$p2 ] );
-            return 0 if !all { $p1->{$_} ~~ $p2->{$_} } keys %$p1;
+            return 0 if !( [ sort keys %$p1 ] |M| [ sort keys %$p2 ] );
+            return 0 if !all { $p1->{$_} |M| $p2->{$_} } keys %$p1;
         }
     }
     
@@ -1731,7 +1737,7 @@ sub output_area {
             $bb <=> $aa;
         }
         grep { @$_ >= 3 }
-        map { push @$_, $_->[0] unless $_->[0] ~~ $_->[-1]; $_ } # closing contours
+        map { push @$_, $_->[0] unless $_->[0] |M| $_->[-1]; $_ } # closing contours
         @contours;
 
     return  if !@contours;
@@ -1884,7 +1890,7 @@ sub _get_field_by_threshold {
 
     my @tholds =
         sort { $a <=> $b }
-        grep {!( $_ ~~ [qw/ selector value /] )}
+        grep {!( $_ |M| [qw/ selector value /] )}
         keys %$selector;
     croak "No threshold values defined in 'threshold' selector" if !@tholds;
 
@@ -1958,34 +1964,34 @@ sub _get_field_content {
 
     return $field if !defined $field || !length $field;
 
-    for ( ref $field ) {
-        # string: resolve templates
-        when (q{}) {
-            return _get_field_by_template_string($field, $obj, %opt);
+    my $type = ref $field;
+    # string: resolve templates
+    if ($type eq q{}) {
+        return _get_field_by_template_string($field, $obj, %opt);
+    }
+    # sub: execute
+    elsif ($type eq 'CODE') {
+        return $field->($obj);
+    }
+    # array: select first succeed result
+    elsif ($type eq 'ARRAY') {
+        for my $subfield ( @$field ) {
+            my $text = _get_field_content($subfield, $obj, empty_failed => 1);
+            return $text  if defined $text && length $text;
         }
-        # sub: execute 
-        when ('CODE') {
-            return $field->($obj);
-        }
-        # array: select first succeed result
-        when ('ARRAY') {
-            for my $subfield ( @$field ) {
-                my $text = _get_field_content($subfield, $obj, empty_failed => 1);
-                return $text  if defined $text && length $text;
-            }
-            return undef;
-        }
-        # special selector, based on 'selector' key
-        when ('HASH') {
-            my $selector_key = $field->{selector};
-            croak 'Undefined selector key'  if !$selector_key;
-            my $selector_sub = $selector{$selector_key};
-            croak "Unknown selector '$selector_key'"  if !$selector_sub;
+        return undef;
+    }
+    # special selector, based on 'selector' key
+    elsif ($type eq 'HASH') {
+        my $selector_key = $field->{selector};
+        croak 'Undefined selector key'  if !$selector_key;
+        my $selector_sub = $selector{$selector_key};
+        croak "Unknown selector '$selector_key'"  if !$selector_sub;
 
-            return $selector_sub->($field, $obj, %opt);
-        }
-
-        # unknown
+        return $selector_sub->($field, $obj, %opt);
+    }
+    # unknown
+    else {
         say STDERR Dump \@_;
         confess "Bad field type: $_";
     }

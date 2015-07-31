@@ -57,7 +57,7 @@ sub find_area {
     return if !$self->{_count};
 
     my $possible_areas =
-        reduce { [ grep { "$_" ~~ [ map {"$_"} @$b ] } @$a ] }
+        reduce { _array_intersection($a, $b) }
         map { my @objects; $self->query_point( @$_, \@objects ); \@objects }
         @points;
 
@@ -74,6 +74,13 @@ sub find_area {
     return $object->{data};
 }
 
+
+sub _array_intersection {
+    my ($ar1, $ar2) = @_;
+    my %ar2 = map {($_ => 1)} @$ar2;
+    my @ar = grep {$ar2{$_}} @$ar1;
+    return \@ar;
+}
 
 
 1;
