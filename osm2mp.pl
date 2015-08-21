@@ -627,6 +627,7 @@ if ( $flags->{routing} ) {
                               <=> lcos( $p1->[-2], $p1->[-1], $road{$a}->{chain}->[1] )  }  @list;
 
                 my $r2 = $list[0];
+                report( "WayID=$r2 is merged into WayID=$r1", 'FIX' );
 
                 # process associated restrictions
                 while ( my ($relid, $tr) = each %trest )  {
