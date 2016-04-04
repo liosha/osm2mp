@@ -18,6 +18,7 @@ use Encode;
 our %PREDEFINED_FILTER = (
     upcase      => sub { return uc shift },
     translit    => sub { require Text::Unidecode; return Text::Unidecode::unidecode( shift ) },
+    strip_space => sub { return shift =~ s/\s+/ /gxmsr },
 );
 
 

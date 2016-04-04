@@ -81,6 +81,7 @@ sub new {
     };
 
     my $filter_chain = $self->{filter_chain} = TextFilter->new();
+    $filter_chain->add_filter('strip_space');
     my $ttf = $ttc->{LOAD_FILTERS}->[0];
     $ttf->store( mp_filter => sub { $filter_chain->apply(@_) } );
 
