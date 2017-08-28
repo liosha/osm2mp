@@ -58,6 +58,7 @@ our %ATTRS = (
         [ ACC_MASK    => 'C', 10 ],
         [ CNTRL_ACC   => 'N', 1 ],
         [ IS_TUNNEL   => 'N', 1 ],
+        [ TURN_RSTRS  => 'C', 64 ],
 
         [ L_CITY      => 'C', 64 ],
         [ R_CITY      => 'C', 64 ],
@@ -109,9 +110,10 @@ my %writer = (
     polygon     => \&_write_polygon,
     polyline    => \&_write_polyline,
     road =>     => \&_write_road_polyline,
+
+    turn_restriction => \&_add_turn_restriction,
+    #turn_restriction => undef,
     
-    # !!! to remove
-    turn_restriction => undef,
     destination_sign => undef,
 );
 
@@ -212,15 +214,12 @@ sub _write_road_polyline {
     my $type = $MP2SHP{3}->{lc $data->{type}} // $data->{type};
     carp "Unknown routable type: $type"  if $type =~ /^0/;
 
-    # !!! convert from  mp-compatible access mask
-    # emergency,delivery,car,bus,taxi,foot,bike,truck
-    my @acc_flags = map {$_ // 0} (split /,/x, $data->{access_flags})[2,3,4,9,5,6,7,9,1,0];
-
     state $mp_ref = { '~[0x04]' => '{M', '~[0x05]' => '{P', '~[0x06]' => '{O' };
     my $ref_prefix = $data->{road_ref} && $data->{refs}
         ? ( $mp_ref->{$data->{road_ref}} // $data->{road_ref} ) . join q{-}, sort uniq @{$data->{refs}}
         : undef;
 
+    my $link_id = $data->{road_id};
     my %record = (
         NAME => join( q{ }, grep { defined && length } ( $ref_prefix, $data->{name} ) ),
         GRMN_TYPE   => $type,
@@ -229,8 +228,8 @@ sub _write_road_polyline {
         SPD_FORMAT  => 1, # km/h
         ONE_WAY     => $data->{oneway},
         TOLL_ROAD   => $data->{toll},
-        LINK_ID     => $data->{road_id},
-        ACC_MASK    => join( q{}, @acc_flags ),
+        LINK_ID     => $link_id,
+        ACC_MASK    => _acc_mask_from_mp($data->{access_flags}),
         %{ $data->{extra_fields} || {} },
     );
 
@@ -250,8 +249,57 @@ sub _write_road_polyline {
         [ $data->{chain} ],
         { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
     );
+
+    $self->{road}->{$link_id} = [
+        $shp->{DBF}->last_record,   # dbf record id
+        $data->{nod}->[0]->[1],     # first node internal id
+        $data->{nod}->[-1]->[1],    # last node internal id
+    ];
+
     return;
 }
+}
+
+
+# convert from mp-compatible access mask
+# mp: emergency,delivery,car,bus,taxi,foot,bike,truck
+# mpc: Automobiles, Buses, Taxis, Carpools, Pedestrians, Bicycles, Trucks, Through Traffic, Deliveries, Emergency Vehicles
+sub _acc_mask_from_mp {
+    my ($mp_acc_str) = @_;
+
+    my @acc_flags = map {$_ // 0} (split /,/x, $mp_acc_str)[2,3,4,9,5,6,7,9,1,0];
+    return join '' => @acc_flags;
+}
+
+
+sub _add_turn_restriction {
+    my $self = shift;
+    my ($vars) = @_;
+
+    my $data = $vars->{opts};
+    my $link_id = $data->{road_from};
+    my ($dbf_id, $fnod, $lnod) = @{$self->{road}->{$link_id}};
+    croak "Road $link_id not found"  if !defined $dbf_id;
+
+    my $place_code =
+        $data->{node_via} == $fnod  ? 'F' :
+        $data->{node_via} == $lnod  ? 'L' :
+        croak "Invalid node_via";
+
+    my $restr_str = $place_code . $data->{road_to};
+    if ($data->{param}) {
+        my $acc_str = _acc_mask_from_mp($data->{param});
+        $acc_str =~ s/0+$//;
+        $restr_str .= ":$acc_str";
+    }
+
+    my $shp = $self->_get_shp( roads => 'POLYLINE' );
+    my $dbf = $shp->{DBF};
+    my (undef, $old_restr) = $dbf->get_record($dbf_id, 'TURN_RSTRS');
+    my $new_restr = join q{;} => grep {$_} ($old_restr, $restr_str);
+    $dbf->update_record_hash($dbf_id, TURN_RSTRS => $new_restr);
+
+    return;
 }
 
 
