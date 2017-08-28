@@ -59,6 +59,9 @@ sub AUTOLOAD {
     return $storage->$method(@_);
 }
 
+# skip in AUTOLOAD
+sub DESTROY {}
+
 
 =method load
 
