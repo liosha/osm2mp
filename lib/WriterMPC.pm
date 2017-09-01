@@ -286,11 +286,11 @@ sub _write_pseudoroad {
     state $common_fields = {
         ROUTE_LVL => 1,
         SPD_LIMIT => 0,
-        IS_LGL_SPD => 'N',
-        L_FORMAT => 1, L_PARITY => 4,
-        R_FORMAT => 1, R_PARITY => 1,
-        R_FROM_ADR => -1,
-        R_TO_ADR => -1,
+#        IS_LGL_SPD => 'N',
+        L_FORMAT => 0, L_PARITY => 3,
+        R_FORMAT => 0, R_PARITY => 0,
+#        R_FROM_ADR => -1,
+#        R_TO_ADR => -1,
         Z_LVL_STRT => 9,
         Z_LVL_END => 9,
     };
