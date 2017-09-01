@@ -17,6 +17,7 @@ use List::MoreUtils qw/ uniq /;
 use match::simple;
 use Math::Polygon;
 
+use Math::Polygon::Tree  0.06  qw{ polygon_centroid };
 use Geo::Shapefile::Writer;
 use TextFilter;
 use GarminTools;
@@ -29,23 +30,7 @@ our @COMMON_ATTRS = (
     [ GRMN_TYPE => 'C', 32 ],
 );
 
-our %ATTRS = (
-    points => [
-        @COMMON_ATTRS,
-        [ STRT_ADDR => 'C', 64 ],
-        [ CITY => 'C', 64 ],
-        [ STATE => 'C', 64 ],
-        [ COUNTRY => 'C', 64 ],
-        [ PCODE => 'C', 64 ],
-        [ PHONE => 'C', 64 ],
-    ],
-    areas => [
-        @COMMON_ATTRS,
-        [ HGT_DP_FMT => 'C', 3 ],
-        [ HGT_DP => 'N', 5 ],
-    ],
-    lines => \@COMMON_ATTRS,
-    roads => [
+our @ROAD_ATTRS = (
         @COMMON_ATTRS,
         [ ROUTE_LVL   => 'N', 1 ],
         [ SPD_LIMIT   => 'N', 3 ],
@@ -66,13 +51,53 @@ our %ATTRS = (
         [ R_STATE     => 'C', 64 ],
         [ L_COUNTRY   => 'C', 64 ],
         [ R_COUNTRY   => 'C', 64 ],
-        [ L_COUNTRY   => 'C', 8 ],
-        [ R_COUNTRY   => 'C', 8 ],
+        [ L_PCODE     => 'C', 8 ],
+        [ R_PCODE     => 'C', 8 ],
+);
+
+our %ATTRS = (
+    points => [
+        @COMMON_ATTRS,
+        [ STRT_ADDR => 'C', 64 ],
+        [ CITY => 'C', 64 ],
+        [ STATE => 'C', 64 ],
+        [ COUNTRY => 'C', 64 ],
+        [ PCODE => 'C', 64 ],
+        [ PHONE => 'C', 64 ],
+    ],
+    areas => [
+        @COMMON_ATTRS,
+        [ HGT_DP_FMT => 'C', 3 ],
+        [ HGT_DP => 'N', 5 ],
+    ],
+    lines => \@COMMON_ATTRS,
+    roads => \@ROAD_ATTRS,
+    addr_pseudoroads => [
+        @ROAD_ATTRS,
+        [ L_FORMAT => 'N', 1 ],
+        [ L_PARITY => 'N', 1 ],
+        [ L_FROM_ADR => 'C', 4 ],
+        [ L_TO_ADR => 'C', 4 ],
+        [ R_PARITY => 'N', 1 ],
+        [ R_FORMAT => 'N', 1 ],
+        [ R_FROM_ADR => 'C', 4 ],
+        [ R_TO_ADR => 'C', 4 ],
+        [ Z_LVL_STRT => 'N', 1 ],
+        [ Z_LVL_END => 'N', 1 ],
+
     ],
 );
 
 
 our %MP2SHP = _init_code_table();
+
+
+our $DEFAULT_PSEUDOROAD_TYPE = 'ALLEY';
+our $DEFAULT_PSEUDOROAD_LENGTH = 0.00002;
+our $DEFAULT_PSEUDOROAD_ID = 10000000;
+our %IS_ADDRESSABLE_POLYGON = map {$_ => 1} qw/
+    GENERIC_MANMADE
+/;
 
 
 =method new( param => $value )
@@ -94,7 +119,10 @@ sub new {
     ## Supported options
     $self->{$_} = $opt{$_} for qw/
         need_addr_pseudoroads
+        pseudoroad_type
     /;
+
+    $self->{pseudoroad_id} = $DEFAULT_PSEUDOROAD_ID;
 
     return $self;
 }
@@ -114,7 +142,7 @@ my %writer = (
     point       => \&_write_point,
     polygon     => \&_write_polygon,
     polyline    => \&_write_polyline,
-    road =>     => \&_write_road_polyline,
+    road =>     => \&_write_road,
 
     turn_restriction => \&_add_turn_restriction,
     #turn_restriction => undef,
@@ -209,13 +237,78 @@ my %addr_field = (
     R_PCODE     => 'postcode',
 );
 
+
+sub _write_road {
+    my $self = shift;
+    my ($vars) = @_;
+
+    my $dbf_id = $self->_write_road_polyline(roads => $vars);
+    return  if !defined $dbf_id;
+
+    my $data = $vars->{data};
+    my $link_id = $data->{road_id};
+
+    $self->{road}->{$link_id} = [
+        $dbf_id,                    # dbf record id
+        $data->{nod}->[0]->[1],     # first node internal id
+        $data->{nod}->[-1]->[1],    # last node internal id
+    ];
+
+    return;
+}
+
+
+sub _write_pseudoroad {
+    my $self = shift;
+    my ($position, $vars) = @_;
+
+    my $data = $vars->{data};
+    my ($hnum) = $data->{address}->{house} =~ /(\d+)/;
+
+    my ($lon, $lat) = @$position;
+    my $chain = [
+        [$lon, $lat - $DEFAULT_PSEUDOROAD_LENGTH],
+        [$lon, $lat + $DEFAULT_PSEUDOROAD_LENGTH],
+    ];
+
+    state $common_fields = {
+        ROUTE_LVL => 1,
+        SPD_LIMIT => 0,
+        IS_LGL_SPD => 'N',
+        L_FORMAT => 1, L_PARITY => 4,
+        R_FORMAT => 1, R_PARITY => 1,
+        R_FROM_ADR => -1,
+        R_TO_ADR => -1,
+        Z_LVL_STRT => 9,
+        Z_LVL_END => 9,
+    };
+
+    my $pseudoroad = {
+        type => $self->{pseudoroad_type} || $DEFAULT_PSEUDOROAD_TYPE,
+        name => "$data->{address}->{house} $data->{address}->{street}",
+        chain => $chain,
+        address => $data->{address},
+        access_flags => '1,1,1,1,1,1,1,1,1,1',
+        extra_fields => {
+            %$common_fields,
+            LINK_ID => $self->{pseudoroad_id}++,
+            L_FROM_ADR => $hnum,
+            L_TO_ADR => $hnum,
+        },
+    };
+
+#    use YAML; die Dump $pseudoroad;
+    $self->_write_road_polyline(addr_pseudoroads => {data => $pseudoroad} );
+    return;
+}
+
 sub _write_road_polyline {
-    my ($self, $vars) = @_;
+    my ($self, $shp_name, $vars) = @_;
     my $data = $vars->{data} || {};
 
     return if !@{$data->{chain}};
 
-    my $shp = $self->_get_shp( roads => 'POLYLINE' );
+    my $shp = $self->_get_shp( $shp_name => 'POLYLINE' );
     my $type = $MP2SHP{3}->{lc $data->{type}} // $data->{type};
     carp "Unknown routable type: $type"  if $type =~ /^0/;
 
@@ -248,20 +341,12 @@ sub _write_road_polyline {
         }
     }
 
-#    use YAML; say Dump $vars, \%record; exit;
-
     $shp->add_shape(
         [ $data->{chain} ],
         { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
     );
 
-    $self->{road}->{$link_id} = [
-        $shp->{DBF}->last_record,   # dbf record id
-        $data->{nod}->[0]->[1],     # first node internal id
-        $data->{nod}->[-1]->[1],    # last node internal id
-    ];
-
-    return;
+    return $shp->{DBF}->last_record;
 }
 }
 
@@ -338,6 +423,16 @@ sub _write_polygon {
         \@rings,
         { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
     );
+
+    # make addressing pseudoroad
+    if (
+        $self->{need_addr_pseudoroads} && $IS_ADDRESSABLE_POLYGON{$type}
+        && $data->{address} && $data->{address}->{house} && $data->{address}->{street}
+    ) {
+        my $position = polygon_centroid($data->{contours}->[0]);
+        $self->_write_pseudoroad($position, $vars);
+    }
+
     return;
 }
 
@@ -362,6 +457,7 @@ sub _write_polyline {
         [ $data->{chain} ],
         { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
     );
+
     return;
 }
 
