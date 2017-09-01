@@ -94,10 +94,7 @@ our %MP2SHP = _init_code_table();
 
 our $DEFAULT_PSEUDOROAD_TYPE = 'ALLEY';
 our $DEFAULT_PSEUDOROAD_LENGTH = 0.00002;
-our $DEFAULT_PSEUDOROAD_ID = 10000000;
-our %IS_ADDRESSABLE_POLYGON = map {$_ => 1} qw/
-    GENERIC_MANMADE
-/;
+our $DEFAULT_PSEUDOROAD_BASE_ID = 0;
 
 
 =method new( param => $value )
@@ -122,7 +119,13 @@ sub new {
         pseudoroad_type
     /;
 
-    $self->{pseudoroad_id} = $DEFAULT_PSEUDOROAD_ID;
+    $self->{pseudoroad_id} = $opt{pseudoroad_base_id} || $DEFAULT_PSEUDOROAD_BASE_ID;
+
+    my $addr_poly_types = $opt{addressible_polygon} || [];
+    $self->{is_addressible_polygon} = +{ map {lc($_) => 1} @{ ref $addr_poly_types ? $addr_poly_types : [$addr_poly_types] } };
+
+    my $addr_point_types = $opt{addressible_point} || [];
+    $self->{is_addressible_point} = +{ map {lc($_) => 1} @{ ref $addr_point_types ? $addr_point_types : [$addr_point_types] } };
 
     return $self;
 }
@@ -196,7 +199,16 @@ sub _write_point {
 
     my $shp = $self->_get_shp( 'points', 'POINT' );
     my $type = $MP2SHP{1}->{lc $data->{type}} // $data->{type};
-    carp "Unknown point type: $type"  if !$type || $type =~ /^0/;
+
+    # make addressing pseudoroad
+    if (
+        $self->{need_addr_pseudoroads} && $self->{is_addressible_point}->{lc($type)}
+        && $data->{address} && $data->{address}->{house} && $data->{address}->{street}
+    ) {
+        $self->_write_pseudoroad($data->{coords}, $vars);
+    }
+
+    return if !$type || $type =~ /^0/;
 
     my %record = (
         NAME => $data->{name},
@@ -401,7 +413,17 @@ sub _write_polygon {
 
     my $shp = $self->_get_shp( 'areas', 'POLYGON' );
     my $type = $MP2SHP{5}->{lc $data->{type}} // $data->{type};
-    carp "Unknown area type: $type"  if $type =~ /^0/;
+
+    # make addressing pseudoroad
+    if (
+        $self->{need_addr_pseudoroads} && $self->{is_addressible_polygon}->{lc($type)}
+        && $data->{address} && $data->{address}->{house} && $data->{address}->{street}
+    ) {
+        my $position = polygon_centroid($data->{contours}->[0]);
+        $self->_write_pseudoroad($position, $vars);
+    }
+
+    return if $type =~ /^0/;
 
     my %record = (
         NAME => $data->{name},
@@ -423,15 +445,6 @@ sub _write_polygon {
         \@rings,
         { map {( $_ => encode( $self->{codepage}, $record{$_} ) )} keys %record },
     );
-
-    # make addressing pseudoroad
-    if (
-        $self->{need_addr_pseudoroads} && $IS_ADDRESSABLE_POLYGON{$type}
-        && $data->{address} && $data->{address}->{house} && $data->{address}->{street}
-    ) {
-        my $position = polygon_centroid($data->{contours}->[0]);
-        $self->_write_pseudoroad($position, $vars);
-    }
 
     return;
 }
