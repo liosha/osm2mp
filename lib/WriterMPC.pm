@@ -91,6 +91,11 @@ sub new {
     ##  Encoding
     $self->_register_codepage( $opt{codepage} );
 
+    ## Supported options
+    $self->{$_} = $opt{$_} for qw/
+        need_addr_pseudoroads
+    /;
+
     return $self;
 }
 
@@ -413,6 +418,7 @@ sub get_getopt {
     return (
         'o|output=s'            => \$self->{output_base},
         'codepage=s'            => sub { $self->_register_codepage( $_[1] ) },
+        'pseudoroads!'          => sub { $self->{need_addr_pseudoroads} = $_[1] },
     );
 }
 
@@ -426,6 +432,7 @@ sub get_usage {
     return (
         [ 'o|output' => 'output file' ],
         [ 'codepage <num>' => 'output character encoding', $self->{codepage} ],
+        [ 'pseudoroads' => 'make pseudoroads addressing layer', 0 + $self->{need_addr_pseudoroads} ],
     );
 }
 
