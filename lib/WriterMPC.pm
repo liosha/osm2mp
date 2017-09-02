@@ -276,6 +276,7 @@ sub _write_pseudoroad {
 
     my $data = $vars->{data};
     my ($hnum) = $data->{address}->{house} =~ /(\d+)/;
+    return if !$hnum;
 
     my ($lon, $lat) = @$position;
     my $chain = [
