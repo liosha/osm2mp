@@ -327,7 +327,7 @@ sub _write_road_polyline {
 
     state $mp_ref = { '~[0x04]' => '{M', '~[0x05]' => '{P', '~[0x06]' => '{O' };
     my $ref_prefix = $data->{road_ref} && $data->{refs}
-        ? ( $mp_ref->{$data->{road_ref}} // $data->{road_ref} ) . join q{-}, sort uniq @{$data->{refs}}
+        ? ( $mp_ref->{$data->{road_ref}} // $data->{road_ref} ) . join q{-}, sort {$a cmp $b} uniq @{$data->{refs}}
         : undef;
 
     my $link_id = $data->{road_id};
