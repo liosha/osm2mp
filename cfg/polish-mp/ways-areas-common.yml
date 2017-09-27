@@ -81,8 +81,8 @@
         - and:
             - height != *
             - min_height != *
-            - building:height != *
-            - building:levels != *
+#            - building:height != *
+#            - building:levels != *
             - building:min_level != *
   action:
     - action: write_polygon
