@@ -69,7 +69,8 @@ sub _make_gme_transformer {
 
         next if $line =~ / ^ (?: \s | ; | \# | \. | $ ) /xms;
 
-        my ($from, $to) = split "\t", decode( $encoding, $line );
+        my $separator = $line =~ /\t/ ? '\t' : '\s';
+        my ($from, $to) = split /$separator/, decode( $encoding, $line );
         $table{$from} = $to;
     }
     close $in;
