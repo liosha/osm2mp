@@ -9,8 +9,8 @@ Resulted MP files could be converted to other formats:
 | Format      | Converter | Prepeared files |
 | ----------- | --------- | -------------- |
 | Garmin      | [config](https://github.com/liosha/osm2mp-garmin-open) [make scripts](https://github.com/liosha/osm2mp-garmin-build) | [worldwide daily by gislab](http://gis-lab.info/data/mp/) |
-| Navitel     |           | [worldwide best effort](http://navitel.osm.rambler.ru/) |
-| Seven Ways  |           | [worldwide best effort](http://navitel.osm.rambler.ru/) |
+| Navitel     |           | [worldwide best effort](http://navitel.openstreetmap.ru/) |
+| Seven Ways  |           | [worldwide best effort](http://navitel.openstreetmap.ru/) |
 | GIS Russa   | [config](http://osm-russa.narod.ru/config.rar) | [latest update 2012-01](http://osm-russa.narod.ru/) |
 | PocketGIS   | [converter](http://www.pocketgis.biz/forum/viewtopic.php?f=30&t=3439) | |
 | Magelan     |
