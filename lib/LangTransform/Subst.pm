@@ -16,6 +16,16 @@ use Utils;
 our $PRIORITY = 1;
 
 our %DATA = (
+    ru_ruold => {
+        from  => 'ru',
+        to    => 'ru-old',
+        table => {
+            'и(?=[аяэеоёуюыий])' => 'і',
+            '(?<=[бвгджзклмнпрстфхцчшщѳ])\b' => 'ъ',
+            'ё' => 'е',
+        },
+        same_upcase => 1,
+    },
     ru_uk => {
         from  => 'ru',
         to    => 'uk',
